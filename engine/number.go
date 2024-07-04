@@ -617,16 +617,6 @@ func exp(x Number) (Number, error) {
 	}
 
 	return Float{dec: &dec}, nil
-
-	//dec := decimal.WithContext(decimal.Context128)
-	//r := Float{
-	//	dec: decimal.Context128.Exp(dec, f.dec),
-	//}
-	//if !dec.IsFinite() {
-	//	return Float{}, exceptionalValueUnderflow
-	//}
-	//
-	//return r, r.Err()
 }
 
 // log returns the natural logarithm of x.
@@ -1130,7 +1120,15 @@ func intDivI(x, y Integer) (Integer, error) {
 		// Two's complement special case
 		return 0, exceptionalValueIntOverflow
 	default:
-		return x / y, nil
+		fxdy, err := divII(x, y)
+		if err != nil {
+			return 0, err
+		}
+		xdy, err := roundFtoI(fxdy)
+		if err != nil {
+			return 0, err
+		}
+		return xdy, nil
 	}
 }
 
@@ -1138,14 +1136,34 @@ func remI(x, y Integer) (Integer, error) {
 	if y == 0 {
 		return 0, exceptionalValueZeroDivisor
 	}
-	return x - ((x / y) * y), nil
+
+	fxdy, err := divII(x, y)
+	if err != nil {
+		return 0, err
+	}
+	xdy, err := roundFtoI(fxdy)
+	if err != nil {
+		return 0, err
+	}
+
+	return x - (xdy * y), nil
 }
 
 func modI(x, y Integer) (Integer, error) {
 	if y == 0 {
 		return 0, exceptionalValueZeroDivisor
 	}
-	return x - (Integer(math.Floor(float64(x)/float64(y))) * y), nil
+
+	fxdy, err := divII(x, y)
+	if err != nil {
+		return 0, err
+	}
+	xdy, err := floorFtoI(fxdy)
+	if err != nil {
+		return 0, err
+	}
+
+	return x - (xdy * y), nil
 }
 
 func negI(x Integer) (Integer, error) {
@@ -1189,7 +1207,11 @@ func intFloorDivI(x, y Integer) (Integer, error) {
 	case y == 0:
 		return 0, exceptionalValueZeroDivisor
 	default:
-		return Integer(math.Floor(float64(x) / float64(y))), nil
+		fxdy, err := divII(x, y)
+		if err != nil {
+			return 0, err
+		}
+		return floorFtoI(fxdy)
 	}
 }
 
