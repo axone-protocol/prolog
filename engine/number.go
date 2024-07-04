@@ -9,7 +9,6 @@ import (
 var (
 	maxInt        = Integer(math.MaxInt64)
 	minInt        = Integer(math.MinInt64)
-	oneFloat      = NewFloatFromInt64(1)
 	minusOneFloat = NewFloatFromInt64(-1)
 )
 
