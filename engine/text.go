@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"io/fs"
 	"strings"
 )
@@ -28,15 +29,16 @@ func (vm *VM) Compile(ctx context.Context, s string, args ...interface{}) error 
 	}
 
 	if vm.procedures == nil {
-		vm.procedures = map[procedureIndicator]procedure{}
+		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
 	}
 	for pi, u := range t.clauses {
-		if existing, ok := vm.procedures[pi].(*userDefined); ok && existing.multifile && u.multifile {
+		p, _ := vm.procedures.Get(pi)
+		if existing, ok := p.(*userDefined); ok && existing.multifile && u.multifile {
 			existing.clauses = append(existing.clauses, u.clauses...)
 			continue
 		}
 
-		vm.procedures[pi] = u
+		vm.procedures.Set(pi, u)
 	}
 
 	for _, g := range t.goals {

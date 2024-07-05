@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"io"
 	"io/fs"
 	"os"
@@ -701,12 +702,12 @@ func assertMerge(vm *VM, t Term, merge func([]clause, []clause) []clause, env *E
 	}
 
 	if vm.procedures == nil {
-		vm.procedures = map[procedureIndicator]procedure{}
+		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
 	}
-	p, ok := vm.procedures[pi]
+	p, ok := vm.getProcedure(pi)
 	if !ok {
 		p = &userDefined{public: true, dynamic: true}
-		vm.procedures[pi] = p
+		vm.setProcedure(pi, p)
 	}
 
 	added, err := compile(t, env)
@@ -1066,11 +1067,11 @@ func CurrentPredicate(vm *VM, pi Term, k Cont, env *Env) *Promise {
 		return Error(typeError(validTypePredicateIndicator, pi, env))
 	}
 
-	ks := make([]func(context.Context) *Promise, 0, len(vm.procedures))
-	for key, p := range vm.procedures {
-		switch p.(type) {
+	ks := make([]func(context.Context) *Promise, 0, vm.procedures.Len())
+	for element := vm.procedures.Oldest(); element != nil; element = element.Next() {
+		switch element.Value.(type) {
 		case *userDefined:
-			c := key.Term()
+			c := element.Key.Term()
 			ks = append(ks, func(context.Context) *Promise {
 				return Unify(vm, pi, c, k, env)
 			})
@@ -1091,7 +1092,7 @@ func Retract(vm *VM, t Term, k Cont, env *Env) *Promise {
 		return Error(err)
 	}
 
-	p, ok := vm.procedures[pi]
+	p, ok := vm.getProcedure(pi)
 	if !ok {
 		return Bool(false)
 	}
@@ -1142,10 +1143,11 @@ func Abolish(vm *VM, pi Term, k Cont, env *Env) *Promise {
 					return Error(domainError(validDomainNotLessThanZero, arity, env))
 				}
 				key := procedureIndicator{name: name, arity: arity}
-				if u, ok := vm.procedures[key].(*userDefined); !ok || !u.dynamic {
+				p, _ := vm.getProcedure(key)
+				if u, ok := p.(*userDefined); !ok || !u.dynamic {
 					return Error(permissionError(operationModify, permissionTypeStaticProcedure, key.Term(), env))
 				}
-				delete(vm.procedures, key)
+				vm.procedures.Delete(key)
 				return k(env)
 			default:
 				return Error(typeError(validTypeInteger, arity, env))
@@ -1982,7 +1984,7 @@ func Clause(vm *VM, head, body Term, k Cont, env *Env) *Promise {
 		return Error(typeError(validTypeCallable, body, env))
 	}
 
-	p, ok := vm.procedures[pi]
+	p, ok := vm.getProcedure(pi)
 	if !ok {
 		return Bool(false)
 	}
@@ -2749,7 +2751,7 @@ func ExpandTerm(vm *VM, term1, term2 Term, k Cont, env *Env) *Promise {
 }
 
 func expand(vm *VM, term Term, env *Env) (Term, error) {
-	if _, ok := vm.procedures[procedureIndicator{name: atomTermExpansion, arity: 2}]; ok {
+	if _, ok := vm.getProcedure(procedureIndicator{name: atomTermExpansion, arity: 2}); ok {
 		var ret Term
 		v := NewVariable()
 		ok, err := Call(vm, atomTermExpansion.Apply(term, v), func(env *Env) *Promise {

@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"io"
 	"io/fs"
 	"strings"
@@ -51,7 +52,7 @@ type VM struct {
 	// Unknown is a callback that is triggered when the VM reaches to an unknown predicate while current_prolog_flag(unknown, warning).
 	Unknown func(name Atom, args []Term, env *Env)
 
-	procedures map[procedureIndicator]procedure
+	procedures *orderedmap.OrderedMap[procedureIndicator, procedure]
 	unknown    unknownAction
 
 	// FS is a file system that is referenced when the VM loads Prolog texts e.g. ensure_loaded/1.
@@ -76,73 +77,73 @@ type VM struct {
 // Register0 registers a predicate of arity 0.
 func (vm *VM) Register0(name Atom, p Predicate0) {
 	if vm.procedures == nil {
-		vm.procedures = map[procedureIndicator]procedure{}
+		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
 	}
-	vm.procedures[procedureIndicator{name: name, arity: 0}] = p
+	vm.procedures.Set(procedureIndicator{name: name, arity: 0}, p)
 }
 
 // Register1 registers a predicate of arity 1.
 func (vm *VM) Register1(name Atom, p Predicate1) {
 	if vm.procedures == nil {
-		vm.procedures = map[procedureIndicator]procedure{}
+		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
 	}
-	vm.procedures[procedureIndicator{name: name, arity: 1}] = p
+	vm.procedures.Set(procedureIndicator{name: name, arity: 1}, p)
 }
 
 // Register2 registers a predicate of arity 2.
 func (vm *VM) Register2(name Atom, p Predicate2) {
 	if vm.procedures == nil {
-		vm.procedures = map[procedureIndicator]procedure{}
+		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
 	}
-	vm.procedures[procedureIndicator{name: name, arity: 2}] = p
+	vm.procedures.Set(procedureIndicator{name: name, arity: 2}, p)
 }
 
 // Register3 registers a predicate of arity 3.
 func (vm *VM) Register3(name Atom, p Predicate3) {
 	if vm.procedures == nil {
-		vm.procedures = map[procedureIndicator]procedure{}
+		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
 	}
-	vm.procedures[procedureIndicator{name: name, arity: 3}] = p
+	vm.procedures.Set(procedureIndicator{name: name, arity: 3}, p)
 }
 
 // Register4 registers a predicate of arity 4.
 func (vm *VM) Register4(name Atom, p Predicate4) {
 	if vm.procedures == nil {
-		vm.procedures = map[procedureIndicator]procedure{}
+		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
 	}
-	vm.procedures[procedureIndicator{name: name, arity: 4}] = p
+	vm.procedures.Set(procedureIndicator{name: name, arity: 4}, p)
 }
 
 // Register5 registers a predicate of arity 5.
 func (vm *VM) Register5(name Atom, p Predicate5) {
 	if vm.procedures == nil {
-		vm.procedures = map[procedureIndicator]procedure{}
+		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
 	}
-	vm.procedures[procedureIndicator{name: name, arity: 5}] = p
+	vm.procedures.Set(procedureIndicator{name: name, arity: 5}, p)
 }
 
 // Register6 registers a predicate of arity 6.
 func (vm *VM) Register6(name Atom, p Predicate6) {
 	if vm.procedures == nil {
-		vm.procedures = map[procedureIndicator]procedure{}
+		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
 	}
-	vm.procedures[procedureIndicator{name: name, arity: 6}] = p
+	vm.procedures.Set(procedureIndicator{name: name, arity: 6}, p)
 }
 
 // Register7 registers a predicate of arity 7.
 func (vm *VM) Register7(name Atom, p Predicate7) {
 	if vm.procedures == nil {
-		vm.procedures = map[procedureIndicator]procedure{}
+		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
 	}
-	vm.procedures[procedureIndicator{name: name, arity: 7}] = p
+	vm.procedures.Set(procedureIndicator{name: name, arity: 7}, p)
 }
 
 // Register8 registers a predicate of arity 8.
 func (vm *VM) Register8(name Atom, p Predicate8) {
 	if vm.procedures == nil {
-		vm.procedures = map[procedureIndicator]procedure{}
+		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
 	}
-	vm.procedures[procedureIndicator{name: name, arity: 8}] = p
+	vm.procedures.Set(procedureIndicator{name: name, arity: 8}, p)
 }
 
 type unknownAction int
@@ -177,7 +178,7 @@ func (vm *VM) Arrive(name Atom, args []Term, k Cont, env *Env) (promise *Promise
 	}
 
 	pi := procedureIndicator{name: name, arity: Integer(len(args))}
-	p, ok := vm.procedures[pi]
+	p, ok := vm.procedures.Get(pi)
 	if !ok {
 		switch vm.unknown {
 		case unknownWarning:
@@ -300,6 +301,20 @@ func (vm *VM) SetUserOutput(s *Stream) {
 	s.alias = atomUserOutput
 	vm.streams.add(s)
 	vm.output = s
+}
+
+func (vm *VM) getProcedure(p procedureIndicator) (procedure, bool) {
+	if vm.procedures == nil {
+		return nil, false
+	}
+	return vm.procedures.Get(p)
+}
+
+func (vm *VM) setProcedure(key procedureIndicator, val procedure) (procedure, bool) {
+	if vm.procedures == nil {
+		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
+	}
+	return vm.procedures.Set(key, val)
 }
 
 // Predicate0 is a predicate of arity 0.

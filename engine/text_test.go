@@ -437,26 +437,29 @@ bar(b).
 			vm.operators.define(1200, operatorSpecifierFX, atomIf)
 			vm.operators.define(1000, operatorSpecifierXFY, atomComma)
 			vm.operators.define(400, operatorSpecifierYFX, atomSlash)
-			vm.procedures = map[procedureIndicator]procedure{
-				{name: NewAtom("foo"), arity: 1}: &userDefined{
-					multifile: true,
-					clauses: clauses{
-						{
-							pi:  procedureIndicator{name: NewAtom("foo"), arity: 1},
-							raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}},
-							bytecode: bytecode{
-								{opcode: opGetConst, operand: NewAtom("c")},
-								{opcode: opExit},
+			vm.procedures = buildOrderedMap(
+				procedurePair{
+					Key: procedureIndicator{name: NewAtom("foo"), arity: 1},
+					Value: &userDefined{
+						multifile: true,
+						clauses: clauses{
+							{
+								pi:  procedureIndicator{name: NewAtom("foo"), arity: 1},
+								raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}},
+								bytecode: bytecode{
+									{opcode: opGetConst, operand: NewAtom("c")},
+									{opcode: opExit},
+								},
 							},
 						},
 					},
 				},
-			}
+			)
 			vm.FS = testdata
 			vm.Register1(NewAtom("throw"), Throw)
 			assert.Equal(t, tt.err, vm.Compile(context.Background(), tt.text, tt.args...))
 			if tt.err == nil {
-				delete(vm.procedures, procedureIndicator{name: NewAtom("throw"), arity: 1})
+				vm.procedures.Delete(procedureIndicator{name: NewAtom("throw"), arity: 1})
 				assert.Equal(t, tt.result, vm.procedures)
 			}
 		})
