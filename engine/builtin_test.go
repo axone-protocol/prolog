@@ -2493,6 +2493,46 @@ func TestCurrentPredicate(t *testing.T) {
 		assert.True(t, baz)
 	})
 
+	t.Run("ordered current predicate", func(t *testing.T) {
+		var foo, bar, baz int
+
+		for i := 0; i < 10; i++ {
+			v := NewVariable()
+
+			vm := VM{procedures: map[procedureIndicator]procedure{
+				{name: NewAtom("foo"), arity: 1}: &userDefined{},
+				{name: NewAtom("bar"), arity: 1}: &userDefined{},
+				{name: NewAtom("baz"), arity: 1}: &userDefined{},
+			}}
+			index := 0
+			ok, err := CurrentPredicate(&vm, v, func(env *Env) *Promise {
+				c, ok := env.Resolve(v).(*compound)
+				assert.True(t, ok)
+				assert.Equal(t, atomSlash, c.Functor())
+				assert.Equal(t, 2, c.Arity())
+				assert.Equal(t, Integer(1), c.Arg(1))
+				switch c.Arg(0) {
+				case NewAtom("foo"):
+					foo = index
+				case NewAtom("bar"):
+					bar = index
+				case NewAtom("baz"):
+					baz = index
+				default:
+					assert.Fail(t, "unreachable")
+				}
+				index += 1
+				return Bool(false)
+			}, nil).Force(context.Background())
+			assert.NoError(t, err)
+			assert.False(t, ok)
+
+			assert.Equal(t, 0, foo)
+			assert.Equal(t, 1, bar)
+			assert.Equal(t, 2, baz)
+		}
+	})
+
 	t.Run("builtin predicate", func(t *testing.T) {
 		vm := VM{procedures: map[procedureIndicator]procedure{
 			{name: atomEqual, arity: 2}: Predicate2(Unify),
