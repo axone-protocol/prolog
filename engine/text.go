@@ -32,13 +32,13 @@ func (vm *VM) Compile(ctx context.Context, s string, args ...interface{}) error 
 		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
 	}
 	for pi, u := range t.clauses {
-		p, _ := vm.procedures.Get(pi)
+		p, _ := vm.getProcedure(pi)
 		if existing, ok := p.(*userDefined); ok && existing.multifile && u.multifile {
 			existing.clauses = append(existing.clauses, u.clauses...)
 			continue
 		}
 
-		vm.procedures.Set(pi, u)
+		vm.setProcedure(pi, u)
 	}
 
 	for _, g := range t.goals {

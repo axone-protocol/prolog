@@ -79,7 +79,7 @@ func (vm *VM) Register0(name Atom, p Predicate0) {
 	if vm.procedures == nil {
 		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
 	}
-	vm.procedures.Set(procedureIndicator{name: name, arity: 0}, p)
+	vm.setProcedure(procedureIndicator{name: name, arity: 0}, p)
 }
 
 // Register1 registers a predicate of arity 1.
@@ -87,7 +87,7 @@ func (vm *VM) Register1(name Atom, p Predicate1) {
 	if vm.procedures == nil {
 		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
 	}
-	vm.procedures.Set(procedureIndicator{name: name, arity: 1}, p)
+	vm.setProcedure(procedureIndicator{name: name, arity: 1}, p)
 }
 
 // Register2 registers a predicate of arity 2.
@@ -95,7 +95,7 @@ func (vm *VM) Register2(name Atom, p Predicate2) {
 	if vm.procedures == nil {
 		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
 	}
-	vm.procedures.Set(procedureIndicator{name: name, arity: 2}, p)
+	vm.setProcedure(procedureIndicator{name: name, arity: 2}, p)
 }
 
 // Register3 registers a predicate of arity 3.
@@ -103,7 +103,7 @@ func (vm *VM) Register3(name Atom, p Predicate3) {
 	if vm.procedures == nil {
 		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
 	}
-	vm.procedures.Set(procedureIndicator{name: name, arity: 3}, p)
+	vm.setProcedure(procedureIndicator{name: name, arity: 3}, p)
 }
 
 // Register4 registers a predicate of arity 4.
@@ -111,7 +111,7 @@ func (vm *VM) Register4(name Atom, p Predicate4) {
 	if vm.procedures == nil {
 		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
 	}
-	vm.procedures.Set(procedureIndicator{name: name, arity: 4}, p)
+	vm.setProcedure(procedureIndicator{name: name, arity: 4}, p)
 }
 
 // Register5 registers a predicate of arity 5.
@@ -119,7 +119,7 @@ func (vm *VM) Register5(name Atom, p Predicate5) {
 	if vm.procedures == nil {
 		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
 	}
-	vm.procedures.Set(procedureIndicator{name: name, arity: 5}, p)
+	vm.setProcedure(procedureIndicator{name: name, arity: 5}, p)
 }
 
 // Register6 registers a predicate of arity 6.
@@ -127,7 +127,7 @@ func (vm *VM) Register6(name Atom, p Predicate6) {
 	if vm.procedures == nil {
 		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
 	}
-	vm.procedures.Set(procedureIndicator{name: name, arity: 6}, p)
+	vm.setProcedure(procedureIndicator{name: name, arity: 6}, p)
 }
 
 // Register7 registers a predicate of arity 7.
@@ -135,7 +135,7 @@ func (vm *VM) Register7(name Atom, p Predicate7) {
 	if vm.procedures == nil {
 		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
 	}
-	vm.procedures.Set(procedureIndicator{name: name, arity: 7}, p)
+	vm.setProcedure(procedureIndicator{name: name, arity: 7}, p)
 }
 
 // Register8 registers a predicate of arity 8.
@@ -143,7 +143,7 @@ func (vm *VM) Register8(name Atom, p Predicate8) {
 	if vm.procedures == nil {
 		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
 	}
-	vm.procedures.Set(procedureIndicator{name: name, arity: 8}, p)
+	vm.setProcedure(procedureIndicator{name: name, arity: 8}, p)
 }
 
 type unknownAction int
@@ -178,7 +178,7 @@ func (vm *VM) Arrive(name Atom, args []Term, k Cont, env *Env) (promise *Promise
 	}
 
 	pi := procedureIndicator{name: name, arity: Integer(len(args))}
-	p, ok := vm.procedures.Get(pi)
+	p, ok := vm.getProcedure(pi)
 	if !ok {
 		switch vm.unknown {
 		case unknownWarning:
