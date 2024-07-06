@@ -70,8 +70,6 @@ func (p *Parser) SetPlaceholder(placeholder Atom, args ...interface{}) error {
 
 func (p *Parser) termOf(o reflect.Value) (Term, error) {
 	switch o.Kind() {
-	case reflect.Float32, reflect.Float64:
-		return Float(o.Float()), nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return Integer(o.Int()), nil
 	case reflect.String:
@@ -805,11 +803,11 @@ func integer(sign int64, s string) (Integer, error) {
 }
 
 func float(sign float64, s string) (Float, error) {
-	bf, _, _ := big.ParseFloat(s, 10, 0, big.ToZero)
-	bf.Mul(big.NewFloat(sign), bf)
+	if sign < 0 {
+		s = "-" + s
+	}
 
-	f, _ := bf.Float64()
-	return Float(f), nil
+	return NewFloatFromString(s)
 }
 
 var (
