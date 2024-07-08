@@ -24,6 +24,8 @@ func mustOpen(fs fs.FS, name string) fs.File {
 }
 
 func TestVM_Compile(t *testing.T) {
+	varCounter = 1
+
 	tests := []struct {
 		title  string
 		text   string
@@ -481,6 +483,8 @@ bar(b).
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
 			var vm VM
+			varCounter = 1 // Global var cause issues in testing environment that call in randomly order for checking equality between procedure clause args
+
 			vm.operators.define(1200, operatorSpecifierXFX, atomIf)
 			vm.operators.define(1200, operatorSpecifierXFX, atomArrow)
 			vm.operators.define(1200, operatorSpecifierFX, atomIf)
@@ -509,7 +513,7 @@ bar(b).
 			assert.Equal(t, tt.err, vm.Compile(context.Background(), tt.text, tt.args...))
 			if tt.err == nil {
 				vm.procedures.Delete(procedureIndicator{name: NewAtom("throw"), arity: 1})
-				assert.Equal(t, tt.result, vm.procedures)
+				assert.EqualValues(t, tt.result, vm.procedures)
 			}
 		})
 	}
