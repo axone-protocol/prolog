@@ -28,17 +28,14 @@ func (vm *VM) Compile(ctx context.Context, s string, args ...interface{}) error 
 		return err
 	}
 
-	if vm.procedures == nil {
-		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
-	}
-	for pi, u := range t.clauses {
-		p, _ := vm.getProcedure(pi)
-		if existing, ok := p.(*userDefined); ok && existing.multifile && u.multifile {
-			existing.clauses = append(existing.clauses, u.clauses...)
+	for c := t.clauses.Oldest(); c != nil; c = c.Next() {
+		p, _ := vm.getProcedure(c.Key)
+		if existing, ok := p.(*userDefined); ok && existing.multifile && c.Value.multifile {
+			existing.clauses = append(existing.clauses, c.Value.clauses...)
 			continue
 		}
 
-		vm.setProcedure(pi, u)
+		vm.setProcedure(c.Key, c.Value)
 	}
 
 	for _, g := range t.goals {
@@ -81,7 +78,7 @@ func Consult(vm *VM, files Term, k Cont, env *Env) *Promise {
 
 func (vm *VM) compile(ctx context.Context, text *text, s string, args ...interface{}) error {
 	if text.clauses == nil {
-		text.clauses = map[procedureIndicator]*userDefined{}
+		text.clauses = orderedmap.New[procedureIndicator, *userDefined]()
 	}
 
 	s = ignoreShebangLine(s)
@@ -223,7 +220,7 @@ func (vm *VM) open(file Term, env *Env) (string, []byte, error) {
 
 type text struct {
 	buf     clauses
-	clauses map[procedureIndicator]*userDefined
+	clauses *orderedmap.OrderedMap[procedureIndicator, *userDefined]
 	goals   []Term
 }
 
@@ -246,10 +243,10 @@ func (t *text) forEachUserDefined(pi Term, f func(u *userDefined)) error {
 					return InstantiationError(nil)
 				case Integer:
 					pi := procedureIndicator{name: n, arity: a}
-					u, ok := t.clauses[pi]
+					u, ok := t.getClause(pi)
 					if !ok {
 						u = &userDefined{}
-						t.clauses[pi] = u
+						t.setClause(pi, u)
 					}
 					f(u)
 				default:
@@ -271,10 +268,10 @@ func (t *text) flush() error {
 	}
 
 	pi := t.buf[0].pi
-	u, ok := t.clauses[pi]
+	u, ok := t.getClause(pi)
 	if !ok {
 		u = &userDefined{}
-		t.clauses[pi] = u
+		t.setClause(pi, u)
 	}
 	if len(u.clauses) > 0 && !u.discontiguous {
 		return &discontiguousError{pi: pi}
@@ -282,6 +279,20 @@ func (t *text) flush() error {
 	u.clauses = append(u.clauses, t.buf...)
 	t.buf = t.buf[:0]
 	return nil
+}
+
+func (t *text) getClause(key procedureIndicator) (*userDefined, bool) {
+	if t.clauses == nil {
+		return nil, false
+	}
+	return t.clauses.Get(key)
+}
+
+func (t *text) setClause(key procedureIndicator, value *userDefined) (*userDefined, bool) {
+	if t.clauses == nil {
+		t.clauses = orderedmap.New[procedureIndicator, *userDefined]()
+	}
+	return t.clauses.Set(key, value)
 }
 
 func ignoreShebangLine(query string) string {
