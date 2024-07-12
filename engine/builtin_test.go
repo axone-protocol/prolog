@@ -952,6 +952,8 @@ func TestTermVariables(t *testing.T) {
 func TestOp(t *testing.T) {
 	t.Run("insert", func(t *testing.T) {
 		t.Run("atom", func(t *testing.T) {
+			varCounter = 1
+
 			vm := VM{_operators: newOperators()}
 			vm.getOperators().define(900, operatorSpecifierXFX, NewAtom(`+++`))
 			vm.getOperators().define(1100, operatorSpecifierXFX, NewAtom(`+`))
@@ -973,21 +975,21 @@ func TestOp(t *testing.T) {
 								},
 							}},
 						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
-							Key: NewAtom(`++`),
-							Value: [_operatorClassLen]operator{
-								operatorClassInfix: {
-									priority:  1000,
-									specifier: operatorSpecifierXFX,
-									name:      NewAtom("++"),
-								},
-							}},
-						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
 							Key: NewAtom(`+`),
 							Value: [_operatorClassLen]operator{
 								operatorClassInfix: {
 									priority:  1100,
 									specifier: operatorSpecifierXFX,
 									name:      atomPlus,
+								},
+							}},
+						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+							Key: NewAtom(`++`),
+							Value: [_operatorClassLen]operator{
+								operatorClassInfix: {
+									priority:  1000,
+									specifier: operatorSpecifierXFX,
+									name:      NewAtom("++"),
 								},
 							}}))}, vm.getOperators())
 		})
@@ -1033,21 +1035,21 @@ func TestOp(t *testing.T) {
 								},
 							}},
 						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
-							Key: NewAtom(`++`),
-							Value: [_operatorClassLen]operator{
-								operatorClassInfix: {
-									priority:  1000,
-									specifier: operatorSpecifierXFX,
-									name:      NewAtom("++"),
-								},
-							}},
-						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
 							Key: NewAtom(`+`),
 							Value: [_operatorClassLen]operator{
 								operatorClassInfix: {
 									priority:  1100,
 									specifier: operatorSpecifierXFX,
 									name:      atomPlus,
+								},
+							}},
+						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+							Key: NewAtom(`++`),
+							Value: [_operatorClassLen]operator{
+								operatorClassInfix: {
+									priority:  1000,
+									specifier: operatorSpecifierXFX,
+									name:      NewAtom("++"),
 								},
 							}}))}, vm.getOperators())
 		})
