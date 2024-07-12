@@ -20,7 +20,7 @@ type WriteOptions struct {
 	variableNames map[Variable]Atom
 	numberVars    bool
 
-	ops         *operators
+	_ops        *operators
 	priority    Integer
 	visited     map[termID]struct{}
 	prefixMinus bool
@@ -58,8 +58,15 @@ func (o WriteOptions) withRight(op operator) *WriteOptions {
 	return &o
 }
 
+func (o WriteOptions) getOps() *operators {
+	if o._ops == nil {
+		o._ops = newOperators()
+	}
+	return o._ops
+}
+
 var defaultWriteOptions = WriteOptions{
-	ops: &operators{
+	_ops: &operators{
 		OrderedMap: orderedmap.New[Atom, [_operatorClassLen]operator](
 			orderedmap.WithInitialData(
 				orderedmap.Pair[Atom, [_operatorClassLen]operator]{
