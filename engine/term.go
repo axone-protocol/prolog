@@ -2,6 +2,7 @@ package engine
 
 import (
 	"fmt"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"io"
 	"strings"
 )
@@ -19,7 +20,7 @@ type WriteOptions struct {
 	variableNames map[Variable]Atom
 	numberVars    bool
 
-	ops         operators
+	ops         *operators
 	priority    Integer
 	visited     map[termID]struct{}
 	prefixMinus bool
@@ -58,13 +59,23 @@ func (o WriteOptions) withRight(op operator) *WriteOptions {
 }
 
 var defaultWriteOptions = WriteOptions{
-	ops: operators{
-		atomPlus: [_operatorClassLen]operator{
-			operatorClassInfix: {priority: 500, specifier: operatorSpecifierYFX, name: atomPlus}, // for flag+value
-		},
-		atomSlash: [_operatorClassLen]operator{
-			operatorClassInfix: {priority: 400, specifier: operatorSpecifierYFX, name: atomSlash}, // for principal functors
-		},
+	ops: &operators{
+		OrderedMap: orderedmap.New[Atom, [_operatorClassLen]operator](
+			orderedmap.WithInitialData(
+				orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+					Key: atomPlus,
+					Value: [_operatorClassLen]operator{
+						operatorClassInfix: {priority: 500, specifier: operatorSpecifierYFX, name: atomPlus}, // for flag+value
+					},
+				},
+				orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+					Key: atomSlash,
+					Value: [_operatorClassLen]operator{
+						operatorClassInfix: {priority: 400, specifier: operatorSpecifierYFX, name: atomSlash}, // for principal functors
+					},
+				},
+			),
+		),
 	},
 	variableNames: map[Variable]Atom{},
 	priority:      1200,

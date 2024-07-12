@@ -952,134 +952,165 @@ func TestTermVariables(t *testing.T) {
 func TestOp(t *testing.T) {
 	t.Run("insert", func(t *testing.T) {
 		t.Run("atom", func(t *testing.T) {
-			vm := VM{operators: operators{}}
-			vm.operators.define(900, operatorSpecifierXFX, NewAtom(`+++`))
-			vm.operators.define(1100, operatorSpecifierXFX, NewAtom(`+`))
+			vm := VM{_operators: newOperators()}
+			vm.getOperators().define(900, operatorSpecifierXFX, NewAtom(`+++`))
+			vm.getOperators().define(1100, operatorSpecifierXFX, NewAtom(`+`))
 
 			ok, err := Op(&vm, Integer(1000), atomXFX, NewAtom("++"), Success, nil).Force(context.Background())
 			assert.NoError(t, err)
 			assert.True(t, ok)
 
-			assert.Equal(t, operators{
-				NewAtom(`+++`): {
-					operatorClassInfix: {
-						priority:  900,
-						specifier: operatorSpecifierXFX,
-						name:      NewAtom("+++"),
-					},
-				},
-				NewAtom(`++`): {
-					operatorClassInfix: {
-						priority:  1000,
-						specifier: operatorSpecifierXFX,
-						name:      NewAtom("++"),
-					},
-				},
-				NewAtom(`+`): {
-					operatorClassInfix: {
-						priority:  1100,
-						specifier: operatorSpecifierXFX,
-						name:      atomPlus,
-					},
-				},
-			}, vm.operators)
+			assert.EqualValues(t, &operators{
+				OrderedMap: orderedmap.New[Atom, [_operatorClassLen]operator](
+					orderedmap.WithInitialData(
+						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+							Key: NewAtom(`+++`),
+							Value: [_operatorClassLen]operator{
+								operatorClassInfix: {
+									priority:  900,
+									specifier: operatorSpecifierXFX,
+									name:      NewAtom("+++"),
+								},
+							}},
+						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+							Key: NewAtom(`++`),
+							Value: [_operatorClassLen]operator{
+								operatorClassInfix: {
+									priority:  1000,
+									specifier: operatorSpecifierXFX,
+									name:      NewAtom("++"),
+								},
+							}},
+						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+							Key: NewAtom(`+`),
+							Value: [_operatorClassLen]operator{
+								operatorClassInfix: {
+									priority:  1100,
+									specifier: operatorSpecifierXFX,
+									name:      atomPlus,
+								},
+							}}))}, vm.getOperators())
 		})
 
 		t.Run("list", func(t *testing.T) {
 			vm := VM{
-				operators: operators{
-					NewAtom(`+++`): {
-						operatorClassInfix: {
-							priority:  900,
-							specifier: operatorSpecifierXFX,
-							name:      NewAtom("+++"),
-						},
-					},
-					NewAtom(`+`): {
-						operatorClassInfix: {
-							priority:  1100,
-							specifier: operatorSpecifierXFX,
-							name:      atomPlus,
-						},
-					},
-				},
+				_operators: &operators{
+					OrderedMap: orderedmap.New[Atom, [_operatorClassLen]operator](
+						orderedmap.WithInitialData(
+							orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+								Key: NewAtom(`+++`),
+								Value: [_operatorClassLen]operator{
+									operatorClassInfix: {
+										priority:  900,
+										specifier: operatorSpecifierXFX,
+										name:      NewAtom("+++"),
+									},
+								}},
+							orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+								Key: NewAtom(`+`),
+								Value: [_operatorClassLen]operator{
+									operatorClassInfix: {
+										priority:  1100,
+										specifier: operatorSpecifierXFX,
+										name:      atomPlus,
+									},
+								}}))},
 			}
 			ok, err := Op(&vm, Integer(1000), atomXFX, List(NewAtom("++"), NewAtom("++")), Success, nil).Force(context.Background())
 			assert.NoError(t, err)
 			assert.True(t, ok)
 
-			assert.Equal(t, operators{
-				NewAtom(`+++`): {
-					operatorClassInfix: {
-						priority:  900,
-						specifier: operatorSpecifierXFX,
-						name:      NewAtom("+++"),
-					},
-				},
-				NewAtom(`++`): {
-					operatorClassInfix: {
-						priority:  1000,
-						specifier: operatorSpecifierXFX,
-						name:      NewAtom("++"),
-					},
-				},
-				NewAtom(`+`): {
-					operatorClassInfix: {
-						priority:  1100,
-						specifier: operatorSpecifierXFX,
-						name:      atomPlus,
-					},
-				},
-			}, vm.operators)
+			assert.EqualValues(t, &operators{
+				OrderedMap: orderedmap.New[Atom, [_operatorClassLen]operator](
+					orderedmap.WithInitialData(
+						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+							Key: NewAtom(`+++`),
+							Value: [_operatorClassLen]operator{
+								operatorClassInfix: {
+									priority:  900,
+									specifier: operatorSpecifierXFX,
+									name:      NewAtom("+++"),
+								},
+							}},
+						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+							Key: NewAtom(`++`),
+							Value: [_operatorClassLen]operator{
+								operatorClassInfix: {
+									priority:  1000,
+									specifier: operatorSpecifierXFX,
+									name:      NewAtom("++"),
+								},
+							}},
+						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+							Key: NewAtom(`+`),
+							Value: [_operatorClassLen]operator{
+								operatorClassInfix: {
+									priority:  1100,
+									specifier: operatorSpecifierXFX,
+									name:      atomPlus,
+								},
+							}}))}, vm.getOperators())
 		})
 	})
 
 	t.Run("remove", func(t *testing.T) {
 		vm := VM{
-			operators: operators{
-				NewAtom(`+++`): {
-					operatorClassInfix: {
-						priority:  900,
-						specifier: operatorSpecifierXFX,
-						name:      NewAtom("+++"),
-					},
-				},
-				NewAtom(`++`): {
-					operatorClassInfix: {
-						priority:  1000,
-						specifier: operatorSpecifierXFX,
-						name:      NewAtom("++"),
-					},
-				},
-				NewAtom(`+`): {
-					operatorClassInfix: {
-						priority:  1100,
-						specifier: operatorSpecifierXFX,
-						name:      atomPlus,
-					},
-				},
-			},
+			_operators: &operators{
+				OrderedMap: orderedmap.New[Atom, [_operatorClassLen]operator](
+					orderedmap.WithInitialData(
+						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+							Key: NewAtom(`+++`),
+							Value: [_operatorClassLen]operator{
+								operatorClassInfix: {
+									priority:  900,
+									specifier: operatorSpecifierXFX,
+									name:      NewAtom("+++"),
+								},
+							}},
+						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+							Key: NewAtom(`++`),
+							Value: [_operatorClassLen]operator{
+								operatorClassInfix: {
+									priority:  1000,
+									specifier: operatorSpecifierXFX,
+									name:      NewAtom("++"),
+								},
+							}},
+						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+							Key: NewAtom(`+`),
+							Value: [_operatorClassLen]operator{
+								operatorClassInfix: {
+									priority:  1100,
+									specifier: operatorSpecifierXFX,
+									name:      atomPlus,
+								},
+							}}))},
 		}
 		ok, err := Op(&vm, Integer(0), atomXFX, NewAtom("++"), Success, nil).Force(context.Background())
 		assert.NoError(t, err)
 		assert.True(t, ok)
 
-		assert.Equal(t, operators{
-			NewAtom(`+++`): {
-				operatorClassInfix: {
-					priority:  900,
-					specifier: operatorSpecifierXFX,
-					name:      NewAtom("+++"),
-				},
-			},
-			NewAtom(`+`): {
-				operatorClassInfix: {
-					priority:  1100,
-					specifier: operatorSpecifierXFX,
-					name:      atomPlus,
-				},
-			},
-		}, vm.operators)
+		assert.EqualValues(t, &operators{
+			OrderedMap: orderedmap.New[Atom, [_operatorClassLen]operator](
+				orderedmap.WithInitialData(
+					orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+						Key: NewAtom(`+++`),
+						Value: [_operatorClassLen]operator{
+							operatorClassInfix: {
+								priority:  900,
+								specifier: operatorSpecifierXFX,
+								name:      NewAtom("+++"),
+							},
+						}},
+					orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+						Key: NewAtom(`+`),
+						Value: [_operatorClassLen]operator{
+							operatorClassInfix: {
+								priority:  1100,
+								specifier: operatorSpecifierXFX,
+								name:      atomPlus,
+							},
+						}}))}, vm.getOperators())
 	})
 
 	t.Run("priority is a variable", func(t *testing.T) {
@@ -1148,16 +1179,16 @@ func TestOp(t *testing.T) {
 	})
 
 	t.Run("operator is ','", func(t *testing.T) {
-		vm := VM{operators: operators{}}
-		vm.operators.define(1000, operatorSpecifierXFY, NewAtom(`,`))
+		vm := VM{_operators: newOperators()}
+		vm.getOperators().define(1000, operatorSpecifierXFY, NewAtom(`,`))
 		ok, err := Op(&vm, Integer(1000), atomXFY, atomComma, Success, nil).Force(context.Background())
 		assert.Equal(t, permissionError(operationModify, permissionTypeOperator, atomComma, nil), err)
 		assert.False(t, ok)
 	})
 
 	t.Run("an element of the operator list is ','", func(t *testing.T) {
-		vm := VM{operators: operators{}}
-		vm.operators.define(1000, operatorSpecifierXFY, NewAtom(`,`))
+		vm := VM{_operators: newOperators()}
+		vm.getOperators().define(1000, operatorSpecifierXFY, NewAtom(`,`))
 		ok, err := Op(&vm, Integer(1000), atomXFY, List(atomComma), Success, nil).Force(context.Background())
 		assert.Equal(t, permissionError(operationModify, permissionTypeOperator, atomComma, nil), err)
 		assert.False(t, ok)
@@ -1187,8 +1218,8 @@ func TestOp(t *testing.T) {
 			})
 
 			t.Run("modify", func(t *testing.T) {
-				vm := VM{operators: operators{}}
-				vm.operators.define(1001, operatorSpecifierXFY, NewAtom(`|`))
+				vm := VM{_operators: newOperators()}
+				vm.getOperators().define(1001, operatorSpecifierXFY, NewAtom(`|`))
 				ok, err := Op(&vm, Integer(1000), atomXFY, atomBar, Success, nil).Force(context.Background())
 				assert.Equal(t, permissionError(operationModify, permissionTypeOperator, atomBar, nil), err)
 				assert.False(t, ok)
@@ -1220,8 +1251,8 @@ func TestOp(t *testing.T) {
 			})
 
 			t.Run("modify", func(t *testing.T) {
-				vm := VM{operators: operators{}}
-				vm.operators.define(101, operatorSpecifierXFY, NewAtom(`|`))
+				vm := VM{_operators: newOperators()}
+				vm.getOperators().define(101, operatorSpecifierXFY, NewAtom(`|`))
 				ok, err := Op(&vm, Integer(1000), atomXFY, List(atomBar), Success, nil).Force(context.Background())
 				assert.Equal(t, permissionError(operationModify, permissionTypeOperator, atomBar, nil), err)
 				assert.False(t, ok)
@@ -1231,16 +1262,16 @@ func TestOp(t *testing.T) {
 
 	t.Run("There shall not be an infix and a postfix operator with the same name.", func(t *testing.T) {
 		t.Run("infix", func(t *testing.T) {
-			vm := VM{operators: operators{}}
-			vm.operators.define(200, operatorSpecifierYF, NewAtom(`+`))
+			vm := VM{_operators: newOperators()}
+			vm.getOperators().define(200, operatorSpecifierYF, NewAtom(`+`))
 			ok, err := Op(&vm, Integer(500), atomYFX, List(atomPlus), Success, nil).Force(context.Background())
 			assert.Equal(t, permissionError(operationCreate, permissionTypeOperator, atomPlus, nil), err)
 			assert.False(t, ok)
 		})
 
 		t.Run("postfix", func(t *testing.T) {
-			vm := VM{operators: operators{}}
-			vm.operators.define(500, operatorSpecifierYFX, NewAtom(`+`))
+			vm := VM{_operators: newOperators()}
+			vm.getOperators().define(500, operatorSpecifierYFX, NewAtom(`+`))
 			ok, err := Op(&vm, Integer(200), atomYF, List(atomPlus), Success, nil).Force(context.Background())
 			assert.Equal(t, permissionError(operationCreate, permissionTypeOperator, atomPlus, nil), err)
 			assert.False(t, ok)
@@ -1249,10 +1280,10 @@ func TestOp(t *testing.T) {
 }
 
 func TestCurrentOp(t *testing.T) {
-	vm := VM{operators: operators{}}
-	vm.operators.define(900, operatorSpecifierXFX, NewAtom(`+++`))
-	vm.operators.define(1000, operatorSpecifierXFX, NewAtom(`++`))
-	vm.operators.define(1100, operatorSpecifierXFX, NewAtom(`+`))
+	vm := VM{_operators: newOperators()}
+	vm.getOperators().define(900, operatorSpecifierXFX, NewAtom(`+++`))
+	vm.getOperators().define(1000, operatorSpecifierXFX, NewAtom(`++`))
+	vm.getOperators().define(1100, operatorSpecifierXFX, NewAtom(`+`))
 
 	t.Run("single solution", func(t *testing.T) {
 		ok, err := CurrentOp(&vm, Integer(1100), atomXFX, atomPlus, Success, nil).Force(context.Background())
@@ -4169,9 +4200,9 @@ func TestWriteTerm(t *testing.T) {
 	}
 
 	var vm VM
-	vm.operators.define(500, operatorSpecifierYFX, atomPlus)
-	vm.operators.define(200, operatorSpecifierFY, atomPlus)
-	vm.operators.define(200, operatorSpecifierYF, atomMinus)
+	vm.getOperators().define(500, operatorSpecifierYFX, atomPlus)
+	vm.getOperators().define(200, operatorSpecifierFY, atomPlus)
+	vm.getOperators().define(200, operatorSpecifierYF, atomMinus)
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
 			buf.Reset()

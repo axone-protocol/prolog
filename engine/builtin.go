@@ -561,11 +561,11 @@ func Op(vm *VM, priority, specifier, op Term, k Cont, env *Env) *Promise {
 	}
 
 	for _, name := range names {
-		if class := spec.class(); vm.operators.definedInClass(name, spec.class()) {
-			vm.operators.remove(name, class)
+		if class := spec.class(); vm.getOperators().definedInClass(name, spec.class()) {
+			vm.getOperators().remove(name, class)
 		}
 
-		vm.operators.define(p, spec, name)
+		vm.getOperators().define(p, spec, name)
 	}
 
 	return k(env)
@@ -574,13 +574,13 @@ func Op(vm *VM, priority, specifier, op Term, k Cont, env *Env) *Promise {
 func validateOp(vm *VM, p Integer, spec operatorSpecifier, name Atom, env *Env) *Promise {
 	switch name {
 	case atomComma:
-		if vm.operators.definedInClass(name, operatorClassInfix) {
+		if vm.getOperators().definedInClass(name, operatorClassInfix) {
 			return Error(permissionError(operationModify, permissionTypeOperator, name, env))
 		}
 	case atomBar:
 		if spec.class() != operatorClassInfix || (p > 0 && p < 1001) {
 			op := operationCreate
-			if vm.operators.definedInClass(name, operatorClassInfix) {
+			if vm.getOperators().definedInClass(name, operatorClassInfix) {
 				op = operationModify
 			}
 			return Error(permissionError(op, permissionTypeOperator, name, env))
@@ -592,11 +592,11 @@ func validateOp(vm *VM, p Integer, spec operatorSpecifier, name Atom, env *Env) 
 	// 6.3.4.3 There shall not be an infix and a postfix Operator with the same name.
 	switch spec.class() {
 	case operatorClassInfix:
-		if vm.operators.definedInClass(name, operatorClassPostfix) {
+		if vm.getOperators().definedInClass(name, operatorClassPostfix) {
 			return Error(permissionError(operationCreate, permissionTypeOperator, name, env))
 		}
 	case operatorClassPostfix:
-		if vm.operators.definedInClass(name, operatorClassInfix) {
+		if vm.getOperators().definedInClass(name, operatorClassInfix) {
 			return Error(permissionError(operationCreate, permissionTypeOperator, name, env))
 		}
 	}
@@ -653,9 +653,9 @@ func CurrentOp(vm *VM, priority, specifier, op Term, k Cont, env *Env) *Promise 
 	}
 
 	pattern := tuple(priority, specifier, op)
-	ks := make([]func(context.Context) *Promise, 0, len(vm.operators)*int(_operatorClassLen))
-	for _, ops := range vm.operators {
-		for _, op := range ops {
+	ks := make([]func(context.Context) *Promise, 0, vm.getOperators().Len()*int(_operatorClassLen))
+	for ops := vm.getOperators().Oldest(); ops != nil; ops = ops.Next() {
+		for _, op := range ops.Value {
 			op := op
 			if op == (operator{}) {
 				continue
@@ -1463,7 +1463,7 @@ func WriteTerm(vm *VM, streamOrAlias, t, options Term, k Cont, env *Env) *Promis
 	}
 
 	opts := WriteOptions{
-		ops:      vm.operators,
+		ops:      vm.getOperators(),
 		priority: 1200,
 	}
 	iter := ListIterator{List: options, Env: env}
