@@ -1,2 +1,6 @@
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+
 ignore:
   - "**/main.go"
