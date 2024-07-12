@@ -3,6 +3,7 @@ package engine
 import (
 	"errors"
 	"fmt"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"io"
 	"math/big"
 	"reflect"
@@ -21,7 +22,7 @@ var (
 // Parser turns bytes into Term.
 type Parser struct {
 	lexer        Lexer
-	operators    operators
+	_operators   *operators
 	doubleQuotes doubleQuotes
 
 	Vars []ParsedVariable
@@ -41,14 +42,11 @@ type ParsedVariable struct {
 
 // NewParser creates a new parser from the current VM and io.RuneReader.
 func NewParser(vm *VM, r io.RuneReader) *Parser {
-	if vm.operators == nil {
-		vm.operators = operators{}
-	}
 	return &Parser{
 		lexer: Lexer{
 			input: newRuneRingBuffer(r),
 		},
-		operators:    vm.operators,
+		_operators:   vm.getOperators(),
 		doubleQuotes: vm.doubleQuotes,
 	}
 }
@@ -258,48 +256,48 @@ func (s operatorSpecifier) arity() int {
 	}[s]
 }
 
-type operators map[Atom][_operatorClassLen]operator
+type operators struct {
+	*orderedmap.OrderedMap[Atom, [_operatorClassLen]operator]
+}
+
+func newOperators() *operators {
+	return &operators{OrderedMap: orderedmap.New[Atom, [_operatorClassLen]operator]()}
+}
 
 func (ops *operators) defined(name Atom) bool {
-	ops.init()
-	_, ok := (*ops)[name]
+	_, ok := ops.Get(name)
 	return ok
 }
 
 func (ops *operators) definedInClass(name Atom, class operatorClass) bool {
-	ops.init()
-	return (*ops)[name][class] != operator{}
+	if o, ok := ops.Get(name); ok {
+		return o[class] != operator{}
+	}
+	return false
 }
 
 func (ops *operators) define(p Integer, spec operatorSpecifier, op Atom) {
 	if p == 0 {
 		return
 	}
-	ops.init()
-	os := (*ops)[op]
+
+	os, _ := ops.Get(op)
 	os[spec.class()] = operator{
 		priority:  p,
 		specifier: spec,
 		name:      op,
 	}
-	(*ops)[op] = os
-}
-
-func (ops *operators) init() {
-	if *ops != nil {
-		return
-	}
-	*ops = map[Atom][3]operator{}
+	ops.Set(op, os)
 }
 
 func (ops *operators) remove(name Atom, class operatorClass) {
-	os := (*ops)[name]
+	os, _ := ops.Get(name)
 	os[class] = operator{}
 	if os == ([_operatorClassLen]operator{}) {
-		delete(*ops, name)
+		ops.Delete(name)
 		return
 	}
-	(*ops)[name] = os
+	ops.Set(name, os)
 }
 
 type operator struct {
@@ -340,6 +338,13 @@ func (d doubleQuotes) String() string {
 		doubleQuotesChars: "chars",
 		doubleQuotesAtom:  "atom",
 	}[d]
+}
+
+func (p *Parser) getOperators() *operators {
+	if p._operators == nil {
+		p._operators = newOperators()
+	}
+	return p._operators
 }
 
 // Loosely based on Pratt parser explained in this article: https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html
@@ -417,7 +422,8 @@ func (p *Parser) prefix(maxPriority Integer) (operator, error) {
 		p.backup()
 	}
 
-	if op := p.operators[a][operatorClassPrefix]; op != (operator{}) && op.priority <= maxPriority {
+	o, _ := p.getOperators().Get(a)
+	if op := o[operatorClassPrefix]; op != (operator{}) && op.priority <= maxPriority {
 		return op, nil
 	}
 
@@ -431,13 +437,14 @@ func (p *Parser) infix(maxPriority Integer) (operator, error) {
 		return operator{}, errNoOp
 	}
 
-	if op := p.operators[a][operatorClassInfix]; op != (operator{}) {
+	o, _ := p.getOperators().Get(a)
+	if op := o[operatorClassInfix]; op != (operator{}) {
 		l, _ := op.bindingPriorities()
 		if l <= maxPriority {
 			return op, nil
 		}
 	}
-	if op := p.operators[a][operatorClassPostfix]; op != (operator{}) {
+	if op := o[operatorClassPostfix]; op != (operator{}) {
 		l, _ := op.bindingPriorities()
 		if l <= maxPriority {
 			return op, nil
@@ -559,7 +566,7 @@ func (p *Parser) term0Atom(maxPriority Integer) (Term, error) {
 	}
 
 	// 6.3.1.3 An atom which is an operator shall not be the immediate operand (3.120) of an operator.
-	if t, ok := t.(Atom); ok && maxPriority < 1201 && p.operators.defined(t) {
+	if t, ok := t.(Atom); ok && maxPriority < 1201 && p.getOperators().defined(t) {
 		p.backup()
 		return nil, errExpectation
 	}
@@ -752,7 +759,7 @@ func (p *Parser) functionalNotation(functor Atom) (Term, error) {
 
 func (p *Parser) arg() (Term, error) {
 	if arg, err := p.atom(); err == nil {
-		if p.operators.defined(arg) {
+		if p.getOperators().defined(arg) {
 			// Check if this atom is not followed by its own arguments.
 			switch t, _ := p.next(); t.kind {
 			case tokenComma, tokenClose, tokenBar, tokenCloseList:

@@ -45,9 +45,11 @@ func WriteCompound(w io.Writer, c Compound, opts *WriteOptions, env *Env) error 
 		return writeCompoundFunctionalNotation(w, c, opts, env)
 	}
 
-	for _, o := range opts.ops[c.Functor()] {
-		if o.specifier.arity() == c.Arity() {
-			return writeCompoundOp(w, c, opts, env, &o)
+	if ops, ok := opts.ops.Get(c.Functor()); ok {
+		for _, o := range ops {
+			if o.specifier.arity() == c.Arity() {
+				return writeCompoundOp(w, c, opts, env, &o)
+			}
 		}
 	}
 

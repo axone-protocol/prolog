@@ -14,7 +14,7 @@ func TestWriteCompound(t *testing.T) {
 	r := f.Apply(w)
 	env := NewEnv().bind(v, l).bind(w, r)
 
-	ops := operators{}
+	ops := newOperators()
 	ops.define(1200, operatorSpecifierXFX, NewAtom(`:-`))
 	ops.define(1200, operatorSpecifierFX, NewAtom(`:-`))
 	ops.define(1200, operatorSpecifierXF, NewAtom(`-:`))

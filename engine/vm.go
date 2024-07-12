@@ -61,7 +61,7 @@ type VM struct {
 	loaded map[string]struct{}
 
 	// Internal/external expression
-	operators       operators
+	_operators      *operators
 	charConversions map[rune]rune
 	charConvEnabled bool
 	doubleQuotes    doubleQuotes
@@ -301,6 +301,13 @@ func (vm *VM) setProcedure(key procedureIndicator, val procedure) (procedure, bo
 		vm.procedures = orderedmap.New[procedureIndicator, procedure]()
 	}
 	return vm.procedures.Set(key, val)
+}
+
+func (vm *VM) getOperators() *operators {
+	if vm._operators == nil {
+		vm._operators = newOperators()
+	}
+	return vm._operators
 }
 
 // Predicate0 is a predicate of arity 0.

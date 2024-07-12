@@ -485,11 +485,11 @@ bar(b).
 			var vm VM
 			varCounter = 1 // Global var cause issues in testing environment that call in randomly order for checking equality between procedure clause args
 
-			vm.operators.define(1200, operatorSpecifierXFX, atomIf)
-			vm.operators.define(1200, operatorSpecifierXFX, atomArrow)
-			vm.operators.define(1200, operatorSpecifierFX, atomIf)
-			vm.operators.define(1000, operatorSpecifierXFY, atomComma)
-			vm.operators.define(400, operatorSpecifierYFX, atomSlash)
+			vm.getOperators().define(1200, operatorSpecifierXFX, atomIf)
+			vm.getOperators().define(1200, operatorSpecifierXFX, atomArrow)
+			vm.getOperators().define(1200, operatorSpecifierFX, atomIf)
+			vm.getOperators().define(1000, operatorSpecifierXFY, atomComma)
+			vm.getOperators().define(400, operatorSpecifierYFX, atomSlash)
 			vm.procedures = buildOrderedMap(
 				procedurePair{
 					Key: procedureIndicator{name: NewAtom("foo"), arity: 1},
