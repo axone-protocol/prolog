@@ -1463,7 +1463,7 @@ func WriteTerm(vm *VM, streamOrAlias, t, options Term, k Cont, env *Env) *Promis
 	}
 
 	opts := WriteOptions{
-		ops:      vm.getOperators(),
+		_ops:     vm.getOperators(),
 		priority: 1200,
 	}
 	iter := ListIterator{List: options, Env: env}
