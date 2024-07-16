@@ -107,17 +107,17 @@ func convertAssign(dest interface{}, vm *engine.VM, t engine.Term, env *engine.E
 	case *interface{}:
 		return convertAssignAny(d, vm, t, env)
 	case *string:
-		return convertAssignString(d, t, env)
+		return convertAssignString(d, vm, t, env)
 	case *int:
-		return convertAssignInt(d, t, env)
+		return convertAssignInt(d, vm, t, env)
 	case *int8:
-		return convertAssignInt8(d, t, env)
+		return convertAssignInt8(d, vm, t, env)
 	case *int16:
-		return convertAssignInt16(d, t, env)
+		return convertAssignInt16(d, vm, t, env)
 	case *int32:
-		return convertAssignInt32(d, t, env)
+		return convertAssignInt32(d, vm, t, env)
 	case *int64:
-		return convertAssignInt64(d, t, env)
+		return convertAssignInt64(d, vm, t, env)
 	case Scanner:
 		return d.Scan(vm, t, env)
 	default:
@@ -126,7 +126,7 @@ func convertAssign(dest interface{}, vm *engine.VM, t engine.Term, env *engine.E
 }
 
 func convertAssignAny(d *interface{}, vm *engine.VM, t engine.Term, env *engine.Env) error {
-	switch t := env.Resolve(t).(type) {
+	switch t := env.Resolve(vm, t).(type) {
 	case engine.Variable:
 		*d = nil
 		return nil
@@ -142,14 +142,14 @@ func convertAssignAny(d *interface{}, vm *engine.VM, t engine.Term, env *engine.
 		return nil
 	case engine.Float:
 		var s string
-		if err := convertAssignString(&s, t, env); err != nil {
+		if err := convertAssignString(&s, vm, t, env); err != nil {
 			return err
 		}
 		*d = s
 		return nil
 	case engine.Compound:
 		var s []interface{}
-		iter := engine.ListIterator{List: t, Env: env}
+		iter := engine.ListIterator{List: t, Env: env, vm: vm}
 		for iter.Next() {
 			s = append(s, nil)
 			if err := convertAssign(&s[len(s)-1], vm, iter.Current(), env); err != nil {
@@ -166,8 +166,8 @@ func convertAssignAny(d *interface{}, vm *engine.VM, t engine.Term, env *engine.
 	}
 }
 
-func convertAssignString(d *string, t engine.Term, env *engine.Env) error {
-	switch t := env.Resolve(t).(type) {
+func convertAssignString(d *string, vm *engine.VM, t engine.Term, env *engine.Env) error {
+	switch t := env.Resolve(vm, t).(type) {
 	case fmt.Stringer:
 		*d = t.String()
 		return nil
@@ -176,8 +176,8 @@ func convertAssignString(d *string, t engine.Term, env *engine.Env) error {
 	}
 }
 
-func convertAssignInt(d *int, t engine.Term, env *engine.Env) error {
-	switch t := env.Resolve(t).(type) {
+func convertAssignInt(d *int, vm *engine.VM, t engine.Term, env *engine.Env) error {
+	switch t := env.Resolve(vm, t).(type) {
 	case engine.Integer:
 		*d = int(t)
 		return nil
@@ -186,8 +186,8 @@ func convertAssignInt(d *int, t engine.Term, env *engine.Env) error {
 	}
 }
 
-func convertAssignInt8(d *int8, t engine.Term, env *engine.Env) error {
-	switch t := env.Resolve(t).(type) {
+func convertAssignInt8(d *int8, vm *engine.VM, t engine.Term, env *engine.Env) error {
+	switch t := env.Resolve(vm, t).(type) {
 	case engine.Integer:
 		*d = int8(t)
 		return nil
@@ -196,8 +196,8 @@ func convertAssignInt8(d *int8, t engine.Term, env *engine.Env) error {
 	}
 }
 
-func convertAssignInt16(d *int16, t engine.Term, env *engine.Env) error {
-	switch t := env.Resolve(t).(type) {
+func convertAssignInt16(d *int16, vm *engine.VM, t engine.Term, env *engine.Env) error {
+	switch t := env.Resolve(vm, t).(type) {
 	case engine.Integer:
 		*d = int16(t)
 		return nil
@@ -206,8 +206,8 @@ func convertAssignInt16(d *int16, t engine.Term, env *engine.Env) error {
 	}
 }
 
-func convertAssignInt32(d *int32, t engine.Term, env *engine.Env) error {
-	switch t := env.Resolve(t).(type) {
+func convertAssignInt32(d *int32, vm *engine.VM, t engine.Term, env *engine.Env) error {
+	switch t := env.Resolve(vm, t).(type) {
 	case engine.Integer:
 		*d = int32(t)
 		return nil
@@ -216,8 +216,8 @@ func convertAssignInt32(d *int32, t engine.Term, env *engine.Env) error {
 	}
 }
 
-func convertAssignInt64(d *int64, t engine.Term, env *engine.Env) error {
-	switch t := env.Resolve(t).(type) {
+func convertAssignInt64(d *int64, vm *engine.VM, t engine.Term, env *engine.Env) error {
+	switch t := env.Resolve(vm, t).(type) {
 	case engine.Integer:
 		*d = int64(t)
 		return nil

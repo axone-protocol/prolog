@@ -23,7 +23,7 @@ var constants = map[Atom]Number{
 	}(),
 }
 
-var unaryFunctors = map[Atom]func(Number) (Number, error){
+var unaryFunctors = map[Atom]func(*VM, Number) (Number, error){
 	atomMinus:               neg,
 	atomAbs:                 abs,
 	atomSign:                sign,
@@ -41,7 +41,7 @@ var unaryFunctors = map[Atom]func(Number) (Number, error){
 	atomPlus:                pos,
 }
 
-var binaryFunctors = map[Atom]func(Number, Number) (Number, error){
+var binaryFunctors = map[Atom]func(*VM, Number, Number) (Number, error){
 	atomPlus:              add,
 	atomMinus:             sub,
 	atomAsterisk:          mul,
@@ -67,21 +67,21 @@ type Number interface {
 	number()
 }
 
-func eval(expression Term, env *Env) (_ Number, err error) {
+func eval(vm *VM, expression Term, env *Env) (_ Number, err error) {
 	defer func() {
 		var ev exceptionalValue
 		if errors.As(err, &ev) {
-			err = evaluationError(ev, env)
+			err = evaluationError(vm, ev, env)
 		}
 	}()
 
-	switch t := env.Resolve(expression).(type) {
+	switch t := env.Resolve(vm, expression).(type) {
 	case Variable:
-		return nil, InstantiationError(env)
+		return nil, InstantiationError(vm, env)
 	case Atom:
 		c, ok := constants[t]
 		if !ok {
-			return nil, typeError(validTypeEvaluable, atomSlash.Apply(t, Integer(0)), env)
+			return nil, typeError(vm, validTypeEvaluable, atomSlash.Apply(t, Integer(0)), env)
 		}
 		return c, nil
 	case Number:
@@ -91,38 +91,38 @@ func eval(expression Term, env *Env) (_ Number, err error) {
 		case 1:
 			f, ok := unaryFunctors[t.Functor()]
 			if !ok {
-				return nil, typeError(validTypeEvaluable, atomSlash.Apply(t.Functor(), Integer(1)), env)
+				return nil, typeError(vm, validTypeEvaluable, atomSlash.Apply(t.Functor(), Integer(1)), env)
 			}
-			x, err := eval(t.Arg(0), env)
+			x, err := eval(vm, t.Arg(0), env)
 			if err != nil {
 				return nil, err
 			}
-			return f(x)
+			return f(vm, x)
 		case 2:
 			f, ok := binaryFunctors[t.Functor()]
 			if !ok {
-				return nil, typeError(validTypeEvaluable, atomSlash.Apply(t.Functor(), Integer(2)), env)
+				return nil, typeError(vm, validTypeEvaluable, atomSlash.Apply(t.Functor(), Integer(2)), env)
 			}
-			x, err := eval(t.Arg(0), env)
+			x, err := eval(vm, t.Arg(0), env)
 			if err != nil {
 				return nil, err
 			}
-			y, err := eval(t.Arg(1), env)
+			y, err := eval(vm, t.Arg(1), env)
 			if err != nil {
 				return nil, err
 			}
-			return f(x, y)
+			return f(vm, x, y)
 		default:
-			return nil, typeError(validTypeEvaluable, atomSlash.Apply(t.Functor(), Integer(arity)), env)
+			return nil, typeError(vm, validTypeEvaluable, atomSlash.Apply(t.Functor(), Integer(arity)), env)
 		}
 	default:
-		return nil, typeError(validTypeEvaluable, atomSlash.Apply(t, Integer(0)), env)
+		return nil, typeError(vm, validTypeEvaluable, atomSlash.Apply(t, Integer(0)), env)
 	}
 }
 
 // Is evaluates expression and unifies the result with result.
 func Is(vm *VM, result, expression Term, k Cont, env *Env) *Promise {
-	v, err := eval(expression, env)
+	v, err := eval(vm, expression, env)
 	if err != nil {
 		return Error(err)
 	}
@@ -130,13 +130,13 @@ func Is(vm *VM, result, expression Term, k Cont, env *Env) *Promise {
 }
 
 // Equal succeeds iff e1 equals to e2.
-func Equal(_ *VM, e1, e2 Term, k Cont, env *Env) *Promise {
-	ev1, err := eval(e1, env)
+func Equal(vm *VM, e1, e2 Term, k Cont, env *Env) *Promise {
+	ev1, err := eval(vm, e1, env)
 	if err != nil {
 		return Error(err)
 	}
 
-	ev2, err := eval(e2, env)
+	ev2, err := eval(vm, e2, env)
 	if err != nil {
 		return Error(err)
 	}
@@ -165,13 +165,13 @@ func Equal(_ *VM, e1, e2 Term, k Cont, env *Env) *Promise {
 }
 
 // NotEqual succeeds iff e1 doesn't equal to e2.
-func NotEqual(_ *VM, e1, e2 Term, k Cont, env *Env) *Promise {
-	ev1, err := eval(e1, env)
+func NotEqual(vm *VM, e1, e2 Term, k Cont, env *Env) *Promise {
+	ev1, err := eval(vm, e1, env)
 	if err != nil {
 		return Error(err)
 	}
 
-	ev2, err := eval(e2, env)
+	ev2, err := eval(vm, e2, env)
 	if err != nil {
 		return Error(err)
 	}
@@ -200,13 +200,13 @@ func NotEqual(_ *VM, e1, e2 Term, k Cont, env *Env) *Promise {
 }
 
 // LessThan succeeds iff e1 is less than e2.
-func LessThan(_ *VM, e1, e2 Term, k Cont, env *Env) *Promise {
-	ev1, err := eval(e1, env)
+func LessThan(vm *VM, e1, e2 Term, k Cont, env *Env) *Promise {
+	ev1, err := eval(vm, e1, env)
 	if err != nil {
 		return Error(err)
 	}
 
-	ev2, err := eval(e2, env)
+	ev2, err := eval(vm, e2, env)
 	if err != nil {
 		return Error(err)
 	}
@@ -235,13 +235,13 @@ func LessThan(_ *VM, e1, e2 Term, k Cont, env *Env) *Promise {
 }
 
 // GreaterThan succeeds iff e1 is greater than e2.
-func GreaterThan(_ *VM, e1, e2 Term, k Cont, env *Env) *Promise {
-	ev1, err := eval(e1, env)
+func GreaterThan(vm *VM, e1, e2 Term, k Cont, env *Env) *Promise {
+	ev1, err := eval(vm, e1, env)
 	if err != nil {
 		return Error(err)
 	}
 
-	ev2, err := eval(e2, env)
+	ev2, err := eval(vm, e2, env)
 	if err != nil {
 		return Error(err)
 	}
@@ -270,13 +270,13 @@ func GreaterThan(_ *VM, e1, e2 Term, k Cont, env *Env) *Promise {
 }
 
 // LessThanOrEqual succeeds iff e1 is less than or equal to e2.
-func LessThanOrEqual(_ *VM, e1, e2 Term, k Cont, env *Env) *Promise {
-	ev1, err := eval(e1, env)
+func LessThanOrEqual(vm *VM, e1, e2 Term, k Cont, env *Env) *Promise {
+	ev1, err := eval(vm, e1, env)
 	if err != nil {
 		return Error(err)
 	}
 
-	ev2, err := eval(e2, env)
+	ev2, err := eval(vm, e2, env)
 	if err != nil {
 		return Error(err)
 	}
@@ -305,13 +305,13 @@ func LessThanOrEqual(_ *VM, e1, e2 Term, k Cont, env *Env) *Promise {
 }
 
 // GreaterThanOrEqual succeeds iff e1 is greater than or equal to e2.
-func GreaterThanOrEqual(_ *VM, e1, e2 Term, k Cont, env *Env) *Promise {
-	ev1, err := eval(e1, env)
+func GreaterThanOrEqual(vm *VM, e1, e2 Term, k Cont, env *Env) *Promise {
+	ev1, err := eval(vm, e1, env)
 	if err != nil {
 		return Error(err)
 	}
 
-	ev2, err := eval(e2, env)
+	ev2, err := eval(vm, e2, env)
 	if err != nil {
 		return Error(err)
 	}
@@ -340,7 +340,7 @@ func GreaterThanOrEqual(_ *VM, e1, e2 Term, k Cont, env *Env) *Promise {
 }
 
 // add returns sum of 2 numbers.
-func add(x, y Number) (Number, error) {
+func add(_ *VM, x, y Number) (Number, error) {
 	switch x := x.(type) {
 	case Integer:
 		switch y := y.(type) {
@@ -361,7 +361,7 @@ func add(x, y Number) (Number, error) {
 }
 
 // sub returns subtraction of 2 numbers.
-func sub(x, y Number) (Number, error) {
+func sub(_ *VM, x, y Number) (Number, error) {
 	switch x := x.(type) {
 	case Integer:
 		switch y := y.(type) {
@@ -382,7 +382,7 @@ func sub(x, y Number) (Number, error) {
 }
 
 // mul returns multiplication of 2 numbers.
-func mul(x, y Number) (Number, error) {
+func mul(_ *VM, x, y Number) (Number, error) {
 	switch x := x.(type) {
 	case Integer:
 		switch y := y.(type) {
@@ -403,22 +403,22 @@ func mul(x, y Number) (Number, error) {
 }
 
 // intDiv returns integer division of 2 numbers.
-func intDiv(x, y Number) (Number, error) {
+func intDiv(vm *VM, x, y Number) (Number, error) {
 	switch x := x.(type) {
 	case Integer:
 		switch y := y.(type) {
 		case Integer:
 			return intDivI(x, y)
 		default:
-			return nil, typeError(validTypeInteger, y, nil)
+			return nil, typeError(vm, validTypeInteger, y, nil)
 		}
 	default:
-		return nil, typeError(validTypeInteger, x, nil)
+		return nil, typeError(vm, validTypeInteger, x, nil)
 	}
 }
 
 // div returns division of 2 numbers
-func div(x, y Number) (Number, error) {
+func div(_ *VM, x, y Number) (Number, error) {
 	switch x := x.(type) {
 	case Integer:
 		switch y := y.(type) {
@@ -439,37 +439,37 @@ func div(x, y Number) (Number, error) {
 }
 
 // rem returns remainder of 2 numbers.
-func rem(x, y Number) (Number, error) {
+func rem(vm *VM, x, y Number) (Number, error) {
 	switch x := x.(type) {
 	case Integer:
 		switch y := y.(type) {
 		case Integer:
 			return remI(x, y)
 		default:
-			return nil, typeError(validTypeInteger, y, nil)
+			return nil, typeError(vm, validTypeInteger, y, nil)
 		}
 	default:
-		return nil, typeError(validTypeInteger, x, nil)
+		return nil, typeError(vm, validTypeInteger, x, nil)
 	}
 }
 
 // mod returns modulo of 2 numbers.
-func mod(x, y Number) (Number, error) {
+func mod(vm *VM, x, y Number) (Number, error) {
 	switch x := x.(type) {
 	case Integer:
 		switch y := y.(type) {
 		case Integer:
 			return modI(x, y)
 		default:
-			return nil, typeError(validTypeInteger, y, nil)
+			return nil, typeError(vm, validTypeInteger, y, nil)
 		}
 	default:
-		return nil, typeError(validTypeInteger, x, nil)
+		return nil, typeError(vm, validTypeInteger, x, nil)
 	}
 }
 
 // neg returns the negation of a number.
-func neg(x Number) (Number, error) {
+func neg(_ *VM, x Number) (Number, error) {
 	switch x := x.(type) {
 	case Integer:
 		return negI(x)
@@ -481,7 +481,7 @@ func neg(x Number) (Number, error) {
 }
 
 // abs returns the absolute value of x.
-func abs(x Number) (Number, error) {
+func abs(_ *VM, x Number) (Number, error) {
 	switch x := x.(type) {
 	case Integer:
 		return absI(x)
@@ -493,7 +493,7 @@ func abs(x Number) (Number, error) {
 }
 
 // sign returns +1, 0, or -1 depending on the sign of x.
-func sign(x Number) (Number, error) {
+func sign(_ *VM, x Number) (Number, error) {
 	switch x := x.(type) {
 	case Integer:
 		return signI(x), nil
@@ -505,27 +505,27 @@ func sign(x Number) (Number, error) {
 }
 
 // floatIntegerPart returns the integer part of x.
-func floatIntegerPart(x Number) (Number, error) {
+func floatIntegerPart(vm *VM, x Number) (Number, error) {
 	switch x := x.(type) {
 	case Float:
 		return intPartF(x)
 	default:
-		return nil, typeError(validTypeFloat, x, nil)
+		return nil, typeError(vm, validTypeFloat, x, nil)
 	}
 }
 
 // floatFractionalPart returns the fractional part of x.
-func floatFractionalPart(x Number) (Number, error) {
+func floatFractionalPart(vm *VM, x Number) (Number, error) {
 	switch x := x.(type) {
 	case Float:
 		return fractPartF(x)
 	default:
-		return nil, typeError(validTypeFloat, x, nil)
+		return nil, typeError(vm, validTypeFloat, x, nil)
 	}
 }
 
 // asFloat returns x as engine.Float.
-func asFloat(x Number) (Number, error) {
+func asFloat(_ *VM, x Number) (Number, error) {
 	switch x := x.(type) {
 	case Integer:
 		return floatItoF(x), nil
@@ -537,47 +537,47 @@ func asFloat(x Number) (Number, error) {
 }
 
 // floor returns the greatest integer value less than or equal to x.
-func floor(x Number) (Number, error) {
+func floor(vm *VM, x Number) (Number, error) {
 	switch x := x.(type) {
 	case Float:
 		return floorFtoI(x)
 	default:
-		return nil, typeError(validTypeFloat, x, nil)
+		return nil, typeError(vm, validTypeFloat, x, nil)
 	}
 }
 
 // truncate returns the integer value of x.
-func truncate(x Number) (Number, error) {
+func truncate(vm *VM, x Number) (Number, error) {
 	switch x := x.(type) {
 	case Float:
 		return truncateFtoI(x)
 	default:
-		return nil, typeError(validTypeFloat, x, nil)
+		return nil, typeError(vm, validTypeFloat, x, nil)
 	}
 }
 
 // round returns the nearest integer of x.
-func round(x Number) (Number, error) {
+func round(vm *VM, x Number) (Number, error) {
 	switch x := x.(type) {
 	case Float:
 		return roundFtoI(x)
 	default:
-		return nil, typeError(validTypeFloat, x, nil)
+		return nil, typeError(vm, validTypeFloat, x, nil)
 	}
 }
 
 // ceiling returns the least integer value greater than or equal to x.
-func ceiling(x Number) (Number, error) {
+func ceiling(vm *VM, x Number) (Number, error) {
 	switch x := x.(type) {
 	case Float:
 		return ceilingFtoI(x)
 	default:
-		return nil, typeError(validTypeFloat, x, nil)
+		return nil, typeError(vm, validTypeFloat, x, nil)
 	}
 }
 
 // power returns the base-x exponential of y.
-func power(x, y Number) (Number, error) {
+func power(_ *VM, x, y Number) (Number, error) {
 	vx, err := numberToFloat(x)
 	if err != nil {
 		return nil, err
@@ -603,7 +603,7 @@ func power(x, y Number) (Number, error) {
 }
 
 // exp returns the base-e exponential of x.
-func exp(x Number) (Number, error) {
+func exp(_ *VM, x Number) (Number, error) {
 	f, err := numberToFloat(x)
 	if err != nil {
 		return nil, err
@@ -619,7 +619,7 @@ func exp(x Number) (Number, error) {
 }
 
 // log returns the natural logarithm of x.
-func log(x Number) (Number, error) {
+func log(_ *VM, x Number) (Number, error) {
 	f, err := numberToFloat(x)
 	if err != nil {
 		return nil, err
@@ -639,7 +639,7 @@ func log(x Number) (Number, error) {
 }
 
 // sqrt returns the square root of x.
-func sqrt(x Number) (Number, error) {
+func sqrt(_ *VM, x Number) (Number, error) {
 	f, err := numberToFloat(x)
 	if err != nil {
 		return nil, err
@@ -659,77 +659,77 @@ func sqrt(x Number) (Number, error) {
 }
 
 // bitwiseRightShift returns n bit-shifted by s to the right.
-func bitwiseRightShift(n, s Number) (Number, error) {
+func bitwiseRightShift(vm *VM, n, s Number) (Number, error) {
 	switch n := n.(type) {
 	case Integer:
 		switch s := s.(type) {
 		case Integer:
 			return Integer(n >> s), nil
 		default:
-			return nil, typeError(validTypeInteger, s, nil)
+			return nil, typeError(vm, validTypeInteger, s, nil)
 		}
 	default:
-		return nil, typeError(validTypeInteger, n, nil)
+		return nil, typeError(vm, validTypeInteger, n, nil)
 	}
 }
 
 // bitwiseLeftShift returns n bit-shifted by s to the left.
-func bitwiseLeftShift(n, s Number) (Number, error) {
+func bitwiseLeftShift(vm *VM, n, s Number) (Number, error) {
 	switch n := n.(type) {
 	case Integer:
 		switch s := s.(type) {
 		case Integer:
 			return Integer(n << s), nil
 		default:
-			return nil, typeError(validTypeInteger, s, nil)
+			return nil, typeError(vm, validTypeInteger, s, nil)
 		}
 	default:
-		return nil, typeError(validTypeInteger, n, nil)
+		return nil, typeError(vm, validTypeInteger, n, nil)
 	}
 }
 
 // bitwiseAnd returns the logical AND on each bit.
-func bitwiseAnd(b1, b2 Number) (Number, error) {
+func bitwiseAnd(vm *VM, b1, b2 Number) (Number, error) {
 	switch b1 := b1.(type) {
 	case Integer:
 		switch b2 := b2.(type) {
 		case Integer:
 			return b1 & b2, nil
 		default:
-			return nil, typeError(validTypeInteger, b2, nil)
+			return nil, typeError(vm, validTypeInteger, b2, nil)
 		}
 	default:
-		return nil, typeError(validTypeInteger, b1, nil)
+		return nil, typeError(vm, validTypeInteger, b1, nil)
 	}
 }
 
 // bitwiseOr returns the logical OR on each bit.
-func bitwiseOr(b1, b2 Number) (Number, error) {
+func bitwiseOr(vm *VM, b1, b2 Number) (Number, error) {
 	switch b1 := b1.(type) {
 	case Integer:
 		switch b2 := b2.(type) {
 		case Integer:
 			return b1 | b2, nil
 		default:
-			return nil, typeError(validTypeInteger, b2, nil)
+			return nil, typeError(vm, validTypeInteger, b2, nil)
 		}
 	default:
-		return nil, typeError(validTypeInteger, b1, nil)
+		return nil, typeError(vm, validTypeInteger, b1, nil)
 	}
 }
 
 // bitwiseComplement returns the logical negation on each bit.
-func bitwiseComplement(b1 Number) (Number, error) {
+func bitwiseComplement(vm *VM, b1 Number) (Number, error) {
 	switch b1 := b1.(type) {
 	case Integer:
 		return ^b1, nil
 	default:
-		return nil, typeError(validTypeInteger, b1, nil)
+		return nil, typeError(vm, validTypeInteger, b1, nil)
 	}
 }
 
 // pos returns x as is.
-func pos(x Number) (Number, error) {
+func pos(_ *VM, x Number) (Number, error) {
 	switch x := x.(type) {
 	case Integer:
 		return posI(x)
@@ -741,22 +741,22 @@ func pos(x Number) (Number, error) {
 }
 
 // intFloorDiv returns the integer floor division.
-func intFloorDiv(x, y Number) (Number, error) {
+func intFloorDiv(vm *VM, x, y Number) (Number, error) {
 	switch x := x.(type) {
 	case Integer:
 		switch y := y.(type) {
 		case Integer:
 			return intFloorDivI(x, y)
 		default:
-			return nil, typeError(validTypeInteger, y, nil)
+			return nil, typeError(vm, validTypeInteger, y, nil)
 		}
 	default:
-		return nil, typeError(validTypeInteger, x, nil)
+		return nil, typeError(vm, validTypeInteger, x, nil)
 	}
 }
 
 // max returns the maximum of x or y.
-func max(x, y Number) (Number, error) {
+func max(_ *VM, x, y Number) (Number, error) {
 	switch x := x.(type) {
 	case Integer:
 		switch y := y.(type) {
@@ -794,7 +794,7 @@ func max(x, y Number) (Number, error) {
 }
 
 // min returns the minimum of x or y.
-func min(x, y Number) (Number, error) {
+func min(_ *VM, x, y Number) (Number, error) {
 	switch x := x.(type) {
 	case Integer:
 		switch y := y.(type) {
@@ -832,15 +832,15 @@ func min(x, y Number) (Number, error) {
 }
 
 // integerPower returns x raised to the power of y.
-func integerPower(x, y Number) (Number, error) {
+func integerPower(vm *VM, x, y Number) (Number, error) {
 	vx, ok := x.(Integer)
 	if !ok {
-		return power(x, y)
+		return power(vm, x, y)
 	}
 
 	vy, ok := y.(Integer)
 	if !ok {
-		return power(x, y)
+		return power(vm, x, y)
 	}
 
 	if vy < 0 {
@@ -855,7 +855,7 @@ func integerPower(x, y Number) (Number, error) {
 			r, _ := intPow(vx, vy) // Since x is either 1 or -1, no errors occur.
 			return intDivI(1, r)
 		default:
-			return nil, typeError(validTypeFloat, vx, nil)
+			return nil, typeError(vm, validTypeFloat, vx, nil)
 		}
 	}
 
@@ -890,15 +890,15 @@ func intPow(a, b Integer) (Integer, error) {
 }
 
 // xor returns the bitwise exclusive or of x and y.
-func xor(x, y Number) (Number, error) {
+func xor(vm *VM, x, y Number) (Number, error) {
 	vx, ok := x.(Integer)
 	if !ok {
-		return nil, typeError(validTypeInteger, x, nil)
+		return nil, typeError(vm, validTypeInteger, x, nil)
 	}
 
 	vy, ok := y.(Integer)
 	if !ok {
-		return nil, typeError(validTypeInteger, y, nil)
+		return nil, typeError(vm, validTypeInteger, y, nil)
 	}
 
 	return vx ^ vy, nil

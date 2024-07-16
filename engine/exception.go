@@ -7,15 +7,16 @@ import (
 // Exception is an error represented by a prolog term.
 type Exception struct {
 	term Term
+	vm   *VM
 }
 
 // NewException creates an Exception from a copy of the given Term.
-func NewException(term Term, env *Env) Exception {
-	c, err := renamedCopy(term, nil, env)
+func NewException(vm *VM, term Term, env *Env) Exception {
+	c, err := renamedCopy(vm, term, nil, env)
 	if err != nil {
 		return err.(Exception) // Must be error(resource_error(memory), _).
 	}
-	return Exception{term: c}
+	return Exception{term: c, vm: vm}
 }
 
 // Term returns the underlying Term of the Exception.
@@ -25,13 +26,13 @@ func (e Exception) Term() Term {
 
 func (e Exception) Error() string {
 	var buf bytes.Buffer
-	_ = e.term.WriteTerm(&buf, &defaultWriteOptions, nil)
+	_ = e.term.WriteTerm(e.vm, &buf, &defaultWriteOptions, nil)
 	return buf.String()
 }
 
 // InstantiationError returns an instantiation error exception.
-func InstantiationError(env *Env) Exception {
-	return NewException(atomError.Apply(atomInstantiationError, varContext), env)
+func InstantiationError(vm *VM, env *Env) Exception {
+	return NewException(vm, atomError.Apply(atomInstantiationError, vm.varContext()), env)
 }
 
 // validType is the correct type for an argument or one of its components.
@@ -79,13 +80,13 @@ func (t validType) Term() Term {
 }
 
 // TypeError creates a new type error exception.
-func TypeError(typ, culprit Term, env *Env) Exception {
-	return NewException(atomError.Apply(atomTypeError.Apply(typ, culprit), varContext), env)
+func TypeError(vm *VM, typ, culprit Term, env *Env) Exception {
+	return NewException(vm, atomError.Apply(atomTypeError.Apply(typ, culprit), vm.varContext()), env)
 }
 
 // typeError creates a new type error exception.
-func typeError(validType validType, culprit Term, env *Env) Exception {
-	return TypeError(validType.Term(), culprit, env)
+func typeError(vm *VM, validType validType, culprit Term, env *Env) Exception {
+	return TypeError(vm, validType.Term(), culprit, env)
 }
 
 // validDomain is the domain which the procedure defines.
@@ -140,13 +141,13 @@ func (vd validDomain) Term() Term {
 }
 
 // DomainError creates a new domain error exception.
-func DomainError(domain, culprit Term, env *Env) Exception {
-	return NewException(atomError.Apply(atomDomainError.Apply(domain, culprit), varContext), env)
+func DomainError(vm *VM, domain, culprit Term, env *Env) Exception {
+	return NewException(vm, atomError.Apply(atomDomainError.Apply(domain, culprit), vm.varContext()), env)
 }
 
 // domainError creates a new domain error exception.
-func domainError(validDomain validDomain, culprit Term, env *Env) Exception {
-	return DomainError(validDomain.Term(), culprit, env)
+func domainError(vm *VM, validDomain validDomain, culprit Term, env *Env) Exception {
+	return DomainError(vm, validDomain.Term(), culprit, env)
 }
 
 // objectType is the object on which an operation is to be performed.
@@ -170,13 +171,13 @@ func (ot objectType) Term() Term {
 }
 
 // ExistenceError creates a new existence error exception.
-func ExistenceError(objectType, culprit Term, env *Env) Exception {
-	return NewException(atomError.Apply(atomExistenceError.Apply(objectType, culprit), varContext), env)
+func ExistenceError(vm *VM, objectType, culprit Term, env *Env) Exception {
+	return NewException(vm, atomError.Apply(atomExistenceError.Apply(objectType, culprit), vm.varContext()), env)
 }
 
 // existenceError creates a new existence error exception.
-func existenceError(objectType objectType, culprit Term, env *Env) Exception {
-	return ExistenceError(objectType.Term(), culprit, env)
+func existenceError(vm *VM, objectType objectType, culprit Term, env *Env) Exception {
+	return ExistenceError(vm, objectType.Term(), culprit, env)
 }
 
 // operation is the operation to be performed.
@@ -240,13 +241,13 @@ func (pt permissionType) Term() Term {
 }
 
 // PermissionError creates a new permission error exception.
-func PermissionError(operation, permissionType, culprit Term, env *Env) Exception {
-	return NewException(atomError.Apply(atomPermissionError.Apply(operation, permissionType, culprit), varContext), env)
+func PermissionError(vm *VM, operation, permissionType, culprit Term, env *Env) Exception {
+	return NewException(vm, atomError.Apply(atomPermissionError.Apply(operation, permissionType, culprit), vm.varContext()), env)
 }
 
 // permissionError creates a new permission error exception.
-func permissionError(operation operation, permissionType permissionType, culprit Term, env *Env) Exception {
-	return PermissionError(operation.Term(), permissionType.Term(), culprit, env)
+func permissionError(vm *VM, operation operation, permissionType permissionType, culprit Term, env *Env) Exception {
+	return PermissionError(vm, operation.Term(), permissionType.Term(), culprit, env)
 }
 
 // flag is an implementation defined limit.
@@ -276,13 +277,13 @@ func (f flag) Term() Term {
 }
 
 // RepresentationError creates a new representation error exception.
-func RepresentationError(limit Term, env *Env) Exception {
-	return NewException(atomError.Apply(atomRepresentationError.Apply(limit), varContext), env)
+func RepresentationError(vm *VM, limit Term, env *Env) Exception {
+	return NewException(vm, atomError.Apply(atomRepresentationError.Apply(limit), vm.varContext()), env)
 }
 
 // representationError creates a new representation error exception.
-func representationError(limit flag, env *Env) Exception {
-	return RepresentationError(limit.Term(), env)
+func representationError(vm *VM, limit flag, env *Env) Exception {
+	return RepresentationError(vm, limit.Term(), env)
 }
 
 // resource is a resource required to complete execution.
@@ -306,23 +307,23 @@ func (r resource) Term() Term {
 }
 
 // ResourceError creates a new resource error exception.
-func ResourceError(resource Term, env *Env) Exception {
-	return Exception{term: atomError.Apply(atomResourceError.Apply(resource), env.Resolve(varContext))}
+func ResourceError(vm *VM, resource Term, env *Env) Exception {
+	return Exception{term: atomError.Apply(atomResourceError.Apply(resource), env.Resolve(vm, vm.varContext()))}
 }
 
 // resourceError creates a new resource error exception.
-func resourceError(resource resource, env *Env) Exception {
-	return ResourceError(resource.Term(), env)
+func resourceError(vm *VM, resource resource, env *Env) Exception {
+	return ResourceError(vm, resource.Term(), env)
 }
 
 // SyntaxError creates a new syntax error exception.
-func SyntaxError(error Term, env *Env) Exception {
-	return NewException(atomError.Apply(atomSyntaxError.Apply(error), varContext), env)
+func SyntaxError(vm *VM, error Term, env *Env) Exception {
+	return NewException(vm, atomError.Apply(atomSyntaxError.Apply(error), vm.varContext()), env)
 }
 
 // syntaxError creates a new syntax error exception.
-func syntaxError(err error, env *Env) Exception {
-	return SyntaxError(NewAtom(err.Error()), env)
+func syntaxError(vm *VM, err error, env *Env) Exception {
+	return SyntaxError(vm, NewAtom(err.Error()), env)
 }
 
 // exceptionalValue is an evaluable functor's result which is not a number.
@@ -354,11 +355,11 @@ func (ev exceptionalValue) Term() Term {
 }
 
 // EvaluationError creates a new evaluation error exception.
-func EvaluationError(error Term, env *Env) Exception {
-	return NewException(atomError.Apply(atomEvaluationError.Apply(error), varContext), env)
+func EvaluationError(vm *VM, error Term, env *Env) Exception {
+	return NewException(vm, atomError.Apply(atomEvaluationError.Apply(error), vm.varContext()), env)
 }
 
 // evaluationError creates a new evaluation error exception.
-func evaluationError(ev exceptionalValue, env *Env) Exception {
-	return EvaluationError(ev.Term(), env)
+func evaluationError(vm *VM, ev exceptionalValue, env *Env) Exception {
+	return EvaluationError(vm, ev.Term(), env)
 }

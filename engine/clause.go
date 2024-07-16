@@ -25,7 +25,7 @@ func (cs clauses) call(vm *VM, args []Term, k Cont, env *Env) *Promise {
 		ks[i] = func(context.Context) *Promise {
 			vars := make([]Variable, len(c.vars))
 			for i := range vars {
-				vars[i] = NewVariable()
+				vars[i] = vm.NewVariable()
 			}
 			return vm.exec(c.bytecode, vars, k, args, nil, env, p)
 		}
@@ -34,16 +34,16 @@ func (cs clauses) call(vm *VM, args []Term, k Cont, env *Env) *Promise {
 	return p
 }
 
-func compile(t Term, env *Env) (clauses, error) {
-	t = env.Resolve(t)
+func compile(vm *VM, t Term, env *Env) (clauses, error) {
+	t = env.Resolve(vm, t)
 	if t, ok := t.(Compound); ok && t.Functor() == atomIf && t.Arity() == 2 {
 		var cs clauses
 		head, body := t.Arg(0), t.Arg(1)
-		iter := altIterator{Alt: body, Env: env}
+		iter := altIterator{Alt: body, Env: env, vm: vm}
 		for iter.Next() {
-			c, err := compileClause(head, iter.Current(), env)
+			c, err := compileClause(vm, head, iter.Current(), env)
 			if err != nil {
-				return nil, typeError(validTypeCallable, body, env)
+				return nil, typeError(vm, validTypeCallable, body, env)
 			}
 			c.raw = t
 			cs = append(cs, c)
@@ -51,8 +51,8 @@ func compile(t Term, env *Env) (clauses, error) {
 		return cs, nil
 	}
 
-	c, err := compileClause(t, nil, env)
-	c.raw = env.simplify(t)
+	c, err := compileClause(vm, t, nil, env)
+	c.raw = env.simplify(vm, t)
 	return []clause{c}, err
 }
 
@@ -63,35 +63,35 @@ type clause struct {
 	bytecode bytecode
 }
 
-func compileClause(head Term, body Term, env *Env) (clause, error) {
+func compileClause(vm *VM, head Term, body Term, env *Env) (clause, error) {
 	var c clause
-	c.compileHead(head, env)
+	c.compileHead(vm, head, env)
 	if body != nil {
-		if err := c.compileBody(body, env); err != nil {
-			return c, typeError(validTypeCallable, body, env)
+		if err := c.compileBody(vm, body, env); err != nil {
+			return c, typeError(vm, validTypeCallable, body, env)
 		}
 	}
 	c.bytecode = append(c.bytecode, instruction{opcode: opExit})
 	return c, nil
 }
 
-func (c *clause) compileHead(head Term, env *Env) {
-	switch head := env.Resolve(head).(type) {
+func (c *clause) compileHead(vm *VM, head Term, env *Env) {
+	switch head := env.Resolve(vm, head).(type) {
 	case Atom:
 		c.pi = procedureIndicator{name: head, arity: 0}
 	case Compound:
 		c.pi = procedureIndicator{name: head.Functor(), arity: Integer(head.Arity())}
 		for i := 0; i < head.Arity(); i++ {
-			c.compileHeadArg(head.Arg(i), env)
+			c.compileHeadArg(vm, head.Arg(i), env)
 		}
 	}
 }
 
-func (c *clause) compileBody(body Term, env *Env) error {
+func (c *clause) compileBody(vm *VM, body Term, env *Env) error {
 	c.bytecode = append(c.bytecode, instruction{opcode: opEnter})
-	iter := seqIterator{Seq: body, Env: env}
+	iter := seqIterator{Seq: body, Env: env, vm: vm}
 	for iter.Next() {
-		if err := c.compilePred(iter.Current(), env); err != nil {
+		if err := c.compilePred(vm, iter.Current(), env); err != nil {
 			return err
 		}
 	}
@@ -100,10 +100,10 @@ func (c *clause) compileBody(body Term, env *Env) error {
 
 var errNotCallable = errors.New("not callable")
 
-func (c *clause) compilePred(p Term, env *Env) error {
-	switch p := env.Resolve(p).(type) {
+func (c *clause) compilePred(vm *VM, p Term, env *Env) error {
+	switch p := env.Resolve(vm, p).(type) {
 	case Variable:
-		return c.compilePred(atomCall.Apply(p), env)
+		return c.compilePred(vm, atomCall.Apply(p), env)
 	case Atom:
 		switch p {
 		case atomCut:
@@ -114,7 +114,7 @@ func (c *clause) compilePred(p Term, env *Env) error {
 		return nil
 	case Compound:
 		for i := 0; i < p.Arity(); i++ {
-			c.compileBodyArg(p.Arg(i), env)
+			c.compileBodyArg(vm, p.Arg(i), env)
 		}
 		c.bytecode = append(c.bytecode, instruction{opcode: opCall, operand: procedureIndicator{name: p.Functor(), arity: Integer(p.Arity())}})
 		return nil
@@ -123,8 +123,8 @@ func (c *clause) compilePred(p Term, env *Env) error {
 	}
 }
 
-func (c *clause) compileHeadArg(a Term, env *Env) {
-	switch a := env.Resolve(a).(type) {
+func (c *clause) compileHeadArg(vm *VM, a Term, env *Env) {
+	switch a := env.Resolve(vm, a).(type) {
 	case Variable:
 		c.bytecode = append(c.bytecode, instruction{opcode: opGetVar, operand: c.varOffset(a)})
 	case charList, codeList: // Treat them as if they're atomic.
@@ -132,21 +132,21 @@ func (c *clause) compileHeadArg(a Term, env *Env) {
 	case list:
 		c.bytecode = append(c.bytecode, instruction{opcode: opGetList, operand: Integer(len(a))})
 		for _, arg := range a {
-			c.compileHeadArg(arg, env)
+			c.compileHeadArg(vm, arg, env)
 		}
 		c.bytecode = append(c.bytecode, instruction{opcode: opPop})
 	case *partial:
 		prefix := a.Compound.(list)
 		c.bytecode = append(c.bytecode, instruction{opcode: opGetPartial, operand: Integer(len(prefix))})
-		c.compileHeadArg(*a.tail, env)
+		c.compileHeadArg(vm, *a.tail, env)
 		for _, arg := range prefix {
-			c.compileHeadArg(arg, env)
+			c.compileHeadArg(vm, arg, env)
 		}
 		c.bytecode = append(c.bytecode, instruction{opcode: opPop})
 	case Compound:
 		c.bytecode = append(c.bytecode, instruction{opcode: opGetFunctor, operand: procedureIndicator{name: a.Functor(), arity: Integer(a.Arity())}})
 		for i := 0; i < a.Arity(); i++ {
-			c.compileHeadArg(a.Arg(i), env)
+			c.compileHeadArg(vm, a.Arg(i), env)
 		}
 		c.bytecode = append(c.bytecode, instruction{opcode: opPop})
 	default:
@@ -154,8 +154,8 @@ func (c *clause) compileHeadArg(a Term, env *Env) {
 	}
 }
 
-func (c *clause) compileBodyArg(a Term, env *Env) {
-	switch a := env.Resolve(a).(type) {
+func (c *clause) compileBodyArg(vm *VM, a Term, env *Env) {
+	switch a := env.Resolve(vm, a).(type) {
 	case Variable:
 		c.bytecode = append(c.bytecode, instruction{opcode: opPutVar, operand: c.varOffset(a)})
 	case charList, codeList: // Treat them as if they're atomic.
@@ -163,7 +163,7 @@ func (c *clause) compileBodyArg(a Term, env *Env) {
 	case list:
 		c.bytecode = append(c.bytecode, instruction{opcode: opPutList, operand: Integer(len(a))})
 		for _, arg := range a {
-			c.compileBodyArg(arg, env)
+			c.compileBodyArg(vm, arg, env)
 		}
 		c.bytecode = append(c.bytecode, instruction{opcode: opPop})
 	case *partial:
@@ -173,16 +173,16 @@ func (c *clause) compileBodyArg(a Term, env *Env) {
 			l++
 		}
 		c.bytecode = append(c.bytecode, instruction{opcode: opPutPartial, operand: Integer(l)})
-		c.compileBodyArg(*a.tail, env)
+		c.compileBodyArg(vm, *a.tail, env)
 		iter = ListIterator{List: a.Compound}
 		for iter.Next() {
-			c.compileBodyArg(iter.Current(), env)
+			c.compileBodyArg(vm, iter.Current(), env)
 		}
 		c.bytecode = append(c.bytecode, instruction{opcode: opPop})
 	case Compound:
 		c.bytecode = append(c.bytecode, instruction{opcode: opPutFunctor, operand: procedureIndicator{name: a.Functor(), arity: Integer(a.Arity())}})
 		for i := 0; i < a.Arity(); i++ {
-			c.compileBodyArg(a.Arg(i), env)
+			c.compileBodyArg(vm, a.Arg(i), env)
 		}
 		c.bytecode = append(c.bytecode, instruction{opcode: opPop})
 	default:

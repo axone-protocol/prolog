@@ -18,47 +18,47 @@ type Compound interface {
 }
 
 // WriteCompound outputs the Compound to an io.Writer.
-func WriteCompound(w io.Writer, c Compound, opts *WriteOptions, env *Env) error {
-	ok, err := writeCompoundVisit(w, c, opts)
+func WriteCompound(vm *VM, w io.Writer, c Compound, opts *WriteOptions, env *Env) error {
+	ok, err := writeCompoundVisit(vm, w, c, opts)
 	if err != nil || ok {
 		return err
 	}
 
 	opts = opts.withVisited(c)
 
-	a := env.Resolve(c.Arg(0))
+	a := env.Resolve(vm, c.Arg(0))
 	if n, ok := a.(Integer); ok && opts.numberVars && c.Functor() == atomVar && c.Arity() == 1 && n >= 0 {
 		return writeCompoundNumberVars(w, n)
 	}
 
 	if !opts.ignoreOps {
 		if c.Functor() == atomDot && c.Arity() == 2 {
-			return writeCompoundList(w, c, opts, env)
+			return writeCompoundList(vm, w, c, opts, env)
 		}
 
 		if c.Functor() == atomEmptyBlock && c.Arity() == 1 {
-			return writeCompoundCurlyBracketed(w, c, opts, env)
+			return writeCompoundCurlyBracketed(vm, w, c, opts, env)
 		}
 	}
 
 	if opts.ignoreOps {
-		return writeCompoundFunctionalNotation(w, c, opts, env)
+		return writeCompoundFunctionalNotation(vm, w, c, opts, env)
 	}
 
 	if ops, ok := opts.getOps().Get(c.Functor()); ok {
 		for _, o := range ops {
 			if o.specifier.arity() == c.Arity() {
-				return writeCompoundOp(w, c, opts, env, &o)
+				return writeCompoundOp(vm, w, c, opts, env, &o)
 			}
 		}
 	}
 
-	return writeCompoundFunctionalNotation(w, c, opts, env)
+	return writeCompoundFunctionalNotation(vm, w, c, opts, env)
 }
 
-func writeCompoundVisit(w io.Writer, c Compound, opts *WriteOptions) (bool, error) {
+func writeCompoundVisit(vm *VM, w io.Writer, c Compound, opts *WriteOptions) (bool, error) {
 	if _, ok := opts.visited[id(c)]; ok {
-		err := atomElipsis.WriteTerm(w, opts, nil)
+		err := atomElipsis.WriteTerm(vm, w, opts, nil)
 		return true, err
 	}
 	return false, nil
@@ -75,44 +75,44 @@ func writeCompoundNumberVars(w io.Writer, n Integer) error {
 	return ew.err
 }
 
-func writeCompoundList(w io.Writer, c Compound, opts *WriteOptions, env *Env) error {
+func writeCompoundList(vm *VM, w io.Writer, c Compound, opts *WriteOptions, env *Env) error {
 	ew := errWriter{w: w}
 	opts = opts.withPriority(999).withLeft(operator{}).withRight(operator{})
 	_, _ = fmt.Fprint(&ew, "[")
-	_ = c.Arg(0).WriteTerm(&ew, opts, env)
+	_ = c.Arg(0).WriteTerm(vm, &ew, opts, env)
 	iter := ListIterator{List: c.Arg(1), Env: env, AllowCycle: opts.maxDepth > 0}
 	for iter.Next() {
 		opts.maxDepth--
 		if opts.maxDepth == 0 {
 			_, _ = fmt.Fprint(&ew, "|")
-			_ = atomElipsis.WriteTerm(&ew, opts, nil)
+			_ = atomElipsis.WriteTerm(vm, &ew, opts, nil)
 			break
 		}
 		_, _ = fmt.Fprint(&ew, ",")
-		_ = iter.Current().WriteTerm(&ew, opts, env)
+		_ = iter.Current().WriteTerm(vm, &ew, opts, env)
 	}
 	if err := iter.Err(); err != nil {
 		_, _ = fmt.Fprint(&ew, "|")
 		s := iter.Suffix()
 		if l, ok := iter.Suffix().(Compound); ok && l.Functor() == atomDot && l.Arity() == 2 {
-			_ = atomElipsis.WriteTerm(&ew, opts, nil)
+			_ = atomElipsis.WriteTerm(vm, &ew, opts, nil)
 		} else {
-			_ = s.WriteTerm(&ew, opts, env)
+			_ = s.WriteTerm(vm, &ew, opts, env)
 		}
 	}
 	_, _ = fmt.Fprint(&ew, "]")
 	return ew.err
 }
 
-func writeCompoundCurlyBracketed(w io.Writer, c Compound, opts *WriteOptions, env *Env) error {
+func writeCompoundCurlyBracketed(vm *VM, w io.Writer, c Compound, opts *WriteOptions, env *Env) error {
 	ew := errWriter{w: w}
 	_, _ = fmt.Fprint(&ew, "{")
-	_ = c.Arg(0).WriteTerm(&ew, opts.withLeft(operator{}), env)
+	_ = c.Arg(0).WriteTerm(vm, &ew, opts.withLeft(operator{}), env)
 	_, _ = fmt.Fprint(&ew, "}")
 	return ew.err
 }
 
-var writeCompoundOps = [...]func(w io.Writer, c Compound, opts *WriteOptions, env *Env, op *operator) error{
+var writeCompoundOps = [...]func(vm *VM, w io.Writer, c Compound, opts *WriteOptions, env *Env, op *operator) error{
 	operatorSpecifierFX:  nil,
 	operatorSpecifierFY:  nil,
 	operatorSpecifierXF:  nil,
@@ -123,7 +123,7 @@ var writeCompoundOps = [...]func(w io.Writer, c Compound, opts *WriteOptions, en
 }
 
 func init() {
-	writeCompoundOps = [len(writeCompoundOps)]func(w io.Writer, c Compound, opts *WriteOptions, env *Env, op *operator) error{
+	writeCompoundOps = [len(writeCompoundOps)]func(vm *VM, w io.Writer, c Compound, opts *WriteOptions, env *Env, op *operator) error{
 		operatorSpecifierFX:  writeCompoundOpPrefix,
 		operatorSpecifierFY:  writeCompoundOpPrefix,
 		operatorSpecifierXF:  writeCompoundOpPostfix,
@@ -134,11 +134,11 @@ func init() {
 	}
 }
 
-func writeCompoundOp(w io.Writer, c Compound, opts *WriteOptions, env *Env, op *operator) error {
-	return writeCompoundOps[op.specifier](w, c, opts, env, op)
+func writeCompoundOp(vm *VM, w io.Writer, c Compound, opts *WriteOptions, env *Env, op *operator) error {
+	return writeCompoundOps[op.specifier](vm, w, c, opts, env, op)
 }
 
-func writeCompoundOpPrefix(w io.Writer, c Compound, opts *WriteOptions, env *Env, op *operator) error {
+func writeCompoundOpPrefix(vm *VM, w io.Writer, c Compound, opts *WriteOptions, env *Env, op *operator) error {
 	ew := errWriter{w: w}
 	_, r := op.bindingPriorities()
 	openClose := opts.priority < op.priority || (opts.right != operator{} && r >= opts.right.priority)
@@ -150,14 +150,14 @@ func writeCompoundOpPrefix(w io.Writer, c Compound, opts *WriteOptions, env *Env
 		_, _ = fmt.Fprint(&ew, "(")
 		opts = opts.withLeft(operator{}).withRight(operator{})
 	}
-	_ = c.Functor().WriteTerm(&ew, opts.withLeft(operator{}).withRight(operator{}), env)
+	_ = c.Functor().WriteTerm(vm, &ew, opts.withLeft(operator{}).withRight(operator{}), env)
 	{
 		opts := opts.withPriority(r).withLeft(*op)
 		opts.maxDepth--
 		if opts.maxDepth == 0 {
-			_ = atomElipsis.WriteTerm(&ew, opts, env)
+			_ = atomElipsis.WriteTerm(vm, &ew, opts, env)
 		} else {
-			_ = c.Arg(0).WriteTerm(&ew, opts, env)
+			_ = c.Arg(0).WriteTerm(vm, &ew, opts, env)
 		}
 	}
 	if openClose {
@@ -166,7 +166,7 @@ func writeCompoundOpPrefix(w io.Writer, c Compound, opts *WriteOptions, env *Env
 	return ew.err
 }
 
-func writeCompoundOpPostfix(w io.Writer, c Compound, opts *WriteOptions, env *Env, op *operator) error {
+func writeCompoundOpPostfix(vm *VM, w io.Writer, c Compound, opts *WriteOptions, env *Env, op *operator) error {
 	ew := errWriter{w: w}
 	l, _ := op.bindingPriorities()
 	openClose := opts.priority < op.priority || (opts.left.name == atomMinus && opts.left.specifier.class() == operatorClassPrefix)
@@ -182,12 +182,12 @@ func writeCompoundOpPostfix(w io.Writer, c Compound, opts *WriteOptions, env *En
 		opts := opts.withPriority(l).withRight(*op)
 		opts.maxDepth--
 		if opts.maxDepth == 0 {
-			_ = atomElipsis.WriteTerm(&ew, opts, env)
+			_ = atomElipsis.WriteTerm(vm, &ew, opts, env)
 		} else {
-			_ = c.Arg(0).WriteTerm(&ew, opts, env)
+			_ = c.Arg(0).WriteTerm(vm, &ew, opts, env)
 		}
 	}
-	_ = c.Functor().WriteTerm(&ew, opts.withLeft(operator{}).withRight(operator{}), env)
+	_ = c.Functor().WriteTerm(vm, &ew, opts.withLeft(operator{}).withRight(operator{}), env)
 	if openClose {
 		_, _ = fmt.Fprint(&ew, ")")
 	} else if opts.right != (operator{}) {
@@ -196,7 +196,7 @@ func writeCompoundOpPostfix(w io.Writer, c Compound, opts *WriteOptions, env *En
 	return ew.err
 }
 
-func writeCompoundOpInfix(w io.Writer, c Compound, opts *WriteOptions, env *Env, op *operator) error {
+func writeCompoundOpInfix(vm *VM, w io.Writer, c Compound, opts *WriteOptions, env *Env, op *operator) error {
 	ew := errWriter{w: w}
 	l, r := op.bindingPriorities()
 	openClose := opts.priority < op.priority ||
@@ -214,24 +214,24 @@ func writeCompoundOpInfix(w io.Writer, c Compound, opts *WriteOptions, env *Env,
 		opts := opts.withPriority(l).withRight(*op)
 		opts.maxDepth--
 		if opts.maxDepth == 0 {
-			_ = atomElipsis.WriteTerm(&ew, opts, env)
+			_ = atomElipsis.WriteTerm(vm, &ew, opts, env)
 		} else {
-			_ = c.Arg(0).WriteTerm(&ew, opts, env)
+			_ = c.Arg(0).WriteTerm(vm, &ew, opts, env)
 		}
 	}
 	switch c.Functor() {
 	case atomComma, atomBar:
 		_, _ = fmt.Fprint(&ew, c.Functor().String())
 	default:
-		_ = c.Functor().WriteTerm(&ew, opts.withLeft(operator{}).withRight(operator{}), env)
+		_ = c.Functor().WriteTerm(vm, &ew, opts.withLeft(operator{}).withRight(operator{}), env)
 	}
 	{
 		opts := opts.withPriority(r).withLeft(*op)
 		opts.maxDepth--
 		if opts.maxDepth == 0 {
-			_ = atomElipsis.WriteTerm(&ew, opts, env)
+			_ = atomElipsis.WriteTerm(vm, &ew, opts, env)
 		} else {
-			_ = c.Arg(1).WriteTerm(&ew, opts, env)
+			_ = c.Arg(1).WriteTerm(vm, &ew, opts, env)
 		}
 	}
 	if openClose {
@@ -240,10 +240,10 @@ func writeCompoundOpInfix(w io.Writer, c Compound, opts *WriteOptions, env *Env,
 	return ew.err
 }
 
-func writeCompoundFunctionalNotation(w io.Writer, c Compound, opts *WriteOptions, env *Env) error {
+func writeCompoundFunctionalNotation(vm *VM, w io.Writer, c Compound, opts *WriteOptions, env *Env) error {
 	ew := errWriter{w: w}
 	opts = opts.withRight(operator{})
-	_ = c.Functor().WriteTerm(&ew, opts, env)
+	_ = c.Functor().WriteTerm(vm, &ew, opts, env)
 	_, _ = fmt.Fprint(&ew, "(")
 	opts = opts.withLeft(operator{}).withPriority(999)
 	opts.maxDepth--
@@ -252,18 +252,18 @@ func writeCompoundFunctionalNotation(w io.Writer, c Compound, opts *WriteOptions
 			_, _ = fmt.Fprint(&ew, ",")
 		}
 		if opts.maxDepth == 0 {
-			_ = atomElipsis.WriteTerm(&ew, opts, env)
+			_ = atomElipsis.WriteTerm(vm, &ew, opts, env)
 			continue
 		}
-		_ = c.Arg(i).WriteTerm(&ew, opts, env)
+		_ = c.Arg(i).WriteTerm(vm, &ew, opts, env)
 	}
 	_, _ = fmt.Fprint(&ew, ")")
 	return ew.err
 }
 
 // CompareCompound compares the Compound with a Term.
-func CompareCompound(c Compound, t Term, env *Env) int {
-	switch t := env.Resolve(t).(type) {
+func CompareCompound(vm *VM, c Compound, t Term, env *Env) int {
+	switch t := env.Resolve(vm, t).(type) {
 	case Compound:
 		switch x, y := c.Arity(), t.Arity(); {
 		case x > y:
@@ -272,12 +272,12 @@ func CompareCompound(c Compound, t Term, env *Env) int {
 			return -1
 		}
 
-		if o := c.Functor().Compare(t.Functor(), env); o != 0 {
+		if o := c.Functor().Compare(vm, t.Functor(), env); o != 0 {
 			return o
 		}
 
 		for i := 0; i < c.Arity(); i++ {
-			if o := c.Arg(i).Compare(t.Arg(i), env); o != 0 {
+			if o := c.Arg(i).Compare(vm, t.Arg(i), env); o != 0 {
 				return o
 			}
 		}
@@ -307,12 +307,12 @@ type compound struct {
 	args    []Term
 }
 
-func (c *compound) WriteTerm(w io.Writer, opts *WriteOptions, env *Env) error {
-	return WriteCompound(w, c, opts, env)
+func (c *compound) WriteTerm(vm *VM, w io.Writer, opts *WriteOptions, env *Env) error {
+	return WriteCompound(vm, w, c, opts, env)
 }
 
-func (c *compound) Compare(t Term, env *Env) int {
-	return CompareCompound(c, t, env)
+func (c *compound) Compare(vm *VM, t Term, env *Env) int {
+	return CompareCompound(vm, c, t, env)
 }
 
 func (c *compound) Functor() Atom {
@@ -338,12 +338,12 @@ func Cons(car, cdr Term) Term {
 
 type list []Term
 
-func (l list) WriteTerm(w io.Writer, opts *WriteOptions, env *Env) error {
-	return WriteCompound(w, l, opts, env)
+func (l list) WriteTerm(vm *VM, w io.Writer, opts *WriteOptions, env *Env) error {
+	return WriteCompound(vm, w, l, opts, env)
 }
 
-func (l list) Compare(t Term, env *Env) int {
-	return CompareCompound(l, t, env)
+func (l list) Compare(vm *VM, t Term, env *Env) int {
+	return CompareCompound(vm, l, t, env)
 }
 
 func (l list) termID() termID { // Slices are not comparable.
@@ -409,12 +409,12 @@ type partial struct {
 	tail *Term
 }
 
-func (p *partial) WriteTerm(w io.Writer, opts *WriteOptions, env *Env) error {
-	return WriteCompound(w, p, opts, env)
+func (p *partial) WriteTerm(vm *VM, w io.Writer, opts *WriteOptions, env *Env) error {
+	return WriteCompound(vm, w, p, opts, env)
 }
 
-func (p *partial) Compare(t Term, env *Env) int {
-	return CompareCompound(p, t, env)
+func (p *partial) Compare(vm *VM, t Term, env *Env) int {
+	return CompareCompound(vm, p, t, env)
 }
 
 func (p *partial) termID() termID { // The underlying compound might not be comparable.
@@ -455,13 +455,13 @@ func PartialList(tail Term, ts ...Term) Term {
 }
 
 // set returns a list of ts which elements are unique.
-func (e *Env) set(ts ...Term) Term {
+func (e *Env) set(vm *VM, ts ...Term) Term {
 	sort.Slice(ts, func(i, j int) bool {
-		return ts[i].Compare(ts[j], e) == -1
+		return ts[i].Compare(vm, ts[j], e) == -1
 	})
 	us := make([]Term, 0, len(ts))
 	for _, t := range ts {
-		if len(us) > 0 && us[len(us)-1].Compare(t, e) == 0 {
+		if len(us) > 0 && us[len(us)-1].Compare(vm, t, e) == 0 {
 			continue
 		}
 		us = append(us, t)
@@ -471,11 +471,11 @@ func (e *Env) set(ts ...Term) Term {
 
 // slice returns a Term slice containing the elements of list.
 // It errors if the given Term is not a list.
-func slice(list Term, env *Env) ([]Term, error) {
+func slice(vm *VM, list Term, env *Env) ([]Term, error) {
 	var ret []Term
 	iter := ListIterator{List: list, Env: env}
 	for iter.Next() {
-		ret = append(ret, env.Resolve(iter.Current()))
+		ret = append(ret, env.Resolve(vm, iter.Current()))
 	}
 	return ret, iter.Err()
 }
@@ -503,12 +503,12 @@ func (c charList) String() string {
 	return string(c)
 }
 
-func (c charList) WriteTerm(w io.Writer, opts *WriteOptions, env *Env) error {
-	return WriteCompound(w, c, opts, env)
+func (c charList) WriteTerm(vm *VM, w io.Writer, opts *WriteOptions, env *Env) error {
+	return WriteCompound(vm, w, c, opts, env)
 }
 
-func (c charList) Compare(t Term, env *Env) int {
-	return CompareCompound(c, t, env)
+func (c charList) Compare(vm *VM, t Term, env *Env) int {
+	return CompareCompound(vm, c, t, env)
 }
 
 func (c charList) Functor() Atom {
@@ -549,12 +549,12 @@ func (c codeList) String() string {
 	return string(c)
 }
 
-func (c codeList) WriteTerm(w io.Writer, opts *WriteOptions, env *Env) error {
-	return WriteCompound(w, c, opts, env)
+func (c codeList) WriteTerm(vm *VM, w io.Writer, opts *WriteOptions, env *Env) error {
+	return WriteCompound(vm, w, c, opts, env)
 }
 
-func (c codeList) Compare(t Term, env *Env) int {
-	return CompareCompound(c, t, env)
+func (c codeList) Compare(vm *VM, t Term, env *Env) int {
+	return CompareCompound(vm, c, t, env)
 }
 
 func (c codeList) Functor() Atom {

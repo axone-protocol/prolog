@@ -31,6 +31,8 @@ type Parser struct {
 	args        []Term
 
 	buf tokenRingBuffer
+
+	vm *VM
 }
 
 // ParsedVariable is a set of information regarding a variable in a parsed term.
@@ -48,6 +50,7 @@ func NewParser(vm *VM, r io.RuneReader) *Parser {
 		},
 		_operators:   vm.getOperators(),
 		doubleQuotes: vm.doubleQuotes,
+		vm:           vm,
 	}
 }
 
@@ -153,7 +156,7 @@ func (p *Parser) number() (Number, error) {
 	}
 	switch t.kind {
 	case tokenInteger:
-		n, err = integer(1, t.val)
+		n, err = integer(p.vm, 1, t.val)
 	case tokenFloatNumber:
 		n, err = float(1, t.val)
 	default:
@@ -176,7 +179,7 @@ func (p *Parser) number() (Number, error) {
 		}
 		switch t.kind {
 		case tokenInteger:
-			n, err = integer(-1, t.val)
+			n, err = integer(p.vm, -1, t.val)
 		case tokenFloatNumber:
 			n, err = float(-1, t.val)
 		default:
@@ -501,7 +504,7 @@ func (p *Parser) term0(maxPriority Integer) (Term, error) {
 	case tokenOpen, tokenOpenCT:
 		return p.openClose()
 	case tokenInteger:
-		return integer(1, t.val)
+		return integer(p.vm, 1, t.val)
 	case tokenFloatNumber:
 		return float(1, t.val)
 	case tokenVariable:
@@ -552,7 +555,7 @@ func (p *Parser) term0Atom(maxPriority Integer) (Term, error) {
 		}
 		switch t.kind {
 		case tokenInteger:
-			return integer(-1, t.val)
+			return integer(p.vm, -1, t.val)
 		case tokenFloatNumber:
 			return float(-1, t.val)
 		default:
@@ -583,7 +586,7 @@ func (p *Parser) term0Atom(maxPriority Integer) (Term, error) {
 
 func (p *Parser) variable(s string) (Term, error) {
 	if s == "_" {
-		return NewVariable(), nil
+		return p.vm.NewVariable(), nil
 	}
 	n := NewAtom(s)
 	for i, pv := range p.Vars {
@@ -592,7 +595,7 @@ func (p *Parser) variable(s string) (Term, error) {
 			return pv.Variable, nil
 		}
 	}
-	v := NewVariable()
+	v := p.vm.NewVariable()
 	p.Vars = append(p.Vars, ParsedVariable{Name: n, Variable: v, Count: 1})
 	return v, nil
 }
@@ -778,7 +781,7 @@ func (p *Parser) arg() (Term, error) {
 	return p.term(999)
 }
 
-func integer(sign int64, s string) (Integer, error) {
+func integer(vm *VM, sign int64, s string) (Integer, error) {
 	base := 10
 	switch {
 	case strings.HasPrefix(s, "0'"):
@@ -801,9 +804,9 @@ func integer(sign int64, s string) (Integer, error) {
 
 	switch i, a := f.Int64(); a {
 	case big.Above:
-		return 0, representationError(flagMinInteger, nil)
+		return 0, representationError(vm, flagMinInteger, nil)
 	case big.Below:
-		return 0, representationError(flagMaxInteger, nil)
+		return 0, representationError(vm, flagMaxInteger, nil)
 	default:
 		return Integer(i), nil
 	}

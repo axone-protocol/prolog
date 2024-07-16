@@ -70,6 +70,9 @@ type VM struct {
 	streams       streams
 	input, output *Stream
 
+	varCounter      int64
+	variableContext *Variable
+
 	// Misc
 	debug bool
 }
@@ -160,12 +163,12 @@ func (vm *VM) Arrive(name Atom, args []Term, k Cont, env *Env) (promise *Promise
 		case unknownFail:
 			return Bool(false)
 		default:
-			return Error(existenceError(objectTypeProcedure, pi.Term(), env))
+			return Error(existenceError(vm, objectTypeProcedure, pi.Term(), env))
 		}
 	}
 
 	// bind the special variable to inform the predicate about the context.
-	env = env.bind(varContext, pi.Term())
+	env = env.bind(vm, vm.varContext(), pi.Term())
 
 	return p.call(vm, args, k, env)
 }
@@ -181,24 +184,24 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 		switch opcode, operand := op.opcode, op.operand; opcode {
 		case opGetConst:
 			arg, args = args[0], args[1:]
-			env, ok = env.Unify(arg, operand)
+			env, ok = env.Unify(vm, arg, operand)
 		case opPutConst:
 			args = append(args, operand)
 		case opGetVar:
 			v := vars[operand.(Integer)]
 			arg, args = args[0], args[1:]
-			env, ok = env.Unify(arg, v)
+			env, ok = env.Unify(vm, arg, v)
 		case opPutVar:
 			v := vars[operand.(Integer)]
 			args = append(args, v)
 		case opGetFunctor:
 			pi := operand.(procedureIndicator)
-			arg, astack = env.Resolve(args[0]), append(astack, args[1:])
+			arg, astack = env.Resolve(vm, args[0]), append(astack, args[1:])
 			args = make([]Term, int(pi.arity))
 			for i := range args {
-				args[i] = NewVariable()
+				args[i] = vm.NewVariable()
 			}
-			env, ok = env.Unify(arg, pi.name.Apply(args...))
+			env, ok = env.Unify(vm, arg, pi.name.Apply(args...))
 		case opPutFunctor:
 			pi := operand.(procedureIndicator)
 			vs := make([]Term, int(pi.arity))
@@ -226,9 +229,9 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 			arg, astack = args[0], append(astack, args[1:])
 			args = make([]Term, int(l))
 			for i := range args {
-				args[i] = NewVariable()
+				args[i] = vm.NewVariable()
 			}
-			env, ok = env.Unify(arg, list(args))
+			env, ok = env.Unify(vm, arg, list(args))
 		case opPutList:
 			l := operand.(Integer)
 			vs := make([]Term, int(l))
@@ -241,9 +244,9 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 			arg, astack = args[0], append(astack, args[1:])
 			args = make([]Term, int(l+1))
 			for i := range args {
-				args[i] = NewVariable()
+				args[i] = vm.NewVariable()
 			}
-			env, ok = env.Unify(arg, PartialList(args[0], args[1:]...))
+			env, ok = env.Unify(vm, arg, PartialList(args[0], args[1:]...))
 		case opPutPartial:
 			l := operand.(Integer)
 			vs := make([]Term, int(l+1))
@@ -402,12 +405,12 @@ type procedureIndicator struct {
 	arity Integer
 }
 
-func (p procedureIndicator) WriteTerm(w io.Writer, opts *WriteOptions, env *Env) error {
-	return WriteCompound(w, p, opts, env)
+func (p procedureIndicator) WriteTerm(vm *VM, w io.Writer, opts *WriteOptions, env *Env) error {
+	return WriteCompound(vm, w, p, opts, env)
 }
 
-func (p procedureIndicator) Compare(t Term, env *Env) int {
-	return CompareCompound(p, t, env)
+func (p procedureIndicator) Compare(vm *VM, t Term, env *Env) int {
+	return CompareCompound(vm, p, t, env)
 }
 
 func (p procedureIndicator) Functor() Atom {
@@ -427,7 +430,7 @@ func (p procedureIndicator) Arg(n int) Term {
 
 func (p procedureIndicator) String() string {
 	var sb strings.Builder
-	_ = p.name.WriteTerm(&sb, &WriteOptions{
+	_ = p.name.WriteTerm(nil, &sb, &WriteOptions{
 		quoted: true,
 	}, nil)
 	_, _ = fmt.Fprintf(&sb, "/%d", p.arity)
@@ -447,16 +450,16 @@ func (p procedureIndicator) Apply(args ...Term) (Term, error) {
 	return p.name.Apply(args...), nil
 }
 
-func piArg(t Term, env *Env) (procedureIndicator, func(int) Term, error) {
-	switch f := env.Resolve(t).(type) {
+func piArg(vm *VM, t Term, env *Env) (procedureIndicator, func(int) Term, error) {
+	switch f := env.Resolve(vm, t).(type) {
 	case Variable:
-		return procedureIndicator{}, nil, InstantiationError(env)
+		return procedureIndicator{}, nil, InstantiationError(vm, env)
 	case Atom:
 		return procedureIndicator{name: f, arity: 0}, nil, nil
 	case Compound:
 		return procedureIndicator{name: f.Functor(), arity: Integer(f.Arity())}, f.Arg, nil
 	default:
-		return procedureIndicator{}, nil, typeError(validTypeCallable, f, env)
+		return procedureIndicator{}, nil, typeError(vm, validTypeCallable, f, env)
 	}
 }
 

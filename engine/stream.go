@@ -80,14 +80,14 @@ func NewOutputBinaryStream(w io.Writer) *Stream {
 }
 
 // WriteTerm outputs the Stream to an io.Writer.
-func (s *Stream) WriteTerm(w io.Writer, _ *WriteOptions, _ *Env) error {
+func (s *Stream) WriteTerm(_ *VM, w io.Writer, _ *WriteOptions, _ *Env) error {
 	_, err := fmt.Fprintf(w, "<stream>(%p)", s)
 	return err
 }
 
 // Compare compares the Stream with a Term.
-func (s *Stream) Compare(t Term, env *Env) int {
-	return CompareAtomic[*Stream](s, t, func(s *Stream, t *Stream) int {
+func (s *Stream) Compare(vm *VM, t Term, env *Env) int {
+	return CompareAtomic[*Stream](vm, s, t, func(s *Stream, t *Stream) int {
 		switch x, y := uintptr(unsafe.Pointer(s)), uintptr(unsafe.Pointer(t)); {
 		case x > y:
 			return 1

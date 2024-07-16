@@ -239,7 +239,7 @@ func NewAtom(name string) Atom {
 }
 
 // WriteTerm outputs the Atom to an io.Writer.
-func (a Atom) WriteTerm(w io.Writer, opts *WriteOptions, _ *Env) error {
+func (a Atom) WriteTerm(_ *VM, w io.Writer, opts *WriteOptions, _ *Env) error {
 	ew := errWriter{w: w}
 	openClose := (opts.left != (operator{}) || opts.right != (operator{})) && opts.getOps().defined(a)
 
@@ -277,8 +277,8 @@ func (a Atom) WriteTerm(w io.Writer, opts *WriteOptions, _ *Env) error {
 }
 
 // Compare compares the Atom with a Term.
-func (a Atom) Compare(t Term, env *Env) int {
-	switch t := env.Resolve(t).(type) {
+func (a Atom) Compare(vm *VM, t Term, env *Env) int {
+	switch t := env.Resolve(vm, t).(type) {
 	case Variable, Float, Integer:
 		return 1
 	case Atom:

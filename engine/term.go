@@ -9,8 +9,8 @@ import (
 
 // Term is a prolog term.
 type Term interface {
-	WriteTerm(w io.Writer, opts *WriteOptions, env *Env) error
-	Compare(t Term, env *Env) int
+	WriteTerm(vm *VM, w io.Writer, opts *WriteOptions, env *Env) error
+	Compare(vm *VM, t Term, env *Env) int
 }
 
 // WriteOptions specify how the Term writes itself.
@@ -92,8 +92,8 @@ var defaultWriteOptions = WriteOptions{
 // The order is Variable < Float < Integer < Atom < custom atomic terms < Compound
 // where different types of custom atomic terms are ordered by the Go-syntax representation of the types.
 // It compares values of the same custom atomic term type T by the provided comparison function.
-func CompareAtomic[T Term](a T, t Term, cmp func(T, T) int, env *Env) int {
-	switch t := env.Resolve(t).(type) {
+func CompareAtomic[T Term](vm *VM, a T, t Term, cmp func(T, T) int, env *Env) int {
+	switch t := env.Resolve(vm, t).(type) {
 	case Variable, Float, Integer, Atom:
 		return 1
 	case T:

@@ -71,7 +71,7 @@ func decimalConditionAsErr(flags apd.Condition) error {
 func (f Float) number() {}
 
 // WriteTerm outputs the Float to an io.Writer.
-func (f Float) WriteTerm(w io.Writer, opts *WriteOptions, _ *Env) error {
+func (f Float) WriteTerm(_ *VM, w io.Writer, opts *WriteOptions, _ *Env) error {
 	ew := errWriter{w: w}
 	openClose := opts.left.name == atomMinus && opts.left.specifier.class() == operatorClassPrefix && !f.Negative()
 
@@ -105,8 +105,8 @@ func (f Float) WriteTerm(w io.Writer, opts *WriteOptions, _ *Env) error {
 }
 
 // Compare compares the Float with a Term.
-func (f Float) Compare(t Term, env *Env) int {
-	switch t := env.Resolve(t).(type) {
+func (f Float) Compare(vm *VM, t Term, env *Env) int {
+	switch t := env.Resolve(vm, t).(type) {
 	case Variable:
 		return 1
 	case Float:

@@ -99,7 +99,7 @@ func (vm *VM) compile(ctx context.Context, text *text, s string, args ...interfa
 			return err
 		}
 
-		pi, arg, err := piArg(et, nil)
+		pi, arg, err := piArg(vm, et, nil)
 		if err != nil {
 			return err
 		}
@@ -110,7 +110,7 @@ func (vm *VM) compile(ctx context.Context, text *text, s string, args ...interfa
 			}
 			continue
 		case procedureIndicator{name: atomIf, arity: 2}: // Rule
-			pi, arg, err = piArg(arg(0), nil)
+			pi, arg, err = piArg(vm, arg(0), nil)
 			if err != nil {
 				return err
 			}
@@ -122,7 +122,7 @@ func (vm *VM) compile(ctx context.Context, text *text, s string, args ...interfa
 				}
 			}
 
-			cs, err := compile(et, nil)
+			cs, err := compile(vm, et, nil)
 			if err != nil {
 				return err
 			}
@@ -138,18 +138,18 @@ func (vm *VM) directive(ctx context.Context, text *text, d Term) error {
 		return err
 	}
 
-	switch pi, arg, _ := piArg(d, nil); pi {
+	switch pi, arg, _ := piArg(vm, d, nil); pi {
 	case procedureIndicator{name: atomDynamic, arity: 1}:
-		return text.forEachUserDefined(arg(0), func(u *userDefined) {
+		return text.forEachUserDefined(vm, arg(0), func(u *userDefined) {
 			u.dynamic = true
 			u.public = true
 		})
 	case procedureIndicator{name: atomMultifile, arity: 1}:
-		return text.forEachUserDefined(arg(0), func(u *userDefined) {
+		return text.forEachUserDefined(vm, arg(0), func(u *userDefined) {
 			u.multifile = true
 		})
 	case procedureIndicator{name: atomDiscontiguous, arity: 1}:
-		return text.forEachUserDefined(arg(0), func(u *userDefined) {
+		return text.forEachUserDefined(vm, arg(0), func(u *userDefined) {
 			u.discontiguous = true
 		})
 	case procedureIndicator{name: atomInitialization, arity: 1}:
@@ -199,9 +199,9 @@ func (vm *VM) ensureLoaded(ctx context.Context, file Term, env *Env) error {
 }
 
 func (vm *VM) open(file Term, env *Env) (string, []byte, error) {
-	switch f := env.Resolve(file).(type) {
+	switch f := env.Resolve(vm, file).(type) {
 	case Variable:
-		return "", nil, InstantiationError(env)
+		return "", nil, InstantiationError(vm, env)
 	case Atom:
 		s := f.String()
 		for _, f := range []string{s, s + ".pl"} {
@@ -212,9 +212,9 @@ func (vm *VM) open(file Term, env *Env) (string, []byte, error) {
 
 			return f, b, nil
 		}
-		return "", nil, existenceError(objectTypeSourceSink, file, env)
+		return "", nil, existenceError(vm, objectTypeSourceSink, file, env)
 	default:
-		return "", nil, typeError(validTypeAtom, file, env)
+		return "", nil, typeError(vm, validTypeAtom, file, env)
 	}
 }
 
@@ -224,23 +224,23 @@ type text struct {
 	goals   []Term
 }
 
-func (t *text) forEachUserDefined(pi Term, f func(u *userDefined)) error {
-	iter := anyIterator{Any: pi}
+func (t *text) forEachUserDefined(vm *VM, pi Term, f func(u *userDefined)) error {
+	iter := anyIterator{Any: pi, vm: vm}
 	for iter.Next() {
 		switch pi := iter.Current().(type) {
 		case Variable:
-			return InstantiationError(nil)
+			return InstantiationError(vm, nil)
 		case Compound:
 			if pi.Functor() != atomSlash || pi.Arity() != 2 {
-				return typeError(validTypePredicateIndicator, pi, nil)
+				return typeError(vm, validTypePredicateIndicator, pi, nil)
 			}
 			switch n := pi.Arg(0).(type) {
 			case Variable:
-				return InstantiationError(nil)
+				return InstantiationError(vm, nil)
 			case Atom:
 				switch a := pi.Arg(1).(type) {
 				case Variable:
-					return InstantiationError(nil)
+					return InstantiationError(vm, nil)
 				case Integer:
 					pi := procedureIndicator{name: n, arity: a}
 					u, ok := t.getClause(pi)
@@ -250,13 +250,13 @@ func (t *text) forEachUserDefined(pi Term, f func(u *userDefined)) error {
 					}
 					f(u)
 				default:
-					return typeError(validTypePredicateIndicator, pi, nil)
+					return typeError(vm, validTypePredicateIndicator, pi, nil)
 				}
 			default:
-				return typeError(validTypePredicateIndicator, pi, nil)
+				return typeError(vm, validTypePredicateIndicator, pi, nil)
 			}
 		default:
-			return typeError(validTypePredicateIndicator, pi, nil)
+			return typeError(vm, validTypePredicateIndicator, pi, nil)
 		}
 	}
 	return iter.Err()
