@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"strings"
+	"sync/atomic"
 )
 
 type bytecode []instruction
@@ -300,6 +301,10 @@ func (vm *VM) SetUserOutput(s *Stream) {
 	s.alias = atomUserOutput
 	vm.streams.add(s)
 	vm.output = s
+}
+
+func (vm *VM) ResetVariableCounter() {
+	atomic.StoreInt64(&varCounter, 1) // Set the varCounter to 1 instead of 0 because NewVariable() will first increment this counter and a global root variable has already been set to 1. (See engine/env.go L3)
 }
 
 // Predicate0 is a predicate of arity 0.
