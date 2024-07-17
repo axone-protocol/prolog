@@ -302,6 +302,19 @@ func (vm *VM) SetUserOutput(s *Stream) {
 	vm.output = s
 }
 
+// ResetEnv is used to reset all global variable
+func (vm *VM) ResetEnv() {
+	varCounter = 0
+	varContext = NewVariable()
+	rootContext = NewAtom("root")
+	rootEnv = &Env{
+		binding: binding{
+			key:   newEnvKey(varContext),
+			value: rootContext,
+		},
+	}
+}
+
 // Predicate0 is a predicate of arity 0.
 type Predicate0 func(*VM, Cont, *Env) *Promise
 

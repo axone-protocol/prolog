@@ -14,15 +14,23 @@ import (
 //go:embed bootstrap.pl
 var bootstrap string
 
-// Interpreter is a Prolog interpreter. The zero value is a valid interpreter without any predicates/operators defined.
+// Interpreter is a Prolog interpreter.
 type Interpreter struct {
 	engine.VM
 	loaded map[string]struct{}
 }
 
+// NewEmpty creates a new Prolog interpreter without any predicates/operators defined.
+func NewEmpty() *Interpreter {
+	var i Interpreter
+	i.ResetEnv()
+	return &i
+}
+
 // New creates a new Prolog interpreter with predefined predicates/operators.
 func New(in io.Reader, out io.Writer) *Interpreter {
 	var i Interpreter
+	i.ResetEnv()
 	i.FS = defaultFS{}
 	i.SetUserInput(engine.NewInputTextStream(in))
 	i.SetUserOutput(engine.NewOutputTextStream(out))
