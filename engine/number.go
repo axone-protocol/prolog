@@ -2,7 +2,7 @@ package engine
 
 import (
 	"errors"
-	"github.com/cockroachdb/apd"
+	"github.com/cockroachdb/apd/v3"
 	"math"
 )
 

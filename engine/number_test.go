@@ -2,7 +2,7 @@ package engine
 
 import (
 	"context"
-	"github.com/cockroachdb/apd"
+	"github.com/cockroachdb/apd/v3"
 	"io"
 	"math"
 	"testing"
