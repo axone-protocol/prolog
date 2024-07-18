@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"io"
 	"math"
 	"os"
@@ -16,6 +17,8 @@ import (
 	"testing"
 	"unicode/utf8"
 )
+
+type procedurePair orderedmap.Pair[procedureIndicator, procedure]
 
 func TestCall(t *testing.T) {
 	var vm VM
@@ -91,11 +94,12 @@ func TestCall1(t *testing.T) {
 		t.Run(tt.title, func(t *testing.T) {
 			defer setMemFree(tt.mem)()
 
-			vm := VM{procedures: map[procedureIndicator]procedure{
-				{name: NewAtom("p"), arity: 2}: Predicate2(func(_ *VM, _, _ Term, k Cont, env *Env) *Promise {
+			vm := VM{procedures: buildOrderedMap(procedurePair{
+				Key: procedureIndicator{name: NewAtom("p"), arity: 2},
+				Value: Predicate2(func(_ *VM, _, _ Term, k Cont, env *Env) *Promise {
 					return k(env)
 				}),
-			}}
+			})}
 			ok, err := Call1(&vm, tt.closure, tt.additional[0], Success, nil).Force(context.Background())
 			assert.Equal(t, tt.ok, ok)
 			assert.Equal(t, tt.err, err)
@@ -122,11 +126,12 @@ func TestCall2(t *testing.T) {
 		t.Run(tt.title, func(t *testing.T) {
 			defer setMemFree(tt.mem)()
 
-			vm := VM{procedures: map[procedureIndicator]procedure{
-				{name: NewAtom("p"), arity: 3}: Predicate3(func(_ *VM, _, _, _ Term, k Cont, env *Env) *Promise {
+			vm := VM{procedures: buildOrderedMap(procedurePair{
+				Key: procedureIndicator{name: NewAtom("p"), arity: 3},
+				Value: Predicate3(func(_ *VM, _, _, _ Term, k Cont, env *Env) *Promise {
 					return k(env)
 				}),
-			}}
+			})}
 			ok, err := Call2(&vm, tt.closure, tt.additional[0], tt.additional[1], Success, nil).Force(context.Background())
 			assert.Equal(t, tt.ok, ok)
 			assert.Equal(t, tt.err, err)
@@ -153,11 +158,12 @@ func TestCall3(t *testing.T) {
 		t.Run(tt.title, func(t *testing.T) {
 			defer setMemFree(tt.mem)()
 
-			vm := VM{procedures: map[procedureIndicator]procedure{
-				{name: NewAtom("p"), arity: 4}: Predicate4(func(_ *VM, _, _, _, _ Term, k Cont, env *Env) *Promise {
+			vm := VM{procedures: buildOrderedMap(procedurePair{
+				Key: procedureIndicator{name: NewAtom("p"), arity: 4},
+				Value: Predicate4(func(_ *VM, _, _, _, _ Term, k Cont, env *Env) *Promise {
 					return k(env)
 				}),
-			}}
+			})}
 			ok, err := Call3(&vm, tt.closure, tt.additional[0], tt.additional[1], tt.additional[2], Success, nil).Force(context.Background())
 			assert.Equal(t, tt.ok, ok)
 			assert.Equal(t, tt.err, err)
@@ -184,11 +190,12 @@ func TestCall4(t *testing.T) {
 		t.Run(tt.title, func(t *testing.T) {
 			defer setMemFree(tt.mem)()
 
-			vm := VM{procedures: map[procedureIndicator]procedure{
-				{name: NewAtom("p"), arity: 5}: Predicate5(func(_ *VM, _, _, _, _, _ Term, k Cont, env *Env) *Promise {
+			vm := VM{procedures: buildOrderedMap(procedurePair{
+				Key: procedureIndicator{name: NewAtom("p"), arity: 5},
+				Value: Predicate5(func(_ *VM, _, _, _, _, _ Term, k Cont, env *Env) *Promise {
 					return k(env)
 				}),
-			}}
+			})}
 			ok, err := Call4(&vm, tt.closure, tt.additional[0], tt.additional[1], tt.additional[2], tt.additional[3], Success, nil).Force(context.Background())
 			assert.Equal(t, tt.ok, ok)
 			assert.Equal(t, tt.err, err)
@@ -215,11 +222,12 @@ func TestCall5(t *testing.T) {
 		t.Run(tt.title, func(t *testing.T) {
 			defer setMemFree(tt.mem)()
 
-			vm := VM{procedures: map[procedureIndicator]procedure{
-				{name: NewAtom("p"), arity: 6}: Predicate6(func(_ *VM, _, _, _, _, _, _ Term, k Cont, env *Env) *Promise {
+			vm := VM{procedures: buildOrderedMap(procedurePair{
+				Key: procedureIndicator{name: NewAtom("p"), arity: 6},
+				Value: Predicate6(func(_ *VM, _, _, _, _, _, _ Term, k Cont, env *Env) *Promise {
 					return k(env)
 				}),
-			}}
+			})}
 			ok, err := Call5(&vm, tt.closure, tt.additional[0], tt.additional[1], tt.additional[2], tt.additional[3], tt.additional[4], Success, nil).Force(context.Background())
 			assert.Equal(t, tt.ok, ok)
 			assert.Equal(t, tt.err, err)
@@ -246,11 +254,12 @@ func TestCall6(t *testing.T) {
 		t.Run(tt.title, func(t *testing.T) {
 			defer setMemFree(tt.mem)()
 
-			vm := VM{procedures: map[procedureIndicator]procedure{
-				{name: NewAtom("p"), arity: 7}: Predicate7(func(_ *VM, _, _, _, _, _, _, _ Term, k Cont, env *Env) *Promise {
+			vm := VM{procedures: buildOrderedMap(procedurePair{
+				Key: procedureIndicator{name: NewAtom("p"), arity: 7},
+				Value: Predicate7(func(_ *VM, _, _, _, _, _, _, _ Term, k Cont, env *Env) *Promise {
 					return k(env)
 				}),
-			}}
+			})}
 			ok, err := Call6(&vm, tt.closure, tt.additional[0], tt.additional[1], tt.additional[2], tt.additional[3], tt.additional[4], tt.additional[5], Success, nil).Force(context.Background())
 			assert.Equal(t, tt.ok, ok)
 			assert.Equal(t, tt.err, err)
@@ -277,11 +286,12 @@ func TestCall7(t *testing.T) {
 		t.Run(tt.title, func(t *testing.T) {
 			defer setMemFree(tt.mem)()
 
-			vm := VM{procedures: map[procedureIndicator]procedure{
-				{name: NewAtom("p"), arity: 8}: Predicate8(func(_ *VM, _, _, _, _, _, _, _, _ Term, k Cont, env *Env) *Promise {
+			vm := VM{procedures: buildOrderedMap(procedurePair{
+				Key: procedureIndicator{name: NewAtom("p"), arity: 8},
+				Value: Predicate8(func(_ *VM, _, _, _, _, _, _, _, _ Term, k Cont, env *Env) *Promise {
 					return k(env)
 				}),
-			}}
+			})}
 			ok, err := Call7(&vm, tt.closure, tt.additional[0], tt.additional[1], tt.additional[2], tt.additional[3], tt.additional[4], tt.additional[5], tt.additional[6], Success, nil).Force(context.Background())
 			assert.Equal(t, tt.ok, ok)
 			assert.Equal(t, tt.err, err)
@@ -291,17 +301,20 @@ func TestCall7(t *testing.T) {
 
 func TestCallNth(t *testing.T) {
 	vm := VM{
-		procedures: map[procedureIndicator]procedure{
-			{name: NewAtom("foo"), arity: 0}: Predicate0(func(_ *VM, k Cont, env *Env) *Promise {
-				return Delay(func(context.Context) *Promise {
-					return k(env)
-				}, func(context.Context) *Promise {
-					return k(env)
-				}, func(context.Context) *Promise {
-					return Error(errors.New("three"))
-				})
-			}),
-		},
+		procedures: buildOrderedMap(
+			procedurePair{
+				Key: procedureIndicator{name: NewAtom("foo"), arity: 0},
+				Value: Predicate0(func(_ *VM, k Cont, env *Env) *Promise {
+					return Delay(func(context.Context) *Promise {
+						return k(env)
+					}, func(context.Context) *Promise {
+						return k(env)
+					}, func(context.Context) *Promise {
+						return Error(errors.New("three"))
+					})
+				}),
+			},
+		),
 	}
 
 	t.Run("ok", func(t *testing.T) {
@@ -939,134 +952,167 @@ func TestTermVariables(t *testing.T) {
 func TestOp(t *testing.T) {
 	t.Run("insert", func(t *testing.T) {
 		t.Run("atom", func(t *testing.T) {
-			vm := VM{operators: operators{}}
-			vm.operators.define(900, operatorSpecifierXFX, NewAtom(`+++`))
-			vm.operators.define(1100, operatorSpecifierXFX, NewAtom(`+`))
+			varCounter = 1
+
+			vm := VM{_operators: newOperators()}
+			vm.getOperators().define(900, operatorSpecifierXFX, NewAtom(`+++`))
+			vm.getOperators().define(1100, operatorSpecifierXFX, NewAtom(`+`))
 
 			ok, err := Op(&vm, Integer(1000), atomXFX, NewAtom("++"), Success, nil).Force(context.Background())
 			assert.NoError(t, err)
 			assert.True(t, ok)
 
-			assert.Equal(t, operators{
-				NewAtom(`+++`): {
-					operatorClassInfix: {
-						priority:  900,
-						specifier: operatorSpecifierXFX,
-						name:      NewAtom("+++"),
-					},
-				},
-				NewAtom(`++`): {
-					operatorClassInfix: {
-						priority:  1000,
-						specifier: operatorSpecifierXFX,
-						name:      NewAtom("++"),
-					},
-				},
-				NewAtom(`+`): {
-					operatorClassInfix: {
-						priority:  1100,
-						specifier: operatorSpecifierXFX,
-						name:      atomPlus,
-					},
-				},
-			}, vm.operators)
+			assert.EqualValues(t, &operators{
+				OrderedMap: orderedmap.New[Atom, [_operatorClassLen]operator](
+					orderedmap.WithInitialData(
+						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+							Key: NewAtom(`+++`),
+							Value: [_operatorClassLen]operator{
+								operatorClassInfix: {
+									priority:  900,
+									specifier: operatorSpecifierXFX,
+									name:      NewAtom("+++"),
+								},
+							}},
+						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+							Key: NewAtom(`+`),
+							Value: [_operatorClassLen]operator{
+								operatorClassInfix: {
+									priority:  1100,
+									specifier: operatorSpecifierXFX,
+									name:      atomPlus,
+								},
+							}},
+						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+							Key: NewAtom(`++`),
+							Value: [_operatorClassLen]operator{
+								operatorClassInfix: {
+									priority:  1000,
+									specifier: operatorSpecifierXFX,
+									name:      NewAtom("++"),
+								},
+							}}))}, vm.getOperators())
 		})
 
 		t.Run("list", func(t *testing.T) {
 			vm := VM{
-				operators: operators{
-					NewAtom(`+++`): {
-						operatorClassInfix: {
-							priority:  900,
-							specifier: operatorSpecifierXFX,
-							name:      NewAtom("+++"),
-						},
-					},
-					NewAtom(`+`): {
-						operatorClassInfix: {
-							priority:  1100,
-							specifier: operatorSpecifierXFX,
-							name:      atomPlus,
-						},
-					},
-				},
+				_operators: &operators{
+					OrderedMap: orderedmap.New[Atom, [_operatorClassLen]operator](
+						orderedmap.WithInitialData(
+							orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+								Key: NewAtom(`+++`),
+								Value: [_operatorClassLen]operator{
+									operatorClassInfix: {
+										priority:  900,
+										specifier: operatorSpecifierXFX,
+										name:      NewAtom("+++"),
+									},
+								}},
+							orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+								Key: NewAtom(`+`),
+								Value: [_operatorClassLen]operator{
+									operatorClassInfix: {
+										priority:  1100,
+										specifier: operatorSpecifierXFX,
+										name:      atomPlus,
+									},
+								}}))},
 			}
 			ok, err := Op(&vm, Integer(1000), atomXFX, List(NewAtom("++"), NewAtom("++")), Success, nil).Force(context.Background())
 			assert.NoError(t, err)
 			assert.True(t, ok)
 
-			assert.Equal(t, operators{
-				NewAtom(`+++`): {
-					operatorClassInfix: {
-						priority:  900,
-						specifier: operatorSpecifierXFX,
-						name:      NewAtom("+++"),
-					},
-				},
-				NewAtom(`++`): {
-					operatorClassInfix: {
-						priority:  1000,
-						specifier: operatorSpecifierXFX,
-						name:      NewAtom("++"),
-					},
-				},
-				NewAtom(`+`): {
-					operatorClassInfix: {
-						priority:  1100,
-						specifier: operatorSpecifierXFX,
-						name:      atomPlus,
-					},
-				},
-			}, vm.operators)
+			assert.EqualValues(t, &operators{
+				OrderedMap: orderedmap.New[Atom, [_operatorClassLen]operator](
+					orderedmap.WithInitialData(
+						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+							Key: NewAtom(`+++`),
+							Value: [_operatorClassLen]operator{
+								operatorClassInfix: {
+									priority:  900,
+									specifier: operatorSpecifierXFX,
+									name:      NewAtom("+++"),
+								},
+							}},
+						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+							Key: NewAtom(`+`),
+							Value: [_operatorClassLen]operator{
+								operatorClassInfix: {
+									priority:  1100,
+									specifier: operatorSpecifierXFX,
+									name:      atomPlus,
+								},
+							}},
+						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+							Key: NewAtom(`++`),
+							Value: [_operatorClassLen]operator{
+								operatorClassInfix: {
+									priority:  1000,
+									specifier: operatorSpecifierXFX,
+									name:      NewAtom("++"),
+								},
+							}}))}, vm.getOperators())
 		})
 	})
 
 	t.Run("remove", func(t *testing.T) {
 		vm := VM{
-			operators: operators{
-				NewAtom(`+++`): {
-					operatorClassInfix: {
-						priority:  900,
-						specifier: operatorSpecifierXFX,
-						name:      NewAtom("+++"),
-					},
-				},
-				NewAtom(`++`): {
-					operatorClassInfix: {
-						priority:  1000,
-						specifier: operatorSpecifierXFX,
-						name:      NewAtom("++"),
-					},
-				},
-				NewAtom(`+`): {
-					operatorClassInfix: {
-						priority:  1100,
-						specifier: operatorSpecifierXFX,
-						name:      atomPlus,
-					},
-				},
-			},
+			_operators: &operators{
+				OrderedMap: orderedmap.New[Atom, [_operatorClassLen]operator](
+					orderedmap.WithInitialData(
+						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+							Key: NewAtom(`+++`),
+							Value: [_operatorClassLen]operator{
+								operatorClassInfix: {
+									priority:  900,
+									specifier: operatorSpecifierXFX,
+									name:      NewAtom("+++"),
+								},
+							}},
+						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+							Key: NewAtom(`++`),
+							Value: [_operatorClassLen]operator{
+								operatorClassInfix: {
+									priority:  1000,
+									specifier: operatorSpecifierXFX,
+									name:      NewAtom("++"),
+								},
+							}},
+						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+							Key: NewAtom(`+`),
+							Value: [_operatorClassLen]operator{
+								operatorClassInfix: {
+									priority:  1100,
+									specifier: operatorSpecifierXFX,
+									name:      atomPlus,
+								},
+							}}))},
 		}
 		ok, err := Op(&vm, Integer(0), atomXFX, NewAtom("++"), Success, nil).Force(context.Background())
 		assert.NoError(t, err)
 		assert.True(t, ok)
 
-		assert.Equal(t, operators{
-			NewAtom(`+++`): {
-				operatorClassInfix: {
-					priority:  900,
-					specifier: operatorSpecifierXFX,
-					name:      NewAtom("+++"),
-				},
-			},
-			NewAtom(`+`): {
-				operatorClassInfix: {
-					priority:  1100,
-					specifier: operatorSpecifierXFX,
-					name:      atomPlus,
-				},
-			},
-		}, vm.operators)
+		assert.EqualValues(t, &operators{
+			OrderedMap: orderedmap.New[Atom, [_operatorClassLen]operator](
+				orderedmap.WithInitialData(
+					orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+						Key: NewAtom(`+++`),
+						Value: [_operatorClassLen]operator{
+							operatorClassInfix: {
+								priority:  900,
+								specifier: operatorSpecifierXFX,
+								name:      NewAtom("+++"),
+							},
+						}},
+					orderedmap.Pair[Atom, [_operatorClassLen]operator]{
+						Key: NewAtom(`+`),
+						Value: [_operatorClassLen]operator{
+							operatorClassInfix: {
+								priority:  1100,
+								specifier: operatorSpecifierXFX,
+								name:      atomPlus,
+							},
+						}}))}, vm.getOperators())
 	})
 
 	t.Run("priority is a variable", func(t *testing.T) {
@@ -1135,16 +1181,16 @@ func TestOp(t *testing.T) {
 	})
 
 	t.Run("operator is ','", func(t *testing.T) {
-		vm := VM{operators: operators{}}
-		vm.operators.define(1000, operatorSpecifierXFY, NewAtom(`,`))
+		vm := VM{_operators: newOperators()}
+		vm.getOperators().define(1000, operatorSpecifierXFY, NewAtom(`,`))
 		ok, err := Op(&vm, Integer(1000), atomXFY, atomComma, Success, nil).Force(context.Background())
 		assert.Equal(t, permissionError(operationModify, permissionTypeOperator, atomComma, nil), err)
 		assert.False(t, ok)
 	})
 
 	t.Run("an element of the operator list is ','", func(t *testing.T) {
-		vm := VM{operators: operators{}}
-		vm.operators.define(1000, operatorSpecifierXFY, NewAtom(`,`))
+		vm := VM{_operators: newOperators()}
+		vm.getOperators().define(1000, operatorSpecifierXFY, NewAtom(`,`))
 		ok, err := Op(&vm, Integer(1000), atomXFY, List(atomComma), Success, nil).Force(context.Background())
 		assert.Equal(t, permissionError(operationModify, permissionTypeOperator, atomComma, nil), err)
 		assert.False(t, ok)
@@ -1174,8 +1220,8 @@ func TestOp(t *testing.T) {
 			})
 
 			t.Run("modify", func(t *testing.T) {
-				vm := VM{operators: operators{}}
-				vm.operators.define(1001, operatorSpecifierXFY, NewAtom(`|`))
+				vm := VM{_operators: newOperators()}
+				vm.getOperators().define(1001, operatorSpecifierXFY, NewAtom(`|`))
 				ok, err := Op(&vm, Integer(1000), atomXFY, atomBar, Success, nil).Force(context.Background())
 				assert.Equal(t, permissionError(operationModify, permissionTypeOperator, atomBar, nil), err)
 				assert.False(t, ok)
@@ -1207,8 +1253,8 @@ func TestOp(t *testing.T) {
 			})
 
 			t.Run("modify", func(t *testing.T) {
-				vm := VM{operators: operators{}}
-				vm.operators.define(101, operatorSpecifierXFY, NewAtom(`|`))
+				vm := VM{_operators: newOperators()}
+				vm.getOperators().define(101, operatorSpecifierXFY, NewAtom(`|`))
 				ok, err := Op(&vm, Integer(1000), atomXFY, List(atomBar), Success, nil).Force(context.Background())
 				assert.Equal(t, permissionError(operationModify, permissionTypeOperator, atomBar, nil), err)
 				assert.False(t, ok)
@@ -1218,16 +1264,16 @@ func TestOp(t *testing.T) {
 
 	t.Run("There shall not be an infix and a postfix operator with the same name.", func(t *testing.T) {
 		t.Run("infix", func(t *testing.T) {
-			vm := VM{operators: operators{}}
-			vm.operators.define(200, operatorSpecifierYF, NewAtom(`+`))
+			vm := VM{_operators: newOperators()}
+			vm.getOperators().define(200, operatorSpecifierYF, NewAtom(`+`))
 			ok, err := Op(&vm, Integer(500), atomYFX, List(atomPlus), Success, nil).Force(context.Background())
 			assert.Equal(t, permissionError(operationCreate, permissionTypeOperator, atomPlus, nil), err)
 			assert.False(t, ok)
 		})
 
 		t.Run("postfix", func(t *testing.T) {
-			vm := VM{operators: operators{}}
-			vm.operators.define(500, operatorSpecifierYFX, NewAtom(`+`))
+			vm := VM{_operators: newOperators()}
+			vm.getOperators().define(500, operatorSpecifierYFX, NewAtom(`+`))
 			ok, err := Op(&vm, Integer(200), atomYF, List(atomPlus), Success, nil).Force(context.Background())
 			assert.Equal(t, permissionError(operationCreate, permissionTypeOperator, atomPlus, nil), err)
 			assert.False(t, ok)
@@ -1236,10 +1282,10 @@ func TestOp(t *testing.T) {
 }
 
 func TestCurrentOp(t *testing.T) {
-	vm := VM{operators: operators{}}
-	vm.operators.define(900, operatorSpecifierXFX, NewAtom(`+++`))
-	vm.operators.define(1000, operatorSpecifierXFX, NewAtom(`++`))
-	vm.operators.define(1100, operatorSpecifierXFX, NewAtom(`+`))
+	vm := VM{_operators: newOperators()}
+	vm.getOperators().define(900, operatorSpecifierXFX, NewAtom(`+++`))
+	vm.getOperators().define(1000, operatorSpecifierXFX, NewAtom(`++`))
+	vm.getOperators().define(1100, operatorSpecifierXFX, NewAtom(`+`))
 
 	t.Run("single solution", func(t *testing.T) {
 		ok, err := CurrentOp(&vm, Integer(1100), atomXFX, atomPlus, Success, nil).Force(context.Background())
@@ -2443,9 +2489,14 @@ func TestCatch(t *testing.T) {
 
 func TestCurrentPredicate(t *testing.T) {
 	t.Run("user defined predicate", func(t *testing.T) {
-		vm := VM{procedures: map[procedureIndicator]procedure{
-			{name: NewAtom("foo"), arity: 1}: &userDefined{},
-		}}
+		vm := VM{
+			procedures: buildOrderedMap(
+				procedurePair{
+					Key:   procedureIndicator{name: NewAtom("foo"), arity: 1},
+					Value: &userDefined{},
+				},
+			),
+		}
 		ok, err := CurrentPredicate(&vm, &compound{
 			functor: atomSlash,
 			args: []Term{
@@ -2462,11 +2513,22 @@ func TestCurrentPredicate(t *testing.T) {
 
 		v := NewVariable()
 
-		vm := VM{procedures: map[procedureIndicator]procedure{
-			{name: NewAtom("foo"), arity: 1}: &userDefined{},
-			{name: NewAtom("bar"), arity: 1}: &userDefined{},
-			{name: NewAtom("baz"), arity: 1}: &userDefined{},
-		}}
+		vm := VM{
+			procedures: buildOrderedMap(
+				procedurePair{
+					Key:   procedureIndicator{name: NewAtom("foo"), arity: 1},
+					Value: &userDefined{},
+				},
+				procedurePair{
+					Key:   procedureIndicator{name: NewAtom("bar"), arity: 1},
+					Value: &userDefined{},
+				},
+				procedurePair{
+					Key:   procedureIndicator{name: NewAtom("baz"), arity: 1},
+					Value: &userDefined{},
+				},
+			),
+		}
 		ok, err := CurrentPredicate(&vm, v, func(env *Env) *Promise {
 			c, ok := env.Resolve(v).(*compound)
 			assert.True(t, ok)
@@ -2493,10 +2555,65 @@ func TestCurrentPredicate(t *testing.T) {
 		assert.True(t, baz)
 	})
 
+	t.Run("ordered current predicate", func(t *testing.T) {
+		var foo, bar, baz int
+
+		for i := 0; i < 10; i++ {
+			v := NewVariable()
+			vm := VM{
+				procedures: buildOrderedMap(
+					procedurePair{
+						Key:   procedureIndicator{name: NewAtom("foo"), arity: 1},
+						Value: &userDefined{},
+					},
+					procedurePair{
+						Key:   procedureIndicator{name: NewAtom("bar"), arity: 1},
+						Value: &userDefined{},
+					},
+					procedurePair{
+						Key:   procedureIndicator{name: NewAtom("baz"), arity: 1},
+						Value: &userDefined{},
+					},
+				),
+			}
+			index := 0
+			ok, err := CurrentPredicate(&vm, v, func(env *Env) *Promise {
+				c, ok := env.Resolve(v).(*compound)
+				assert.True(t, ok)
+				assert.Equal(t, atomSlash, c.Functor())
+				assert.Equal(t, 2, c.Arity())
+				assert.Equal(t, Integer(1), c.Arg(1))
+				switch c.Arg(0) {
+				case NewAtom("foo"):
+					foo = index
+				case NewAtom("bar"):
+					bar = index
+				case NewAtom("baz"):
+					baz = index
+				default:
+					assert.Fail(t, "unreachable")
+				}
+				index += 1
+				return Bool(false)
+			}, nil).Force(context.Background())
+			assert.NoError(t, err)
+			assert.False(t, ok)
+
+			assert.Equal(t, 0, foo)
+			assert.Equal(t, 1, bar)
+			assert.Equal(t, 2, baz)
+		}
+	})
+
 	t.Run("builtin predicate", func(t *testing.T) {
-		vm := VM{procedures: map[procedureIndicator]procedure{
-			{name: atomEqual, arity: 2}: Predicate2(Unify),
-		}}
+		vm := VM{
+			procedures: buildOrderedMap(
+				procedurePair{
+					Key:   procedureIndicator{name: atomEqual, arity: 2},
+					Value: Predicate2(Unify),
+				},
+			),
+		}
 		ok, err := CurrentPredicate(&vm, &compound{
 			functor: atomSlash,
 			args: []Term{
@@ -2606,10 +2723,10 @@ func TestAssertz(t *testing.T) {
 					{opcode: opExit},
 				},
 			},
-		}}, vm.procedures[procedureIndicator{
+		}}, vm.procedures.GetPair(procedureIndicator{
 			name:  NewAtom("foo"),
 			arity: 1,
-		}])
+		}).Value)
 	})
 
 	t.Run("clause is a variable", func(t *testing.T) {
@@ -2673,9 +2790,12 @@ func TestAssertz(t *testing.T) {
 
 	t.Run("static", func(t *testing.T) {
 		vm := VM{
-			procedures: map[procedureIndicator]procedure{
-				{name: NewAtom("foo"), arity: 0}: &userDefined{dynamic: false},
-			},
+			procedures: buildOrderedMap(
+				procedurePair{
+					Key:   procedureIndicator{name: NewAtom("foo"), arity: 0},
+					Value: &userDefined{dynamic: false},
+				},
+			),
 		}
 
 		ok, err := Assertz(&vm, NewAtom("foo"), Success, nil).Force(context.Background())
@@ -2730,7 +2850,7 @@ func TestAsserta(t *testing.T) {
 					{opcode: opExit},
 				},
 			},
-		}}, vm.procedures[procedureIndicator{name: NewAtom("foo"), arity: 1}])
+		}}, vm.procedures.GetPair(procedureIndicator{name: NewAtom("foo"), arity: 1}).Value)
 	})
 
 	t.Run("rule", func(t *testing.T) {
@@ -2804,7 +2924,7 @@ func TestAsserta(t *testing.T) {
 					{opcode: opExit},
 				},
 			},
-		}}, vm.procedures[procedureIndicator{name: NewAtom("foo"), arity: 0}])
+		}}, vm.procedures.GetPair(procedureIndicator{name: NewAtom("foo"), arity: 0}).Value)
 	})
 
 	t.Run("clause is a variable", func(t *testing.T) {
@@ -2876,9 +2996,12 @@ func TestAsserta(t *testing.T) {
 
 	t.Run("static", func(t *testing.T) {
 		vm := VM{
-			procedures: map[procedureIndicator]procedure{
-				{name: NewAtom("foo"), arity: 0}: &userDefined{dynamic: false},
-			},
+			procedures: buildOrderedMap(
+				procedurePair{
+					Key:   procedureIndicator{name: NewAtom("foo"), arity: 0},
+					Value: &userDefined{dynamic: false},
+				},
+			),
 		}
 
 		ok, err := Asserta(&vm, NewAtom("foo"), Success, nil).Force(context.Background())
@@ -2909,13 +3032,16 @@ func TestAsserta(t *testing.T) {
 func TestRetract(t *testing.T) {
 	t.Run("retract the first one", func(t *testing.T) {
 		vm := VM{
-			procedures: map[procedureIndicator]procedure{
-				{name: NewAtom("foo"), arity: 1}: &userDefined{dynamic: true, clauses: []clause{
-					{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("a")}}},
-					{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("b")}}},
-					{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}}},
-				}},
-			},
+			procedures: buildOrderedMap(
+				procedurePair{
+					Key: procedureIndicator{name: NewAtom("foo"), arity: 1},
+					Value: &userDefined{dynamic: true, clauses: []clause{
+						{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("a")}}},
+						{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("b")}}},
+						{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}}},
+					}},
+				},
+			),
 		}
 
 		ok, err := Retract(&vm, &compound{
@@ -2928,18 +3054,21 @@ func TestRetract(t *testing.T) {
 		assert.Equal(t, &userDefined{dynamic: true, clauses: []clause{
 			{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("b")}}},
 			{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}}},
-		}}, vm.procedures[procedureIndicator{name: NewAtom("foo"), arity: 1}])
+		}}, vm.procedures.GetPair(procedureIndicator{name: NewAtom("foo"), arity: 1}).Value)
 	})
 
 	t.Run("retract the specific one", func(t *testing.T) {
 		vm := VM{
-			procedures: map[procedureIndicator]procedure{
-				{name: NewAtom("foo"), arity: 1}: &userDefined{dynamic: true, clauses: []clause{
-					{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("a")}}},
-					{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("b")}}},
-					{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}}},
-				}},
-			},
+			procedures: buildOrderedMap(
+				procedurePair{
+					Key: procedureIndicator{name: NewAtom("foo"), arity: 1},
+					Value: &userDefined{dynamic: true, clauses: []clause{
+						{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("a")}}},
+						{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("b")}}},
+						{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}}},
+					}},
+				},
+			),
 		}
 
 		ok, err := Retract(&vm, &compound{
@@ -2952,18 +3081,21 @@ func TestRetract(t *testing.T) {
 		assert.Equal(t, &userDefined{dynamic: true, clauses: []clause{
 			{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("a")}}},
 			{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}}},
-		}}, vm.procedures[procedureIndicator{name: NewAtom("foo"), arity: 1}])
+		}}, vm.procedures.GetPair(procedureIndicator{name: NewAtom("foo"), arity: 1}).Value)
 	})
 
 	t.Run("retract all", func(t *testing.T) {
 		vm := VM{
-			procedures: map[procedureIndicator]procedure{
-				{name: NewAtom("foo"), arity: 1}: &userDefined{dynamic: true, clauses: []clause{
-					{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("a")}}},
-					{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("b")}}},
-					{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}}},
-				}},
-			},
+			procedures: buildOrderedMap(
+				procedurePair{
+					Key: procedureIndicator{name: NewAtom("foo"), arity: 1},
+					Value: &userDefined{dynamic: true, clauses: []clause{
+						{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("a")}}},
+						{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("b")}}},
+						{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}}},
+					}},
+				},
+			),
 		}
 
 		ok, err := Retract(&vm, &compound{
@@ -2972,7 +3104,8 @@ func TestRetract(t *testing.T) {
 		}, Failure, nil).Force(context.Background())
 		assert.NoError(t, err)
 		assert.False(t, ok)
-		assert.Empty(t, vm.procedures[procedureIndicator{name: NewAtom("foo"), arity: 1}].(*userDefined).clauses)
+		p, _ := vm.procedures.Get(procedureIndicator{name: NewAtom("foo"), arity: 1})
+		assert.Empty(t, p.(*userDefined).clauses)
 	})
 
 	t.Run("variable", func(t *testing.T) {
@@ -3002,9 +3135,10 @@ func TestRetract(t *testing.T) {
 
 	t.Run("static", func(t *testing.T) {
 		vm := VM{
-			procedures: map[procedureIndicator]procedure{
-				{name: NewAtom("foo"), arity: 0}: &userDefined{dynamic: false},
-			},
+			procedures: buildOrderedMap(procedurePair{
+				Key:   procedureIndicator{name: NewAtom("foo"), arity: 0},
+				Value: &userDefined{dynamic: false},
+			}),
 		}
 
 		ok, err := Retract(&vm, NewAtom("foo"), Success, nil).Force(context.Background())
@@ -3017,11 +3151,14 @@ func TestRetract(t *testing.T) {
 
 	t.Run("exception in continuation", func(t *testing.T) {
 		vm := VM{
-			procedures: map[procedureIndicator]procedure{
-				{name: NewAtom("foo"), arity: 1}: &userDefined{dynamic: true, clauses: []clause{
-					{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("a")}}},
-				}},
-			},
+			procedures: buildOrderedMap(
+				procedurePair{
+					Key: procedureIndicator{name: NewAtom("foo"), arity: 1},
+					Value: &userDefined{dynamic: true, clauses: []clause{
+						{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("a")}}},
+					}},
+				},
+			),
 		}
 
 		ok, err := Retract(&vm, &compound{
@@ -3034,20 +3171,24 @@ func TestRetract(t *testing.T) {
 		assert.False(t, ok)
 
 		// removed
-		assert.Empty(t, vm.procedures[procedureIndicator{name: NewAtom("foo"), arity: 1}].(*userDefined).clauses)
+		p, _ := vm.procedures.Get(procedureIndicator{name: NewAtom("foo"), arity: 1})
+		assert.Empty(t, p.(*userDefined).clauses)
 	})
 }
 
 func TestAbolish(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		vm := VM{
-			procedures: map[procedureIndicator]procedure{
-				{name: NewAtom("foo"), arity: 1}: &userDefined{dynamic: true, clauses: []clause{
-					{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("a")}}},
-					{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("b")}}},
-					{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}}},
-				}},
-			},
+			procedures: buildOrderedMap(
+				procedurePair{
+					Key: procedureIndicator{name: NewAtom("foo"), arity: 1},
+					Value: &userDefined{dynamic: true, clauses: []clause{
+						{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("a")}}},
+						{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("b")}}},
+						{raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}}},
+					}},
+				},
+			),
 		}
 
 		ok, err := Abolish(&vm, &compound{
@@ -3057,7 +3198,7 @@ func TestAbolish(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, ok)
 
-		_, ok = vm.procedures[procedureIndicator{name: NewAtom("foo"), arity: 1}]
+		_, ok = vm.procedures.Get(procedureIndicator{name: NewAtom("foo"), arity: 1})
 		assert.False(t, ok)
 	})
 
@@ -3138,9 +3279,12 @@ func TestAbolish(t *testing.T) {
 
 	t.Run("The predicate indicator pi is that of a static procedure", func(t *testing.T) {
 		vm := VM{
-			procedures: map[procedureIndicator]procedure{
-				{name: NewAtom("foo"), arity: 0}: &userDefined{dynamic: false},
-			},
+			procedures: buildOrderedMap(
+				procedurePair{
+					Key:   procedureIndicator{name: NewAtom("foo"), arity: 0},
+					Value: &userDefined{dynamic: false},
+				},
+			),
 		}
 		ok, err := Abolish(&vm, &compound{
 			functor: atomSlash,
@@ -4058,9 +4202,9 @@ func TestWriteTerm(t *testing.T) {
 	}
 
 	var vm VM
-	vm.operators.define(500, operatorSpecifierYFX, atomPlus)
-	vm.operators.define(200, operatorSpecifierFY, atomPlus)
-	vm.operators.define(200, operatorSpecifierYF, atomMinus)
+	vm.getOperators().define(500, operatorSpecifierYFX, atomPlus)
+	vm.getOperators().define(200, operatorSpecifierFY, atomPlus)
+	vm.getOperators().define(200, operatorSpecifierYF, atomMinus)
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
 			buf.Reset()
@@ -5400,17 +5544,20 @@ func TestClause(t *testing.T) {
 		var c int
 
 		vm := VM{
-			procedures: map[procedureIndicator]procedure{
-				{name: NewAtom("green"), arity: 1}: &userDefined{public: true, clauses: []clause{
-					{raw: &compound{
-						functor: atomIf, args: []Term{
-							&compound{functor: NewAtom("green"), args: []Term{x}},
-							&compound{functor: NewAtom("moldy"), args: []Term{x}},
-						},
+			procedures: buildOrderedMap(
+				procedurePair{
+					Key: procedureIndicator{name: NewAtom("green"), arity: 1},
+					Value: &userDefined{public: true, clauses: []clause{
+						{raw: &compound{
+							functor: atomIf, args: []Term{
+								&compound{functor: NewAtom("green"), args: []Term{x}},
+								&compound{functor: NewAtom("moldy"), args: []Term{x}},
+							},
+						}},
+						{raw: &compound{functor: NewAtom("green"), args: []Term{NewAtom("kermit")}}},
 					}},
-					{raw: &compound{functor: NewAtom("green"), args: []Term{NewAtom("kermit")}}},
-				}},
-			},
+				},
+			),
 		}
 		ok, err := Clause(&vm, &compound{
 			functor: NewAtom("green"),
@@ -5460,11 +5607,14 @@ func TestClause(t *testing.T) {
 		what, body := NewVariable(), NewVariable()
 
 		vm := VM{
-			procedures: map[procedureIndicator]procedure{
-				{name: NewAtom("green"), arity: 1}: Predicate1(func(_ *VM, t Term, f Cont, env *Env) *Promise {
-					return Bool(true)
-				}),
-			},
+			procedures: buildOrderedMap(
+				procedurePair{
+					Key: procedureIndicator{name: NewAtom("green"), arity: 1},
+					Value: Predicate1(func(_ *VM, t Term, f Cont, env *Env) *Promise {
+						return Bool(true)
+					}),
+				},
+			),
 		}
 		ok, err := Clause(&vm, &compound{
 			functor: NewAtom("green"),
@@ -5488,11 +5638,14 @@ func TestClause(t *testing.T) {
 		defer setMemFree(1)()
 
 		vm := VM{
-			procedures: map[procedureIndicator]procedure{
-				{name: NewAtom("green"), arity: 1}: &userDefined{public: true, clauses: []clause{
-					{raw: NewAtom("green").Apply(NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable())},
-				}},
-			},
+			procedures: buildOrderedMap(
+				procedurePair{
+					Key: procedureIndicator{name: NewAtom("green"), arity: 1},
+					Value: &userDefined{public: true, clauses: []clause{
+						{raw: NewAtom("green").Apply(NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable())},
+					}},
+				},
+			),
 		}
 		ok, err := Clause(&vm, NewAtom("green").Apply(NewVariable()), NewVariable(), Success, nil).Force(context.Background())
 		assert.Equal(t, resourceError(resourceMemory, nil), err)
@@ -7587,4 +7740,13 @@ func setMemFree(n int64) func() {
 	return func() {
 		memFree = orig
 	}
+}
+
+func buildOrderedMap(pairs ...procedurePair) *orderedmap.OrderedMap[procedureIndicator, procedure] {
+	procedures := orderedmap.New[procedureIndicator, procedure]()
+	// Type alias for pairProcedure (aka orderedmap.Pair[procedureIndicator, procedure]) not working, compiler didn't accept it thinking is not the same, but it is 😢
+	for _, p := range pairs {
+		procedures.AddPairs(orderedmap.Pair[procedureIndicator, procedure]{Key: p.Key, Value: p.Value})
+	}
+	return procedures
 }

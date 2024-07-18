@@ -22,7 +22,7 @@ func assertEqualFloatAware(t *testing.T, expected interface{}, actual interface{
 }
 
 func TestParser_Term(t *testing.T) {
-	ops := operators{}
+	ops := newOperators()
 	ops.define(1000, operatorSpecifierXFY, NewAtom(`,`))
 	ops.define(500, operatorSpecifierYFX, NewAtom(`+`))
 	ops.define(400, operatorSpecifierYFX, NewAtom(`*`))
@@ -175,7 +175,7 @@ func TestParser_Term(t *testing.T) {
 				lexer: Lexer{
 					input: newRuneRingBuffer(strings.NewReader(tc.input)),
 				},
-				operators:    ops,
+				_operators:   ops,
 				doubleQuotes: tc.doubleQuotes,
 			}
 			term, err := p.Term()
