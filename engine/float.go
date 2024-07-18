@@ -2,15 +2,18 @@ package engine
 
 import (
 	"fmt"
-	"github.com/cockroachdb/apd"
+	"github.com/cockroachdb/apd/v3"
 	"io"
 	"strings"
 )
 
-// Float is a prolog floating-point number.
+// Float is a prolog "falsy" floating-point number.
+//
 // The underlying implementation is not based on floating-point, it's a [GDA](https://speleotrove.com/decimal/)
 // compatible implementation to avoid approximation and determinism issues.
-// It uses under the hood a decimal128 with 34 precision digits.
+// It uses under the hood a decimal128 with 34 precision digits and must be manipulated using the `decimal128Ctx` only.
+//
+// It serves as an immutable wrapper over `apd.Decimal`.
 type Float struct {
 	dec *apd.Decimal
 }
