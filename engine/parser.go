@@ -463,13 +463,13 @@ func (p *Parser) op(maxPriority Integer) (Atom, error) {
 			if p.current().kind == tokenCloseList {
 				p.backup()
 			}
-			return 0, errNoOp
+			return Atom{}, errNoOp
 		case atomEmptyBlock:
 			p.backup()
 			if p.current().kind == tokenCloseCurly {
 				p.backup()
 			}
-			return 0, errNoOp
+			return Atom{}, errNoOp
 		default:
 			return a, nil
 		}
@@ -477,7 +477,7 @@ func (p *Parser) op(maxPriority Integer) (Atom, error) {
 
 	t, err := p.next()
 	if err != nil {
-		return 0, err
+		return Atom{}, err
 	}
 	switch t.kind {
 	case tokenComma:
@@ -489,7 +489,7 @@ func (p *Parser) op(maxPriority Integer) (Atom, error) {
 	}
 
 	p.backup()
-	return 0, errExpectation
+	return Atom{}, errExpectation
 }
 
 func (p *Parser) term0(maxPriority Integer) (Term, error) {
@@ -571,7 +571,7 @@ func (p *Parser) term0Atom(maxPriority Integer) (Term, error) {
 		return nil, errExpectation
 	}
 
-	if p.placeholder != 0 && t == p.placeholder {
+	if p.placeholder.value != 0 && t == p.placeholder {
 		if len(p.args) == 0 {
 			return nil, errPlaceholder
 		}
@@ -616,13 +616,13 @@ func (p *Parser) atom() (Atom, error) {
 
 	t, err := p.next()
 	if err != nil {
-		return 0, err
+		return Atom{}, err
 	}
 	switch t.kind {
 	case tokenOpenList:
 		t, err := p.next()
 		if err != nil {
-			return 0, err
+			return Atom{}, err
 		}
 		switch t.kind {
 		case tokenCloseList:
@@ -630,12 +630,12 @@ func (p *Parser) atom() (Atom, error) {
 		default:
 			p.backup()
 			p.backup()
-			return 0, errExpectation
+			return Atom{}, errExpectation
 		}
 	case tokenOpenCurly:
 		t, err := p.next()
 		if err != nil {
-			return 0, err
+			return Atom{}, err
 		}
 		switch t.kind {
 		case tokenCloseCurly:
@@ -643,7 +643,7 @@ func (p *Parser) atom() (Atom, error) {
 		default:
 			p.backup()
 			p.backup()
-			return 0, errExpectation
+			return Atom{}, errExpectation
 		}
 	case tokenDoubleQuotedList:
 		switch p.doubleQuotes {
@@ -651,18 +651,18 @@ func (p *Parser) atom() (Atom, error) {
 			return NewAtom(unDoubleQuote(t.val)), nil
 		default:
 			p.backup()
-			return 0, errExpectation
+			return Atom{}, errExpectation
 		}
 	default:
 		p.backup()
-		return 0, errExpectation
+		return Atom{}, errExpectation
 	}
 }
 
 func (p *Parser) name() (Atom, error) {
 	t, err := p.next()
 	if err != nil {
-		return 0, err
+		return Atom{}, err
 	}
 	switch t.kind {
 	case tokenLetterDigit, tokenGraphic, tokenSemicolon, tokenCut:
@@ -671,7 +671,7 @@ func (p *Parser) name() (Atom, error) {
 		return NewAtom(unquote(t.val)), nil
 	default:
 		p.backup()
-		return 0, errExpectation
+		return Atom{}, errExpectation
 	}
 }
 

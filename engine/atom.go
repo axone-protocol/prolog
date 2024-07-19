@@ -1,26 +1,17 @@
 package engine
 
 import (
+	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"regexp"
 	"strings"
-	"sync"
 	"unicode/utf8"
 )
 
 var (
 	quotedAtomEscapePattern = regexp.MustCompile(`[[:cntrl:]]|\\|'`)
-)
-
-var (
-	atomTable = struct {
-		sync.RWMutex
-		names []string
-		atoms map[string]Atom
-	}{
-		atoms: map[string]Atom{},
-	}
 )
 
 // Well-known atoms.
@@ -208,27 +199,26 @@ var (
 )
 
 // Atom is a prolog atom.
-type Atom uint64
+type Atom struct {
+	value uint64
+	name  string
+}
 
 // NewAtom interns the given string and returns an Atom.
 func NewAtom(name string) Atom {
 	// A one-char atom is just a rune.
 	if r, n := utf8.DecodeLastRuneInString(name); r != utf8.RuneError && n == len(name) {
-		return Atom(r)
+		return Atom{uint64(r), name}
 	}
 
-	atomTable.Lock()
-	defer atomTable.Unlock()
+	hashBytes := sha256.Sum256([]byte(name))
+	hashUint64 := binary.BigEndian.Uint64(hashBytes[:8])
 
-	a, ok := atomTable.atoms[name]
-	if ok {
-		return a
-	}
+	return Atom{hashUint64, name}
+}
 
-	a = Atom(len(atomTable.names) + (utf8.MaxRune + 1))
-	atomTable.atoms[name] = a
-	atomTable.names = append(atomTable.names, name)
-	return a
+func NewAtomRune(v rune) Atom {
+	return Atom{uint64(v), string(v)}
 }
 
 // WriteTerm outputs the Atom to an io.Writer.
@@ -237,7 +227,7 @@ func (a Atom) WriteTerm(w io.Writer, opts *WriteOptions, _ *Env) error {
 	openClose := (opts.left != (operator{}) || opts.right != (operator{})) && opts.getOps().defined(a)
 
 	if openClose {
-		if opts.left.name != 0 && opts.left.specifier.class() == operatorClassPrefix {
+		if opts.left.name.value != 0 && opts.left.specifier.class() == operatorClassPrefix {
 			_, _ = ew.Write([]byte(" "))
 		}
 		_, _ = ew.Write([]byte("("))
@@ -289,12 +279,7 @@ func (a Atom) Compare(t Term, env *Env) int {
 }
 
 func (a Atom) String() string {
-	if a <= utf8.MaxRune {
-		return string(rune(a))
-	}
-	atomTable.RLock()
-	defer atomTable.RUnlock()
-	return atomTable.names[a-(utf8.MaxRune+1)]
+	return a.name
 }
 
 // Apply returns a Compound which Functor is the Atom and args are the arguments. If the arguments are empty,

@@ -287,6 +287,7 @@ func (vm *VM) ResetEnv() {
 			value: rootContext,
 		},
 	}
+	//atomTable.atoms = map[string]Atom{}
 }
 
 func (vm *VM) getProcedure(p procedureIndicator) (procedure, bool) {

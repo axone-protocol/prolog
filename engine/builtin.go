@@ -1621,7 +1621,7 @@ func CharCode(vm *VM, char, code Term, k Cont, env *Env) *Promise {
 				return Error(representationError(flagCharacterCode, env))
 			}
 
-			return Unify(vm, ch, Atom(r), k, env)
+			return Unify(vm, ch, NewAtomRune(r), k, env)
 		default:
 			return Error(typeError(validTypeInteger, code, env))
 		}
@@ -1685,11 +1685,11 @@ func PutChar(vm *VM, streamOrAlias, char Term, k Cont, env *Env) *Promise {
 	case Variable:
 		return Error(InstantiationError(env))
 	case Atom:
-		if c > utf8.MaxRune {
+		if c.value > utf8.MaxRune {
 			return Error(typeError(validTypeCharacter, c, env))
 		}
 
-		r := rune(c)
+		r := rune(c.value)
 
 		switch _, err := s.WriteRune(r); {
 		case errors.Is(err, errWrongIOMode):
@@ -1861,7 +1861,7 @@ func GetChar(vm *VM, streamOrAlias, char Term, k Cont, env *Env) *Promise {
 			return Error(representationError(flagCharacter, env))
 		}
 
-		return Unify(vm, char, Atom(r), k, env)
+		return Unify(vm, char, NewAtomRune(r), k, env)
 	case io.EOF:
 		return Unify(vm, char, atomEndOfFile, k, env)
 	case errWrongIOMode:
@@ -1941,7 +1941,7 @@ func PeekChar(vm *VM, streamOrAlias, char Term, k Cont, env *Env) *Promise {
 			return Error(representationError(flagCharacter, env))
 		}
 
-		return Unify(vm, char, Atom(r), k, env)
+		return Unify(vm, char, NewAtomRune(r), k, env)
 	case io.EOF:
 		return Unify(vm, char, atomEndOfFile, k, env)
 	case errWrongIOMode:
@@ -2335,7 +2335,7 @@ func numberCharsWrite(vm *VM, num, chars Term, k Cont, env *Env) *Promise {
 
 	cs := make([]Term, len(rs))
 	for i, r := range rs {
-		cs[i] = Atom(r)
+		cs[i] = NewAtomRune(r)
 	}
 	return Unify(vm, chars, List(cs...), k, env)
 }
@@ -2584,7 +2584,7 @@ func CurrentCharConversion(vm *VM, inChar, outChar Term, k Cont, env *Env) *Prom
 	if c1, ok := env.Resolve(inChar).(Atom); ok {
 		r := []rune(c1.String())
 		if r, ok := vm.charConversions[r[0]]; ok {
-			return Unify(vm, outChar, Atom(r), k, env)
+			return Unify(vm, outChar, NewAtomRune(r), k, env)
 		}
 		return Unify(vm, outChar, c1, k, env)
 	}
@@ -2599,7 +2599,7 @@ func CurrentCharConversion(vm *VM, inChar, outChar Term, k Cont, env *Env) *Prom
 		}
 
 		ks[i] = func(context.Context) *Promise {
-			return Unify(vm, pattern, tuple(Atom(r), Atom(cr)), k, env)
+			return Unify(vm, pattern, tuple(NewAtomRune(r), NewAtomRune(cr)), k, env)
 		}
 	}
 	return Delay(ks...)
