@@ -1,13 +1,10 @@
 package engine
 
 import (
-	"crypto/sha256"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"regexp"
 	"strings"
-	"unicode/utf8"
 )
 
 var (
@@ -199,26 +196,15 @@ var (
 )
 
 // Atom is a prolog atom.
-type Atom struct {
-	value uint64
-	name  string
-}
+type Atom string
 
 // NewAtom interns the given string and returns an Atom.
 func NewAtom(name string) Atom {
-	// A one-char atom is just a rune.
-	if r, n := utf8.DecodeLastRuneInString(name); r != utf8.RuneError && n == len(name) {
-		return Atom{uint64(r), name}
-	}
-
-	hashBytes := sha256.Sum256([]byte(name))
-	hashUint64 := binary.BigEndian.Uint64(hashBytes[:8])
-
-	return Atom{hashUint64, name}
+	return Atom(name)
 }
 
 func NewAtomRune(v rune) Atom {
-	return Atom{uint64(v), string(v)}
+	return Atom(v)
 }
 
 // WriteTerm outputs the Atom to an io.Writer.
@@ -227,7 +213,7 @@ func (a Atom) WriteTerm(w io.Writer, opts *WriteOptions, _ *Env) error {
 	openClose := (opts.left != (operator{}) || opts.right != (operator{})) && opts.getOps().defined(a)
 
 	if openClose {
-		if opts.left.name.value != 0 && opts.left.specifier.class() == operatorClassPrefix {
+		if opts.left.name != "" && opts.left.specifier.class() == operatorClassPrefix {
 			_, _ = ew.Write([]byte(" "))
 		}
 		_, _ = ew.Write([]byte("("))
@@ -279,7 +265,7 @@ func (a Atom) Compare(t Term, env *Env) int {
 }
 
 func (a Atom) String() string {
-	return a.name
+	return string(a)
 }
 
 // Apply returns a Compound which Functor is the Atom and args are the arguments. If the arguments are empty,

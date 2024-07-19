@@ -48,13 +48,13 @@ func TestCompareAtomic(t *testing.T) {
 		{a: &y{}, t: NewVariable(), o: 1},
 		{a: &y{}, t: NewFloatFromInt64(0), o: 1},
 		{a: &y{}, t: Integer(0), o: 1},
-		{a: &y{}, t: Atom{}, o: 1},
+		{a: &y{}, t: Atom(""), o: 1},
 		{a: &y{}, t: &x{}, o: 1},
 		{a: &y{val: 1}, t: &y{val: 0}, cmp: cmp, o: 1},
 		{a: &y{val: 0}, t: &y{val: 0}, cmp: cmp, o: 0},
 		{a: &y{val: 0}, t: &y{val: 1}, cmp: cmp, o: -1},
 		{a: &y{}, t: &z{}, o: -1},
-		{a: &y{}, t: Atom{}.Apply(Integer(0)), o: -1},
+		{a: &y{}, t: Atom("").Apply(Integer(0)), o: -1},
 	}
 
 	for _, tt := range tests {

@@ -1685,11 +1685,10 @@ func PutChar(vm *VM, streamOrAlias, char Term, k Cont, env *Env) *Promise {
 	case Variable:
 		return Error(InstantiationError(env))
 	case Atom:
-		if c.value > utf8.MaxRune {
+		r, n := utf8.DecodeLastRuneInString(c.String())
+		if r == utf8.RuneError || n != len(c.String()) {
 			return Error(typeError(validTypeCharacter, c, env))
 		}
-
-		r := rune(c.value)
 
 		switch _, err := s.WriteRune(r); {
 		case errors.Is(err, errWrongIOMode):
