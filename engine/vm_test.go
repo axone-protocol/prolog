@@ -286,3 +286,25 @@ func TestProcedureIndicator_Apply(t *testing.T) {
 		assert.Nil(t, c)
 	})
 }
+
+func TestVM_ResetEnv(t *testing.T) {
+	var vm VM
+	varCounter = 10
+	varContext = NewVariable()
+	rootContext = NewAtom("non-root")
+	rootEnv = &Env{
+		binding: binding{
+			key:   newEnvKey(varContext),
+			value: NewAtom("non-root"),
+		},
+	}
+
+	t.Run("Reset environment", func(t *testing.T) {
+		vm.ResetEnv()
+
+		assert.Equal(t, int64(1), varCounter) // 1 because NewVariable() is called in ResetEnv()
+		assert.Equal(t, "root", rootContext.String())
+		assert.Equal(t, newEnvKey(varContext), rootEnv.binding.key)
+		assert.Equal(t, NewAtom("root"), rootEnv.binding.value)
+	})
+}
