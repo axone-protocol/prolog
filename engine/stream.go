@@ -359,7 +359,7 @@ func (s *Stream) properties() []Term {
 		ps = append(ps, atomOutput)
 	}
 
-	if s.alias != 0 {
+	if s.alias != "" {
 		ps = append(ps, atomAlias.Apply(s.alias))
 	}
 
@@ -510,7 +510,7 @@ type streams struct {
 }
 
 func (ss *streams) add(s *Stream) {
-	if s.alias != 0 {
+	if s.alias != "" {
 		if ss.aliases == nil {
 			ss.aliases = map[Atom]*Stream{}
 		}

@@ -204,7 +204,7 @@ func writeCompoundOpInfix(w io.Writer, c Compound, opts *WriteOptions, env *Env,
 		(opts.right != operator{} && r >= opts.right.priority)
 
 	if openClose {
-		if opts.left.name != 0 && opts.left.specifier.class() == operatorClassPrefix {
+		if opts.left.name != "" && opts.left.specifier.class() == operatorClassPrefix {
 			_, _ = fmt.Fprint(&ew, " ")
 		}
 		_, _ = fmt.Fprint(&ew, "(")
@@ -494,7 +494,7 @@ func pair(k, v Term) Term {
 }
 
 func tuple(args ...Term) Term {
-	return Atom(0).Apply(args...)
+	return Atom("").Apply(args...)
 }
 
 type charList string
@@ -524,7 +524,7 @@ func (c charList) Arg(n int) Term {
 	var t Term
 	switch n {
 	case 0:
-		t = Atom(r)
+		t = NewAtomRune(r)
 	case 1:
 		if i == len(c) {
 			t = atomEmptyList

@@ -5,22 +5,10 @@ import (
 	"io"
 	"regexp"
 	"strings"
-	"sync"
-	"unicode/utf8"
 )
 
 var (
 	quotedAtomEscapePattern = regexp.MustCompile(`[[:cntrl:]]|\\|'`)
-)
-
-var (
-	atomTable = struct {
-		sync.RWMutex
-		names []string
-		atoms map[string]Atom
-	}{
-		atoms: map[string]Atom{},
-	}
 )
 
 // Well-known atoms.
@@ -208,27 +196,15 @@ var (
 )
 
 // Atom is a prolog atom.
-type Atom uint64
+type Atom string
 
 // NewAtom interns the given string and returns an Atom.
 func NewAtom(name string) Atom {
-	// A one-char atom is just a rune.
-	if r, n := utf8.DecodeLastRuneInString(name); r != utf8.RuneError && n == len(name) {
-		return Atom(r)
-	}
+	return Atom(name)
+}
 
-	atomTable.Lock()
-	defer atomTable.Unlock()
-
-	a, ok := atomTable.atoms[name]
-	if ok {
-		return a
-	}
-
-	a = Atom(len(atomTable.names) + (utf8.MaxRune + 1))
-	atomTable.atoms[name] = a
-	atomTable.names = append(atomTable.names, name)
-	return a
+func NewAtomRune(v rune) Atom {
+	return Atom(v)
 }
 
 // WriteTerm outputs the Atom to an io.Writer.
@@ -237,7 +213,7 @@ func (a Atom) WriteTerm(w io.Writer, opts *WriteOptions, _ *Env) error {
 	openClose := (opts.left != (operator{}) || opts.right != (operator{})) && opts.getOps().defined(a)
 
 	if openClose {
-		if opts.left.name != 0 && opts.left.specifier.class() == operatorClassPrefix {
+		if opts.left.name != "" && opts.left.specifier.class() == operatorClassPrefix {
 			_, _ = ew.Write([]byte(" "))
 		}
 		_, _ = ew.Write([]byte("("))
@@ -289,12 +265,7 @@ func (a Atom) Compare(t Term, env *Env) int {
 }
 
 func (a Atom) String() string {
-	if a <= utf8.MaxRune {
-		return string(rune(a))
-	}
-	atomTable.RLock()
-	defer atomTable.RUnlock()
-	return atomTable.names[a-(utf8.MaxRune+1)]
+	return string(a)
 }
 
 // Apply returns a Compound which Functor is the Atom and args are the arguments. If the arguments are empty,
