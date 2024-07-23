@@ -278,7 +278,7 @@ func (vm *VM) SetUserOutput(s *Stream) {
 
 // ResetEnv is used to reset all global variable
 func (vm *VM) ResetEnv() {
-	varCounter = 0
+	varCounter.count = 0
 	varContext = NewVariable()
 	rootContext = NewAtom("root")
 	rootEnv = &Env{
