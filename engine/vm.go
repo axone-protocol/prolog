@@ -280,6 +280,7 @@ func (vm *VM) SetUserOutput(s *Stream) {
 }
 
 // SetMaxVariables sets the maximum number of variables that the VM can create.
+// Zero value mean no limits
 func (vm *VM) SetMaxVariables(n uint64) {
 	vm.maxVariables = n
 	maxVariables = n

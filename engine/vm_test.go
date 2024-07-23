@@ -270,6 +270,15 @@ func TestVM_SetUserOutput(t *testing.T) {
 	})
 }
 
+func TestVM_SetMaxVariables(t *testing.T) {
+	t.Run("ok", func(t *testing.T) {
+		var vm VM
+		vm.SetMaxVariables(10)
+		assert.Equal(t, uint64(10), maxVariables)
+		assert.Equal(t, uint64(10), vm.maxVariables)
+	})
+}
+
 func TestProcedureIndicator_Apply(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		c, err := procedureIndicator{name: NewAtom("foo"), arity: 2}.Apply(NewAtom("a"), NewAtom("b"))
@@ -289,7 +298,7 @@ func TestProcedureIndicator_Apply(t *testing.T) {
 
 func TestVM_ResetEnv(t *testing.T) {
 	var vm VM
-	vm.maxVariables = 10
+	vm.SetMaxVariables(20)
 
 	varCounter.count = 10
 	varContext = NewVariable()
@@ -300,7 +309,7 @@ func TestVM_ResetEnv(t *testing.T) {
 			value: NewAtom("non-root"),
 		},
 	}
-	maxVariables = 20
+	maxVariables = 30
 
 	t.Run("Reset environment", func(t *testing.T) {
 		vm.ResetEnv()
@@ -309,6 +318,6 @@ func TestVM_ResetEnv(t *testing.T) {
 		assert.Equal(t, "root", rootContext.String())
 		assert.Equal(t, newEnvKey(varContext), rootEnv.binding.key)
 		assert.Equal(t, NewAtom("root"), rootEnv.binding.value)
-		assert.Equal(t, uint64(10), maxVariables)
+		assert.Equal(t, uint64(20), maxVariables)
 	})
 }
