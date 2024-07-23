@@ -141,3 +141,39 @@ func Test_freeVariablesSet(t *testing.T) {
 		assert.Equal(t, tt.fv, newFreeVariablesSet(tt.t, tt.v, nil))
 	}
 }
+
+func Test_maxVariables(t *testing.T) {
+	tests := []struct {
+		title         string
+		init          func()
+		max           uint64
+		expectedCount uint64
+		shouldPanic   bool
+	}{
+		{title: "no limits", init: func() {
+			NewVariable()
+			NewVariable()
+		}, max: 0, expectedCount: 2},
+		{title: "limit", init: func() {
+			NewVariable()
+			NewVariable()
+		}, max: 2, expectedCount: 2},
+		{title: "limit reached", init: func() {
+			NewVariable()
+			NewVariable()
+		}, max: 1, expectedCount: 1, shouldPanic: true},
+	}
+
+	for _, tt := range tests {
+		varCounter.count = 0 // reset at each test
+
+		maxVariables = tt.max
+
+		if tt.shouldPanic {
+			assert.Panics(t, tt.init)
+		} else {
+			tt.init()
+		}
+		assert.Equal(t, varCounter.count, tt.expectedCount)
+	}
+}
