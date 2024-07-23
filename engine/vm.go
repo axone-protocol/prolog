@@ -70,6 +70,9 @@ type VM struct {
 	streams       streams
 	input, output *Stream
 
+	// Limits
+	maxVariables uint64
+
 	// Misc
 	debug bool
 }
@@ -276,9 +279,16 @@ func (vm *VM) SetUserOutput(s *Stream) {
 	vm.output = s
 }
 
+// SetMaxVariables sets the maximum number of variables that the VM can create.
+// Zero value mean no limits
+func (vm *VM) SetMaxVariables(n uint64) {
+	vm.maxVariables = n
+	maxVariables = n
+}
+
 // ResetEnv is used to reset all global variable
 func (vm *VM) ResetEnv() {
-	varCounter = 0
+	varCounter.count = 0
 	varContext = NewVariable()
 	rootContext = NewAtom("root")
 	rootEnv = &Env{
@@ -287,6 +297,7 @@ func (vm *VM) ResetEnv() {
 			value: rootContext,
 		},
 	}
+	maxVariables = vm.maxVariables
 }
 
 func (vm *VM) getProcedure(p procedureIndicator) (procedure, bool) {

@@ -24,7 +24,7 @@ func mustOpen(fs fs.FS, name string) fs.File {
 }
 
 func TestVM_Compile(t *testing.T) {
-	varCounter = 1
+	varCounter.count = 1
 
 	tests := []struct {
 		title  string
@@ -483,7 +483,7 @@ bar(b).
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
 			var vm VM
-			varCounter = 1 // Global var cause issues in testing environment that call in randomly order for checking equality between procedure clause args
+			varCounter.count = 1 // Global var cause issues in testing environment that call in randomly order for checking equality between procedure clause args
 
 			vm.getOperators().define(1200, operatorSpecifierXFX, atomIf)
 			vm.getOperators().define(1200, operatorSpecifierXFX, atomArrow)

@@ -952,7 +952,7 @@ func TestTermVariables(t *testing.T) {
 func TestOp(t *testing.T) {
 	t.Run("insert", func(t *testing.T) {
 		t.Run("atom", func(t *testing.T) {
-			varCounter = 1
+			varCounter.count = 1
 
 			vm := VM{_operators: newOperators()}
 			vm.getOperators().define(900, operatorSpecifierXFX, NewAtom(`+++`))

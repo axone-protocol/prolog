@@ -1,15 +1,26 @@
 package engine
 
 import (
+	"errors"
 	"fmt"
 	"io"
-	"sync/atomic"
+	"sync"
 )
 
-var varCounter int64
+var errMaxVariables = errors.New("maximum number of variables reached")
+
+var maxVariables uint64
+var varCounter = struct {
+	sync.Mutex
+	count uint64
+}{
+	count: 0,
+}
 
 func lastVariable() Variable {
-	return Variable(varCounter)
+	defer varCounter.Unlock()
+	varCounter.Lock()
+	return Variable(varCounter.count)
 }
 
 // Variable is a prolog variable.
@@ -17,8 +28,13 @@ type Variable int64
 
 // NewVariable creates a new anonymous variable.
 func NewVariable() Variable {
-	n := atomic.AddInt64(&varCounter, 1)
-	return Variable(n)
+	defer varCounter.Unlock()
+	varCounter.Lock()
+	if maxVariables != 0 && varCounter.count >= maxVariables {
+		panic(errMaxVariables)
+	}
+	varCounter.count++
+	return Variable(varCounter.count)
 }
 
 func (v Variable) WriteTerm(w io.Writer, opts *WriteOptions, env *Env) error {

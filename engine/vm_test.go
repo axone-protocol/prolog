@@ -270,6 +270,22 @@ func TestVM_SetUserOutput(t *testing.T) {
 	})
 }
 
+func TestVM_SetMaxVariables(t *testing.T) {
+	t.Run("limits", func(t *testing.T) {
+		var vm VM
+		vm.SetMaxVariables(10)
+		assert.Equal(t, uint64(10), maxVariables)
+		assert.Equal(t, uint64(10), vm.maxVariables)
+	})
+
+	t.Run("no limit", func(t *testing.T) {
+		var vm VM
+		vm.SetMaxVariables(0)
+		assert.Equal(t, uint64(0), maxVariables)
+		assert.Equal(t, uint64(0), vm.maxVariables)
+	})
+}
+
 func TestProcedureIndicator_Apply(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		c, err := procedureIndicator{name: NewAtom("foo"), arity: 2}.Apply(NewAtom("a"), NewAtom("b"))
@@ -289,7 +305,9 @@ func TestProcedureIndicator_Apply(t *testing.T) {
 
 func TestVM_ResetEnv(t *testing.T) {
 	var vm VM
-	varCounter = 10
+	vm.SetMaxVariables(20)
+
+	varCounter.count = 10
 	varContext = NewVariable()
 	rootContext = NewAtom("non-root")
 	rootEnv = &Env{
@@ -298,13 +316,15 @@ func TestVM_ResetEnv(t *testing.T) {
 			value: NewAtom("non-root"),
 		},
 	}
+	maxVariables = 30
 
 	t.Run("Reset environment", func(t *testing.T) {
 		vm.ResetEnv()
 
-		assert.Equal(t, int64(1), varCounter) // 1 because NewVariable() is called in ResetEnv()
+		assert.Equal(t, uint64(1), varCounter.count) // 1 because NewVariable() is called in ResetEnv()
 		assert.Equal(t, "root", rootContext.String())
 		assert.Equal(t, newEnvKey(varContext), rootEnv.binding.key)
 		assert.Equal(t, NewAtom("root"), rootEnv.binding.value)
+		assert.Equal(t, uint64(20), maxVariables)
 	})
 }
