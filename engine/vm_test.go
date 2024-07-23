@@ -289,6 +289,8 @@ func TestProcedureIndicator_Apply(t *testing.T) {
 
 func TestVM_ResetEnv(t *testing.T) {
 	var vm VM
+	vm.maxVariables = 10
+
 	varCounter.count = 10
 	varContext = NewVariable()
 	rootContext = NewAtom("non-root")
@@ -298,6 +300,7 @@ func TestVM_ResetEnv(t *testing.T) {
 			value: NewAtom("non-root"),
 		},
 	}
+	maxVariables = 20
 
 	t.Run("Reset environment", func(t *testing.T) {
 		vm.ResetEnv()
@@ -306,5 +309,6 @@ func TestVM_ResetEnv(t *testing.T) {
 		assert.Equal(t, "root", rootContext.String())
 		assert.Equal(t, newEnvKey(varContext), rootEnv.binding.key)
 		assert.Equal(t, NewAtom("root"), rootEnv.binding.value)
+		assert.Equal(t, uint64(10), maxVariables)
 	})
 }
