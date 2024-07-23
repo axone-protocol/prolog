@@ -271,11 +271,18 @@ func TestVM_SetUserOutput(t *testing.T) {
 }
 
 func TestVM_SetMaxVariables(t *testing.T) {
-	t.Run("ok", func(t *testing.T) {
+	t.Run("limits", func(t *testing.T) {
 		var vm VM
 		vm.SetMaxVariables(10)
 		assert.Equal(t, uint64(10), maxVariables)
 		assert.Equal(t, uint64(10), vm.maxVariables)
+	})
+
+	t.Run("no limit", func(t *testing.T) {
+		var vm VM
+		vm.SetMaxVariables(0)
+		assert.Equal(t, uint64(0), maxVariables)
+		assert.Equal(t, uint64(0), vm.maxVariables)
 	})
 }
 
