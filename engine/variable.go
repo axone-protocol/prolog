@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-var errMaxVariables = errors.New("maximum number of variables reached")
+var ErrMaxVariables = errors.New("maximum number of variables reached")
 
 var maxVariables uint64
 var varCounter = struct {
@@ -31,7 +31,7 @@ func NewVariable() Variable {
 	defer varCounter.Unlock()
 	varCounter.Lock()
 	if maxVariables != 0 && varCounter.count >= maxVariables {
-		panic(errMaxVariables)
+		panic(ErrMaxVariables)
 	}
 	varCounter.count++
 	return Variable(varCounter.count)
