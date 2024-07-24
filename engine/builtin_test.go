@@ -33,6 +33,9 @@ func TestCall(t *testing.T) {
 			panic("told you")
 		})
 	})
+	vm.Register0(NewAtom("do_not_call_wrapped"), func(*VM, Cont, *Env) *Promise {
+		panic(errors.New("told you"))
+	})
 	assert.NoError(t, vm.Compile(context.Background(), `
 foo.
 foo(_, _).
@@ -60,8 +63,9 @@ f(g([a, [b, c|X]])).
 
 		{title: `cover all`, goal: atomComma.Apply(atomCut, NewAtom("f").Apply(NewAtom("g").Apply(List(NewAtom("a"), PartialList(NewVariable(), NewAtom("b"), NewAtom("c")))))), ok: true},
 		{title: `out of memory`, goal: NewAtom("foo").Apply(NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable()), err: resourceError(resourceMemory, nil), mem: 1},
-		{title: `panic`, goal: NewAtom("do_not_call"), err: errors.New("panic: told you")},
-		{title: `panic (lazy)`, goal: NewAtom("lazy_do_not_call"), err: errors.New("panic: told you")},
+		{title: `panic`, goal: NewAtom("do_not_call"), err: PanicError{errors.New("told you")}},
+		{title: `panic (lazy)`, goal: NewAtom("lazy_do_not_call"), err: PanicError{errors.New("told you")}},
+		{title: `panic (wrapped)`, goal: NewAtom("do_not_call_wrapped"), err: PanicError{errors.New("told you")}},
 	}
 
 	for _, tt := range tests {

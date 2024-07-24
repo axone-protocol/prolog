@@ -129,7 +129,12 @@ func ensurePromise(p **Promise) {
 }
 
 func panicError(r interface{}) error {
-	return fmt.Errorf("panic: %v", r)
+	switch r := r.(type) {
+	case error:
+		return PanicError{r}
+	default:
+		return PanicError{fmt.Errorf("%v", r)}
+	}
 }
 
 type promiseStack []*Promise
@@ -163,4 +168,13 @@ func (s *promiseStack) recover(err error) error {
 
 	// went through all the ancestor promises and still got the unhandled error.
 	return err
+}
+
+// PanicError is an error thrown once panic occurs during the execution of a promise.
+type PanicError struct {
+	OriginErr error
+}
+
+func (p PanicError) Error() string {
+	return fmt.Sprintf("panic: %v", p.OriginErr)
 }
