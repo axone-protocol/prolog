@@ -1,41 +1,101 @@
 package engine
 
 import (
+	"bytes"
 	"context"
 	"fmt"
-	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"io"
 	"io/fs"
 	"strings"
+
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
+
+// HookFunc is a type for a hook function that is triggered before the VM executes a specific instruction.
+// If the hook function returns an error, the VM halts execution and returns the error.
+type HookFunc func(opcode Opcode, operand Term, env *Env) error
+
+// DebugHook is a hook function that prints the current instruction and its operand (if any).
+func DebugHook(opcode Opcode, operand Term, env *Env) error {
+	var buf bytes.Buffer
+
+	buf.WriteString(opcode.String())
+
+	if operand != nil {
+		buf.WriteRune('(')
+		_ = operand.WriteTerm(&buf, &defaultWriteOptions, nil)
+		buf.WriteRune(')')
+	}
+	fmt.Println(buf.String())
+
+	return nil
+}
+
+// CompositeHook returns a hook function that chains multiple hooks together.
+// The hooks are executed sequentially, and if any hook returns an error, the execution stops.
+func CompositeHook(fs ...HookFunc) HookFunc {
+	return func(opcode Opcode, operand Term, env *Env) error {
+		for _, f := range fs {
+			if err := f(opcode, operand, env); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
 
 type bytecode []instruction
 
 type instruction struct {
-	opcode  opcode
+	opcode  Opcode
 	operand Term
 }
 
-type opcode byte
+type Opcode byte
 
 const (
-	opEnter opcode = iota
-	opCall
-	opExit
-	opGetConst
-	opPutConst
-	opGetVar
-	opPutVar
-	opGetFunctor
-	opPutFunctor
-	opPop
+	OpEnter Opcode = iota
+	OpCall
+	OpExit
+	OpGetConst
+	OpPutConst
+	OpGetVar
+	OpPutVar
+	OpGetFunctor
+	OpPutFunctor
+	OpPop
 
-	opCut
-	opGetList
-	opPutList
-	opGetPartial
-	opPutPartial
+	OpCut
+	OpGetList
+	OpPutList
+	OpGetPartial
+	OpPutPartial
 )
+
+func (op Opcode) String() string {
+	opcodeStrings := [...]string{
+		OpEnter:      "enter",
+		OpCall:       "call",
+		OpExit:       "exit",
+		OpGetConst:   "get_const",
+		OpPutConst:   "put_const",
+		OpGetVar:     "get_var",
+		OpPutVar:     "put_var",
+		OpGetFunctor: "get_functor",
+		OpPutFunctor: "put_functor",
+		OpPop:        "pop",
+		OpCut:        "cut",
+		OpGetList:    "get_list",
+		OpPutList:    "put_list",
+		OpGetPartial: "get_partial",
+		OpPutPartial: "put_partial",
+	}
+
+	if int(op) < 0 || int(op) >= len(opcodeStrings) {
+		return fmt.Sprintf("(%d)", op)
+	}
+	return opcodeStrings[op]
+}
 
 // Success is a continuation that leads to true.
 func Success(*Env) *Promise {
@@ -72,6 +132,9 @@ type VM struct {
 
 	// Limits
 	maxVariables uint64
+
+	// Hook
+	hook HookFunc
 
 	// Misc
 	debug bool
@@ -181,20 +244,26 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 	)
 	for ok {
 		op, pc = pc[0], pc[1:]
+		if vm.hook != nil {
+			if err := vm.hook(op.opcode, op.operand, env); err != nil {
+				return Error(err)
+			}
+		}
+
 		switch opcode, operand := op.opcode, op.operand; opcode {
-		case opGetConst:
+		case OpGetConst:
 			arg, args = args[0], args[1:]
 			env, ok = env.Unify(arg, operand)
-		case opPutConst:
+		case OpPutConst:
 			args = append(args, operand)
-		case opGetVar:
+		case OpGetVar:
 			v := vars[operand.(Integer)]
 			arg, args = args[0], args[1:]
 			env, ok = env.Unify(arg, v)
-		case opPutVar:
+		case OpPutVar:
 			v := vars[operand.(Integer)]
 			args = append(args, v)
-		case opGetFunctor:
+		case OpGetFunctor:
 			pi := operand.(procedureIndicator)
 			arg, astack = env.Resolve(args[0]), append(astack, args[1:])
 			args = make([]Term, int(pi.arity))
@@ -202,29 +271,29 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 				args[i] = NewVariable()
 			}
 			env, ok = env.Unify(arg, pi.name.Apply(args...))
-		case opPutFunctor:
+		case OpPutFunctor:
 			pi := operand.(procedureIndicator)
 			vs := make([]Term, int(pi.arity))
 			arg = pi.name.Apply(vs...)
 			args = append(args, arg)
 			astack = append(astack, args)
 			args = vs[:0]
-		case opPop:
+		case OpPop:
 			args, astack = astack[len(astack)-1], astack[:len(astack)-1]
-		case opEnter:
+		case OpEnter:
 			break
-		case opCall:
+		case OpCall:
 			pi := operand.(procedureIndicator)
 			return vm.Arrive(pi.name, args, func(env *Env) *Promise {
 				return vm.exec(pc, vars, cont, nil, nil, env, cutParent)
 			}, env)
-		case opExit:
+		case OpExit:
 			return cont(env)
-		case opCut:
+		case OpCut:
 			return cut(cutParent, func(context.Context) *Promise {
 				return vm.exec(pc, vars, cont, args, astack, env, cutParent)
 			})
-		case opGetList:
+		case OpGetList:
 			l := operand.(Integer)
 			arg, astack = args[0], append(astack, args[1:])
 			args = make([]Term, int(l))
@@ -232,14 +301,14 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 				args[i] = NewVariable()
 			}
 			env, ok = env.Unify(arg, list(args))
-		case opPutList:
+		case OpPutList:
 			l := operand.(Integer)
 			vs := make([]Term, int(l))
 			arg = list(vs)
 			args = append(args, arg)
 			astack = append(astack, args)
 			args = vs[:0]
-		case opGetPartial:
+		case OpGetPartial:
 			l := operand.(Integer)
 			arg, astack = args[0], append(astack, args[1:])
 			args = make([]Term, int(l+1))
@@ -247,7 +316,7 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 				args[i] = NewVariable()
 			}
 			env, ok = env.Unify(arg, PartialList(args[0], args[1:]...))
-		case opPutPartial:
+		case OpPutPartial:
 			l := operand.(Integer)
 			vs := make([]Term, int(l+1))
 			arg = &partial{
@@ -284,6 +353,16 @@ func (vm *VM) SetUserOutput(s *Stream) {
 func (vm *VM) SetMaxVariables(n uint64) {
 	vm.maxVariables = n
 	maxVariables = n
+}
+
+// InstallHook sets the given hook function in the VM.
+func (vm *VM) InstallHook(f HookFunc) {
+	vm.hook = f
+}
+
+// ClearHook removes the installed hook function from the VM.
+func (vm *VM) ClearHook() {
+	vm.hook = nil
 }
 
 // ResetEnv is used to reset all global variable
