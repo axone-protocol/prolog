@@ -6,6 +6,11 @@
 [![codecov](https://codecov.io/gh/ichiban/prolog/branch/main/graph/badge.svg?token=2FC3PZY7LN)](https://codecov.io/gh/ichiban/prolog)
 [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go)
 
+> [!IMPORTANT]
+> This repository is a *hard fork* of [ichiban/prolog](https://github.com/ichiban/prolog), customized to meet the specific requirements of the [Axone protocol](https://github.com/axone-protocol). It is maintained independently for our use case, and upstream updates may not be regularly integrated.
+>
+> For the original, general-purpose Prolog implementation or to contribute to the broader community, please visit the [ichiban/prolog repository](https://github.com/ichiban/prolog).
+
 ## What is this?
 
 `ichiban/prolog` is an embeddable **ISO Prolog** interpreter in **Go**.
