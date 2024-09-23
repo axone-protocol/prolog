@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -15,20 +14,20 @@ import (
 // If the hook function returns an error, the VM halts execution and returns the error.
 type HookFunc func(opcode Opcode, operand Term, env *Env) error
 
-// DebugHook is a hook function that prints the current instruction and its operand (if any).
-func DebugHook(opcode Opcode, operand Term, env *Env) error {
-	var buf bytes.Buffer
+// DebugHookFn is a function that returns a hook function that prints the executed instruction.
+func DebugHookFn(w io.Writer) HookFunc {
+	return func(opcode Opcode, operand Term, _ *Env) error {
+		_, _ = io.WriteString(w, opcode.String())
 
-	buf.WriteString(opcode.String())
+		if operand != nil {
+			_, _ = io.WriteString(w, "(")
+			_ = operand.WriteTerm(w, &defaultWriteOptions, nil)
+			_, _ = io.WriteString(w, ")")
+		}
+		_, _ = io.WriteString(w, "\n")
 
-	if operand != nil {
-		buf.WriteRune('(')
-		_ = operand.WriteTerm(&buf, &defaultWriteOptions, nil)
-		buf.WriteRune(')')
+		return nil
 	}
-	fmt.Println(buf.String())
-
-	return nil
 }
 
 // CompositeHook returns a hook function that chains multiple hooks together.
