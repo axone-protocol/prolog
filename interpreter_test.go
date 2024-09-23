@@ -1219,6 +1219,25 @@ func TestInterpreter_Bombing(t *testing.T) {
 		})
 	})
 
+	t.Run("💣 backtrack of death", func(t *testing.T) {
+		nbCalls := 0
+		t.Run("create vm", func(t *testing.T) {
+			i := New(nil, nil)
+			assert.NotNil(t, i)
+			i.InstallHook(limitHooker(&nbCalls))
+
+			t.Run("execute program", func(t *testing.T) {
+				assert.NoError(t, i.Exec("backtrackOfDeath :- repeat, fail."))
+
+				t.Run("💥", func(t *testing.T) {
+					sol := i.QuerySolutionContext(context.Background(), `backtrackOfDeath.`)
+
+					assert.Nil(t, sol.sols)
+					assert.EqualError(t, sol.Err(), "error(resource_error(calls),\\+ /1)")
+				})
+			})
+		})
+	})
 }
 
 func TestInterpreter_QuerySolution(t *testing.T) {
