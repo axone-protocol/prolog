@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"testing"
@@ -327,4 +328,20 @@ func TestVM_ResetEnv(t *testing.T) {
 		assert.Equal(t, NewAtom("root"), rootEnv.binding.value)
 		assert.Equal(t, uint64(20), maxVariables)
 	})
+}
+
+func TestVM_DebugHook(t *testing.T) {
+	var vm VM
+	vm.Register0(NewAtom("foo"), func(_ *VM, k Cont, env *Env) *Promise {
+		return k(env)
+	})
+
+	buf := &bytes.Buffer{}
+	vm.InstallHook(DebugHookFn(buf))
+
+	var env Env
+	ok, err := Call(&vm, NewAtom("foo"), Success, &env).Force(context.Background())
+	assert.NoError(t, err)
+	assert.True(t, ok)
+	assert.Equal(t, "enter\ncall(foo/0)\nexit\n", buf.String())
 }

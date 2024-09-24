@@ -5,9 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"io"
 	"math"
 	"os"
@@ -16,6 +13,10 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
 type procedurePair orderedmap.Pair[procedureIndicator, procedure]
@@ -2709,8 +2710,8 @@ func TestAssertz(t *testing.T) {
 					args:    []Term{NewAtom("a")},
 				},
 				bytecode: bytecode{
-					{opcode: opGetConst, operand: NewAtom("a")},
-					{opcode: opExit},
+					{opcode: OpGetConst, operand: NewAtom("a")},
+					{opcode: OpExit},
 				},
 			},
 			{
@@ -2723,8 +2724,8 @@ func TestAssertz(t *testing.T) {
 					args:    []Term{NewAtom("b")},
 				},
 				bytecode: bytecode{
-					{opcode: opGetConst, operand: NewAtom("b")},
-					{opcode: opExit},
+					{opcode: OpGetConst, operand: NewAtom("b")},
+					{opcode: OpExit},
 				},
 			},
 		}}, vm.procedures.GetPair(procedureIndicator{
@@ -2839,8 +2840,8 @@ func TestAsserta(t *testing.T) {
 					args:    []Term{NewAtom("b")},
 				},
 				bytecode: bytecode{
-					{opcode: opGetConst, operand: NewAtom("b")},
-					{opcode: opExit},
+					{opcode: OpGetConst, operand: NewAtom("b")},
+					{opcode: OpExit},
 				},
 			},
 			{
@@ -2850,8 +2851,8 @@ func TestAsserta(t *testing.T) {
 					args:    []Term{NewAtom("a")},
 				},
 				bytecode: bytecode{
-					{opcode: opGetConst, operand: NewAtom("a")},
-					{opcode: opExit},
+					{opcode: OpGetConst, operand: NewAtom("a")},
+					{opcode: OpExit},
 				},
 			},
 		}}, vm.procedures.GetPair(procedureIndicator{name: NewAtom("foo"), arity: 1}).Value)
@@ -2902,11 +2903,11 @@ func TestAsserta(t *testing.T) {
 					},
 				},
 				bytecode: bytecode{
-					{opcode: opEnter},
-					{opcode: opPutConst, operand: NewAtom("a")},
-					{opcode: opCall, operand: procedureIndicator{name: NewAtom("p"), arity: 1}},
-					{opcode: opCut},
-					{opcode: opExit},
+					{opcode: OpEnter},
+					{opcode: OpPutConst, operand: NewAtom("a")},
+					{opcode: OpCall, operand: procedureIndicator{name: NewAtom("p"), arity: 1}},
+					{opcode: OpCut},
+					{opcode: OpExit},
 				},
 			},
 			{
@@ -2922,10 +2923,10 @@ func TestAsserta(t *testing.T) {
 					},
 				},
 				bytecode: bytecode{
-					{opcode: opEnter},
-					{opcode: opPutConst, operand: NewAtom("b")},
-					{opcode: opCall, operand: procedureIndicator{name: NewAtom("p"), arity: 1}},
-					{opcode: opExit},
+					{opcode: OpEnter},
+					{opcode: OpPutConst, operand: NewAtom("b")},
+					{opcode: OpCall, operand: procedureIndicator{name: NewAtom("p"), arity: 1}},
+					{opcode: OpExit},
 				},
 			},
 		}}, vm.procedures.GetPair(procedureIndicator{name: NewAtom("foo"), arity: 0}).Value)

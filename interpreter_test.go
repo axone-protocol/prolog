@@ -5,13 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ichiban/prolog/engine"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"os"
 	"regexp"
 	"testing"
 	"time"
+
+	"github.com/ichiban/prolog/engine"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNew(t *testing.T) {
@@ -1181,6 +1182,61 @@ next(N) :- retract(count(X)), N is X + 1, asserta(count(N)).
 		assert.False(t, sols.Next())
 		assert.NoError(t, sols.Err())
 		assert.NoError(t, sols.Close())
+	})
+}
+
+func TestInterpreter_Bombing(t *testing.T) {
+	const callLimit = 25
+	limitHooker := func(nbCall *int) engine.HookFunc {
+		return func(opcode engine.Opcode, operand engine.Term, env *engine.Env) error {
+			if opcode == engine.OpCall {
+				*nbCall++
+				if *nbCall > callLimit {
+					return engine.ResourceError(engine.NewAtom("calls"), env)
+				}
+			}
+			return nil
+		}
+	}
+
+	t.Run("💣 recursion of death", func(t *testing.T) {
+		nbCalls := 0
+		t.Run("create vm", func(t *testing.T) {
+			i := New(nil, nil)
+			assert.NotNil(t, i)
+			i.InstallHook(limitHooker(&nbCalls))
+
+			t.Run("execute program", func(t *testing.T) {
+				assert.NoError(t, i.Exec("recursionOfDeath :- recursionOfDeath."))
+
+				t.Run("💥", func(t *testing.T) {
+					sol := i.QuerySolutionContext(context.Background(), `recursionOfDeath.`)
+
+					assert.Nil(t, sol.sols)
+					assert.EqualError(t, sol.Err(), "error(resource_error(calls),recursionOfDeath/0)")
+				})
+			})
+		})
+	})
+
+	t.Run("💣 backtrack of death", func(t *testing.T) {
+		nbCalls := 0
+		t.Run("create vm", func(t *testing.T) {
+			i := New(nil, nil)
+			assert.NotNil(t, i)
+			i.InstallHook(limitHooker(&nbCalls))
+
+			t.Run("execute program", func(t *testing.T) {
+				assert.NoError(t, i.Exec("backtrackOfDeath :- repeat, fail."))
+
+				t.Run("💥", func(t *testing.T) {
+					sol := i.QuerySolutionContext(context.Background(), `backtrackOfDeath.`)
+
+					assert.Nil(t, sol.sols)
+					assert.EqualError(t, sol.Err(), "error(resource_error(calls),\\+ /1)")
+				})
+			})
+		})
 	})
 }
 
