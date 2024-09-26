@@ -3,13 +3,14 @@ package engine
 import (
 	"errors"
 	"fmt"
-	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"io"
 	"math/big"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
+
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
 var (
@@ -530,7 +531,6 @@ func (p *Parser) term0(maxPriority Integer) (Term, error) {
 			return CodeList(unDoubleQuote(t.val)), nil
 		default:
 			p.backup()
-			break
 		}
 	default:
 		p.backup()

@@ -4,11 +4,12 @@ import (
 	"context"
 	_ "embed" // for go:embed
 	"errors"
-	"github.com/ichiban/prolog/engine"
 	"io"
 	"io/fs"
 	"os"
 	"strings"
+
+	"github.com/ichiban/prolog/engine"
 )
 
 //go:embed bootstrap.pl
@@ -17,7 +18,6 @@ var bootstrap string
 // Interpreter is a Prolog interpreter.
 type Interpreter struct {
 	engine.VM
-	loaded map[string]struct{}
 }
 
 // NewEmpty creates a new Prolog interpreter without any predicates/operators defined.
