@@ -10,10 +10,17 @@ var (
 	falsePromise = &Promise{ok: false}
 )
 
+// PromiseFunc defines the type of a function that returns a promise.
+type PromiseFunc = func(context.Context) *Promise
+
+// NextFunc defines the type of a function that returns the next PromiseFunc in a sequence,
+// along with a boolean indicating whether the returned value is valid.
+type NextFunc = func() (PromiseFunc, bool)
+
 // Promise is a delayed execution that results in (bool, error). The zero value for Promise is equivalent to Bool(false).
 type Promise struct {
 	// delayed execution with multiple choices
-	delayed []func(context.Context) *Promise
+	delayed *NextFunc
 
 	// final result
 	ok  bool
@@ -26,8 +33,16 @@ type Promise struct {
 }
 
 // Delay delays an execution of k.
-func Delay(k ...func(context.Context) *Promise) *Promise {
-	return &Promise{delayed: k}
+// Should be used with reasonable quantity of k, otherwise prefer DelaySeq.
+func Delay(k ...PromiseFunc) *Promise {
+	return DelaySeq(makeNextFunc(k...))
+}
+
+// DelaySeq delays an execution of a sequence of promises.
+func DelaySeq(next NextFunc) *Promise {
+	return &Promise{
+		delayed: &next,
+	}
 }
 
 // Bool returns a promise that simply returns (ok, nil).
@@ -46,20 +61,22 @@ func Error(err error) *Promise {
 var dummyCutParent Promise
 
 // cut returns a promise that once the execution reaches it, it eliminates other possible choices.
-func cut(parent *Promise, k func(context.Context) *Promise) *Promise {
+func cut(parent *Promise, k PromiseFunc) *Promise {
 	if parent == nil {
 		parent = &dummyCutParent
 	}
+	next := makeNextFunc(k)
 	return &Promise{
-		delayed:   []func(context.Context) *Promise{k},
+		delayed:   &next,
 		cutParent: parent,
 	}
 }
 
 // repeat returns a promise that repeats k.
-func repeat(k func(context.Context) *Promise) *Promise {
+func repeat(k PromiseFunc) *Promise {
+	next := makeNextFunc(k)
 	return &Promise{
-		delayed: []func(context.Context) *Promise{k},
+		delayed: &next,
 		repeat:  true,
 	}
 }
@@ -67,9 +84,11 @@ func repeat(k func(context.Context) *Promise) *Promise {
 // catch returns a promise with a recovering function.
 // Once a promise results in error, the error goes through ancestor promises looking for a recovering function that
 // returns a non-nil promise to continue on.
-func catch(recover func(error) *Promise, k func(context.Context) *Promise) *Promise {
+func catch(recover func(error) *Promise, k PromiseFunc) *Promise {
+	next := makeNextFunc(k)
+
 	return &Promise{
-		delayed: []func(context.Context) *Promise{k},
+		delayed: &next,
 		recover: recover,
 	}
 }
@@ -84,7 +103,7 @@ func (p *Promise) Force(ctx context.Context) (ok bool, err error) {
 		default:
 			p := stack.pop()
 
-			if len(p.delayed) == 0 {
+			if p.delayed == nil {
 				switch {
 				case p.err != nil:
 					if err := stack.recover(p.err); err != nil {
@@ -106,7 +125,11 @@ func (p *Promise) Force(ctx context.Context) (ok bool, err error) {
 
 			// Try the child promises from left to right.
 			q := p.child(ctx)
-			stack = append(stack, p, q)
+			if q == nil {
+				stack = append(stack, p)
+			} else {
+				stack = append(stack, p, q)
+			}
 		}
 	}
 	return false, nil
@@ -114,12 +137,21 @@ func (p *Promise) Force(ctx context.Context) (ok bool, err error) {
 
 func (p *Promise) child(ctx context.Context) (promise *Promise) {
 	defer ensurePromise(&promise)
-	defer func() {
-		if !p.repeat {
-			p.delayed, p.delayed[0] = p.delayed[1:], nil
-		}
-	}()
-	return p.delayed[0](ctx)
+
+	promiseFn, ok := (*p.delayed)()
+	if !ok {
+		p.delayed = nil
+		return nil
+	}
+
+	promise = promiseFn(ctx)
+
+	if p.repeat {
+		nextFunc := makeNextFunc(promiseFn)
+		p.delayed = &nextFunc
+	}
+
+	return
 }
 
 func ensurePromise(p **Promise) {
@@ -134,6 +166,20 @@ func panicError(r interface{}) error {
 		return PanicError{r}
 	default:
 		return PanicError{fmt.Errorf("%v", r)}
+	}
+}
+
+// makeNextFunc creates a NextFunc that iterates over a list of PromiseFunc.
+// It returns the next PromiseFunc in the list and a boolean indicating if a valid function was returned.
+// Once all PromiseFuncs are consumed, the boolean will be false.
+func makeNextFunc(k ...PromiseFunc) NextFunc {
+	return func() (PromiseFunc, bool) {
+		if len(k) == 0 {
+			return nil, false
+		}
+		f := k[0]
+		k = k[1:]
+		return f, true
 	}
 }
 
