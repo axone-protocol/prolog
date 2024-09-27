@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestPromise_Force(t *testing.T) {
+func TestPromise_ForceWithDelayedExecutions(t *testing.T) {
 	var res []int
 	k := Delay(func(context.Context) *Promise {
 		res = append(res, 1)
@@ -71,5 +71,44 @@ func TestPromise_Force(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, 10, count)
+	})
+}
+
+func TestPromise_ForceWithDelayedSequenceExecutions(t *testing.T) {
+	var res []int
+	k := DelaySeq(
+		func() NextFunc {
+			i := 0
+			return func() (PromiseFunc, bool) {
+				defer func() { i++ }()
+
+				v := i
+				res = append(res, v)
+				return func(ctx context.Context) *Promise {
+					return Bool(v%((v%4)+1) == 0)
+				}, i < 11
+			}
+		}())
+
+	t.Run("ok", func(t *testing.T) {
+		cases := []struct {
+			wantOk  bool
+			wantRes []int
+		}{
+			{wantOk: true, wantRes: []int{0}},
+			{wantOk: true, wantRes: []int{1, 2, 3, 4}},
+			{wantOk: true, wantRes: []int{5, 6}},
+			{wantOk: true, wantRes: []int{7, 8}},
+			{wantOk: false, wantRes: []int{9, 10, 11}},
+			{wantOk: false, wantRes: nil},
+		}
+
+		for _, tc := range cases {
+			res = nil
+			ok, err := k.Force(context.Background())
+			assert.NoError(t, err)
+			assert.Equal(t, tc.wantOk, ok)
+			assert.Equal(t, tc.wantRes, res)
+		}
 	})
 }
