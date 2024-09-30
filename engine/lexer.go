@@ -737,7 +737,6 @@ func (l *Lexer) fraction() (Token, error) {
 				return Token{}, err
 			case isDecimalDigitChar(r):
 				l.backup()
-				break
 			default:
 				l.backup()
 				if sign != 0 {

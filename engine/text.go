@@ -3,9 +3,10 @@ package engine
 import (
 	"context"
 	"fmt"
-	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"io/fs"
 	"strings"
+
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
 // discontiguousError is an error that the user-defined predicate is defined by clauses which are not consecutive read-terms.
@@ -110,7 +111,7 @@ func (vm *VM) compile(ctx context.Context, text *text, s string, args ...interfa
 			}
 			continue
 		case procedureIndicator{name: atomIf, arity: 2}: // Rule
-			pi, arg, err = piArg(arg(0), nil)
+			pi, _, err = piArg(arg(0), nil)
 			if err != nil {
 				return err
 			}

@@ -2,9 +2,10 @@ package engine
 
 import (
 	"fmt"
-	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"io"
 	"strings"
+
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
 // Term is a prolog term.
@@ -23,7 +24,6 @@ type WriteOptions struct {
 	_ops        *operators
 	priority    Integer
 	visited     map[termID]struct{}
-	prefixMinus bool
 	left, right operator
 	maxDepth    Integer
 }

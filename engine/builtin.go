@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"io"
 	"io/fs"
 	"os"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
 // Repeat repeats the continuation until it succeeds.
@@ -1268,7 +1269,7 @@ func Open(vm *VM, sourceSink, mode, stream, options Term, k Cont, env *Env) *Pro
 	case err == nil:
 		if s.mode == ioModeRead {
 			s.source = f
-			s.initRead()
+			_ = s.initRead()
 		} else {
 			s.sink = f
 		}
@@ -2426,9 +2427,7 @@ func StreamProperty(vm *VM, stream, property Term, k Cont, env *Env) *Promise {
 	streams := make([]*Stream, 0, len(vm.streams.elems))
 	switch s := env.Resolve(stream).(type) {
 	case Variable:
-		for _, v := range vm.streams.elems {
-			streams = append(streams, v)
-		}
+		streams = append(streams, vm.streams.elems...)
 	case *Stream:
 		streams = append(streams, s)
 	default:
