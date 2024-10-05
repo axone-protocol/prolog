@@ -1,4 +1,4 @@
-module github.com/ichiban/prolog
+module github.com/axone-protocol/prolog
 
 go 1.19
 
