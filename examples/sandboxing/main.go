@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/ichiban/prolog/engine"
+	"github.com/axone-protocol/prolog/engine"
 
-	"github.com/ichiban/prolog"
+	"github.com/axone-protocol/prolog"
 )
 
 func main() {

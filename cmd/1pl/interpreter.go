@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"github.com/ichiban/prolog"
-	"github.com/ichiban/prolog/engine"
+	"github.com/axone-protocol/prolog"
+	"github.com/axone-protocol/prolog/engine"
 	"io"
 )
 
