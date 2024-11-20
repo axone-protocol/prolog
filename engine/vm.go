@@ -50,6 +50,14 @@ type instruction struct {
 	operand Term
 }
 
+func (i instruction) String() string {
+	var sb strings.Builder
+	if i.operand != nil {
+		_ = i.operand.WriteTerm(&sb, &defaultWriteOptions, nil)
+	}
+	return fmt.Sprintf("%s(%s)", i.opcode, sb.String())
+}
+
 type Opcode byte
 
 const (
