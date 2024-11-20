@@ -583,6 +583,15 @@ func TestTypeCompound(t *testing.T) {
 		assert.True(t, ok)
 	})
 
+	t.Run("dict is compound", func(t *testing.T) {
+		ok, err := TypeCompound(nil, &dict{compound{
+			functor: NewAtom("foo"),
+			args:    []Term{NewAtom("a")},
+		}}, Success, nil).Force(context.Background())
+		assert.NoError(t, err)
+		assert.True(t, ok)
+	})
+
 	t.Run("not compound", func(t *testing.T) {
 		ok, err := TypeCompound(nil, NewAtom("foo"), Success, nil).Force(context.Background())
 		assert.NoError(t, err)
