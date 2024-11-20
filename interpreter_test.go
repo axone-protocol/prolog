@@ -1091,6 +1091,52 @@ func TestDict(t *testing.T) {
 					"C": "y",
 				}}},
 		},
+		// predefined functions
+		// - get
+		{
+			query: `A = point{x:1,y:2}.get(x).`,
+			wantResult: []result{{solutions: map[string]TermString{
+				"A": "1",
+			}}},
+		},
+		{
+			query:      `A = point{x:1,y:2}.get(foo).`,
+			wantResult: []result{},
+		},
+		{
+			query: "S = segment{to:point{y:20, x:10}, from:point{y:2, x:1}}.get(to/x).",
+			wantResult: []result{{solutions: map[string]TermString{
+				"S": "10",
+			}}},
+		},
+		{
+			query: "S = segment{to:point{y:20, x:10}, from:point{b:2, a:1}}.get(from/X).",
+			wantResult: []result{{solutions: map[string]TermString{
+				"S": "1",
+				"X": "a",
+			}}, {solutions: map[string]TermString{
+				"S": "2",
+				"X": "b",
+			}}},
+		},
+		{
+			query: "S = point{x:5}.get(/(x,y,z)).",
+			wantResult: []result{{
+				err: fmt.Errorf("error(domain_error(dict_key,/(x,y,z)),. /3)"),
+			}},
+		},
+		{
+			query: "S = point{x:5}.get(1).",
+			wantResult: []result{{
+				err: fmt.Errorf("error(domain_error(dict_key,1),. /3)"),
+			}},
+		},
+		{
+			query: "S = X.get(x).",
+			wantResult: []result{{
+				err: fmt.Errorf("error(instantiation_error,. /3)"),
+			}},
+		},
 	}
 
 	for _, tt := range tests {

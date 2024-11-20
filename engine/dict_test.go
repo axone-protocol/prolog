@@ -396,6 +396,49 @@ func TestOp3(t *testing.T) {
 			function:  NewAtom("z"),
 			wantError: "error(domain_error(dict_key,z),root)",
 		},
+		// Get
+		{
+			name: "get existing key",
+			dict: &dict{
+				compound: compound{
+					functor: atomDict,
+					args:    []Term{NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)}}},
+			function:   NewAtom("get").Apply(NewAtom("x")),
+			wantResult: Integer(1),
+		},
+		{
+			name:       "get keys",
+			dict:       makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+			function:   NewVariable(),
+			wantResult: Integer(1),
+		},
+		{
+			name: "get multiple keys",
+			dict: makeDict(
+				NewAtom("point"),
+				NewAtom("x"), Integer(1),
+				NewAtom("y"), Integer(2),
+				NewAtom("z"), makeDict(NewAtom("nested"), NewAtom("foo"), NewAtom("bar"))),
+			function:   NewAtom("get").Apply(atomSlash.Apply(NewAtom("z"), NewAtom("foo"))),
+			wantResult: NewAtom("bar"),
+		},
+		{
+			name:     "get non-existing key",
+			dict:     makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+			function: NewAtom("get").Apply(NewAtom("z")),
+		},
+		{
+			name:      "get incorrect key path (1)",
+			dict:      makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+			function:  NewAtom("get").Apply(NewAtom("@").Apply(NewAtom("x"), NewAtom("y"))),
+			wantError: "error(domain_error(dict_key,@(x,y)),root)",
+		},
+		{
+			name:      "get incorrect key path (2)",
+			dict:      makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+			function:  NewAtom("get").Apply(Integer(1)),
+			wantError: "error(domain_error(dict_key,1),root)",
+		},
 		// Pathological
 		{
 			name:      "invalid dict type",
