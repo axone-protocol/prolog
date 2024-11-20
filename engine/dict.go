@@ -21,6 +21,7 @@ var (
 var (
 	// predifinedFuncs are the predefined (reserved) functions that can be called on a Dict.
 	predefinedFuncs = map[Atom]func(*VM, Term, Term, Term, Cont, *Env) *Promise{
+		"get": GetDict3,
 		// TODO: to continue (https://www.swi-prolog.org/pldoc/man?section=ext-dicts-predefined)
 	}
 )
@@ -207,16 +208,7 @@ func Op3(vm *VM, dict, function, result Term, cont Cont, env *Env) *Promise {
 	case Dict:
 		switch function := env.Resolve(function).(type) {
 		case Variable:
-			promises := make([]PromiseFunc, 0, dict.Len())
-			for key := range dict.All() {
-				key := key
-				promises = append(promises, func(context.Context) *Promise {
-					value, _ := dict.Value(key)
-					return Unify(vm, tuple(function, result), tuple(key, value), cont, env)
-				})
-			}
-
-			return Delay(promises...)
+			return GetDict3(vm, function, dict, result, cont, env)
 		case Atom:
 			extracted, ok := dict.Value(function)
 			if !ok {
@@ -230,6 +222,54 @@ func Op3(vm *VM, dict, function, result Term, cont Cont, env *Env) *Promise {
 			return Error(existenceError(objectTypeProcedure, function, env))
 		default:
 			return Error(typeError(validTypeCallable, function, env))
+		}
+	default:
+		return Error(typeError(validTypeDict, dict, env))
+	}
+}
+
+// GetDict3 return the value associated with keyPath.
+// keyPath is either a single key or a term Key1/Key2/.... Each key is either an atom, small integer or a variable.
+// While Dict.Key (see Op3) throws an existence error, this function fails silently if a key does not exist in the
+// target dict.
+func GetDict3(vm *VM, keyPath Term, dict Term, result Term, cont Cont, env *Env) *Promise {
+	switch dict := env.Resolve(dict).(type) {
+	case Variable:
+		return Error(InstantiationError(env))
+	case Dict:
+		switch keyPath := env.Resolve(keyPath).(type) {
+		case Variable:
+			promises := make([]PromiseFunc, 0, dict.Len())
+			for key := range dict.All() {
+				key := key
+				promises = append(promises, func(context.Context) *Promise {
+					value, _ := dict.Value(key)
+					return Unify(vm, tuple(keyPath, result), tuple(key, value), cont, env)
+				})
+			}
+
+			return Delay(promises...)
+		case Atom:
+			if value, ok := dict.Value(keyPath); ok {
+				return Unify(vm, result, value, cont, env)
+			}
+			return Bool(false)
+		case Compound:
+			switch keyPath.Functor() {
+			case atomSlash:
+				if keyPath.Arity() == 2 {
+					tempA := NewVariable()
+					return GetDict3(vm, keyPath.Arg(0), dict, tempA, func(env *Env) *Promise {
+						tempB := NewVariable()
+						return GetDict3(vm, keyPath.Arg(1), tempA, tempB, func(env *Env) *Promise {
+							return Unify(vm, tempB, result, cont, env)
+						}, env)
+					}, env)
+				}
+			}
+			return Error(domainError(validDomainDictKey, keyPath, env))
+		default:
+			return Error(domainError(validDomainDictKey, keyPath, env))
 		}
 	default:
 		return Error(typeError(validTypeDict, dict, env))

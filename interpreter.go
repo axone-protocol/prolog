@@ -67,6 +67,7 @@ func New(in io.Reader, out io.Writer) *Interpreter {
 
 	// Dicts operator
 	i.Register3(engine.NewAtom("."), engine.Op3)
+	i.Register3(engine.NewAtom("get_dict"), engine.GetDict3)
 
 	// Arithmetic evaluation
 	i.Register2(engine.NewAtom("is"), engine.Is)
