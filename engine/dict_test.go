@@ -439,6 +439,67 @@ func TestOp3(t *testing.T) {
 			function:  NewAtom("get").Apply(Integer(1)),
 			wantError: "error(domain_error(dict_key,1),root)",
 		},
+		// Put
+		{
+			name:       "put new key(value) pair",
+			dict:       makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+			function:   NewAtom("put").Apply(List(NewAtom("a").Apply(Integer(3)))),
+			wantResult: makeDict(NewAtom("point"), NewAtom("a"), Integer(3), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+		},
+		{
+			name:       "put new key:value pair",
+			dict:       makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+			function:   NewAtom("put").Apply(List(NewAtom(":").Apply(NewAtom("a"), Integer(3)))),
+			wantResult: makeDict(NewAtom("point"), NewAtom("a"), Integer(3), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+		},
+		{
+			name:       "put new key-value pair",
+			dict:       makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+			function:   NewAtom("put").Apply(List(NewAtom("-").Apply(NewAtom("a"), Integer(3)))),
+			wantResult: makeDict(NewAtom("point"), NewAtom("a"), Integer(3), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+		},
+		{
+			name:       "put new key=value pair",
+			dict:       makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+			function:   NewAtom("put").Apply(List(NewAtom("=").Apply(NewAtom("a"), Integer(3)))),
+			wantResult: makeDict(NewAtom("point"), NewAtom("a"), Integer(3), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+		},
+		{
+			name:       "put all key=value pairs",
+			dict:       makeDict(NewAtom("empty")),
+			function:   NewAtom("put").Apply(List(NewAtom("=").Apply(NewAtom("y"), Integer(2)), NewAtom("=").Apply(NewAtom("x"), Integer(1)))),
+			wantResult: makeDict(NewAtom("empty"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+		},
+		{
+			name:       "put a dict",
+			dict:       makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+			function:   NewAtom("put").Apply(makeDict(NewAtom("new"), NewAtom("a"), Integer(0), NewAtom("x"), Integer(3))),
+			wantResult: makeDict(NewAtom("point"), NewAtom("a"), Integer(0), NewAtom("x"), Integer(3), NewAtom("y"), Integer(2)),
+		},
+		{
+			name:       "put a dict (2)",
+			dict:       makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+			function:   NewAtom("put").Apply(makeDict(NewAtom("new"), NewAtom("z"), Integer(3))),
+			wantResult: makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2), NewAtom("z"), Integer(3)),
+		},
+		{
+			name:      "put incorrect pair",
+			dict:      makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+			function:  NewAtom("put").Apply(List(Integer(1), Integer(2))),
+			wantError: "error(type_error(pair,1),root)",
+		},
+		{
+			name:      "put incorrect pair (2)",
+			dict:      makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+			function:  NewAtom("put").Apply(Integer(42)),
+			wantError: "error(type_error(pair,42),root)",
+		},
+		{
+			name:      "put incorrect pair (3)",
+			dict:      makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+			function:  NewAtom("put").Apply(NewAtom("@").Apply(Integer(42))),
+			wantError: "error(type_error(list,@(42)),root)",
+		},
 		// Pathological
 		{
 			name:      "invalid dict type",

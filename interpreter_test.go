@@ -1137,6 +1137,69 @@ func TestDict(t *testing.T) {
 				err: fmt.Errorf("error(instantiation_error,. /3)"),
 			}},
 		},
+		// - put
+		{
+			query: `A = point{x:1, y:2}.put(_{x:3}).`,
+			wantResult: []result{{solutions: map[string]TermString{
+				"A": "point{x:3,y:2}",
+			}}},
+		},
+		{
+			query: `A = point{y:2, x:1}.put(_{z:3}).`,
+			wantResult: []result{{solutions: map[string]TermString{
+				"A": "point{x:1,y:2,z:3}",
+			}}},
+		},
+		{
+			query: `A = point{x:1, z:3}.put(_{y:2}).`,
+			wantResult: []result{{solutions: map[string]TermString{
+				"A": "point{x:1,y:2,z:3}",
+			}}},
+		},
+		{
+			query: `A = point{y:2, z:3}.put(_{x:1}).`,
+			wantResult: []result{{solutions: map[string]TermString{
+				"A": "point{x:1,y:2,z:3}",
+			}}},
+		},
+		{
+			query: `C = 3, A = point{b:2, d:4, f:6}.put(_{a:1, c:C, e:5}).`,
+			wantResult: []result{{solutions: map[string]TermString{
+				"C": "3",
+				"A": "point{a:1,b:2,c:3,d:4,e:5,f:6}",
+			}}},
+		},
+		{
+			query: `C = 3, A = point{b:2, d:4, f:6}.put([a:1, c=C, e(5)]).`,
+			wantResult: []result{{solutions: map[string]TermString{
+				"C": "3",
+				"A": "point{a:1,b:2,c:3,d:4,e:5,f:6}",
+			}}},
+		},
+		{
+			query: `A = point{b:2, d:4, f:6}.put(Z).`,
+			wantResult: []result{{
+				err: fmt.Errorf("error(instantiation_error,. /3)"),
+			}},
+		},
+		{
+			query: `A = point{b:2, d:4, f:6}.put(foo).`,
+			wantResult: []result{{
+				err: fmt.Errorf("error(type_error(pair,foo),. /3)"),
+			}},
+		},
+		{
+			query: `A = point{b:2, d:4, f:6}.put(a/4).`,
+			wantResult: []result{{
+				err: fmt.Errorf("error(type_error(list,a/4),. /3)"),
+			}},
+		},
+		{
+			query: `A = point{b:2, d:4, f:6}.put([foo(a,4)]).`,
+			wantResult: []result{{
+				err: fmt.Errorf("error(type_error(pair,foo(a,4)),. /3)"),
+			}},
+		},
 	}
 
 	for _, tt := range tests {
