@@ -22,6 +22,7 @@ var (
 	// predifinedFuncs are the predefined (reserved) functions that can be called on a Dict.
 	predefinedFuncs = map[Atom]func(*VM, Term, Term, Term, Cont, *Env) *Promise{
 		"get": GetDict3,
+		"put": PutDict3,
 		// TODO: to continue (https://www.swi-prolog.org/pldoc/man?section=ext-dicts-predefined)
 	}
 )
@@ -274,6 +275,119 @@ func GetDict3(vm *VM, keyPath Term, dict Term, result Term, cont Cont, env *Env)
 	default:
 		return Error(typeError(validTypeDict, dict, env))
 	}
+}
+
+// PutDict3 evaluates to a new dict where the key-values in dictIn replace or extend the key-values in the original dict.
+//
+// new is either a dict or list of attribute-value pairs using the syntax Key:Value, Key=Value, Key-Value or Key(Value)
+func PutDict3(vm *VM, new Term, dictIn Term, dictOut Term, cont Cont, env *Env) *Promise {
+	switch dictIn := env.Resolve(dictIn).(type) {
+	case Variable:
+		return Error(InstantiationError(env))
+	case Dict:
+		switch new := env.Resolve(new).(type) {
+		case Variable:
+			return Error(InstantiationError(env))
+		case Dict:
+			dictIn = mergeDict(new, dictIn)
+			return Unify(vm, dictOut, dictIn, cont, env)
+		case Compound:
+			dict, err := newDictFromListOfPairs(new, env)
+			if err != nil {
+				return Error(err)
+			}
+			dictIn = mergeDict(dict, dictIn)
+			return Unify(vm, dictOut, dictIn, cont, env)
+		default:
+			return Error(typeError(validTypePair, new, env))
+		}
+	default:
+		return Error(typeError(validTypeDict, dictIn, env))
+	}
+}
+
+// mergeDict merge n into d returning a new Dict.
+func mergeDict(n Dict, d Dict) Dict {
+	totalLen := d.Len() + n.Len()
+	args := make([]Term, 0, totalLen*2+1)
+	args = append(args, d.Tag())
+
+	dPairs := make([]Term, 0, d.Len()*2)
+	for k, v := range d.All() {
+		dPairs = append(dPairs, k, v)
+	}
+
+	nPairs := make([]Term, 0, n.Len()*2)
+	for k, v := range n.All() {
+		nPairs = append(nPairs, k, v)
+	}
+
+	i, j := 0, 0
+	for i < len(dPairs) && j < len(nPairs) {
+		dk, nk := dPairs[i].(Atom), nPairs[j].(Atom)
+
+		switch {
+		case dk == nk:
+			args = append(args, nk, nPairs[j+1])
+			i += 2
+			j += 2
+		case dk < nk:
+			args = append(args, dk, dPairs[i+1])
+			i += 2
+		case nk < dk:
+			args = append(args, nk, nPairs[j+1])
+			j += 2
+		}
+	}
+
+	for i < len(dPairs) {
+		args = append(args, dPairs[i], dPairs[i+1])
+		i += 2
+	}
+
+	for j < len(nPairs) {
+		args = append(args, nPairs[j], nPairs[j+1])
+		j += 2
+	}
+
+	return newDict(args)
+}
+
+func newDictFromListOfPairs(l Compound, env *Env) (Dict, error) {
+	var args []Term
+	args = append(args, NewVariable())
+
+	iter := ListIterator{List: l, Env: env}
+	for iter.Next() {
+		k, v, err := assertPair(iter.Current(), env)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, k, v)
+	}
+	if err := iter.Err(); err != nil {
+		return nil, err
+	}
+
+	return NewDict(args)
+}
+
+func assertPair(pair Term, env *Env) (Atom, Term, error) {
+	switch pair := pair.(type) {
+	case Compound:
+		switch pair.Arity() {
+		case 1: // Key(Value)
+			return pair.Functor(), pair.Arg(0), nil
+		case 2: // Key:Value, Key=Value, Key-Value
+			switch pair.Functor() {
+			case atomColon, atomEqual, atomMinus:
+				if key, ok := pair.Arg(0).(Atom); ok {
+					return key, pair.Arg(1), nil
+				}
+			}
+		}
+	}
+	return "", nil, typeError(validTypePair, pair, env)
 }
 
 type duplicateKeyError struct {
