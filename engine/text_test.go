@@ -8,9 +8,8 @@ import (
 	"io/fs"
 	"testing"
 
-	orderedmap "github.com/wk8/go-ordered-map/v2"
-
 	"github.com/stretchr/testify/assert"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
 //go:embed testdata
@@ -184,6 +183,144 @@ bar(X, "abc", [a, b], [a, b|Y], f(a)) :- X, !, foo(X, "abc", [a, b], [a, b|Y], f
 								{opcode: OpPutConst, operand: NewAtom("a")},
 								{opcode: OpPop},
 								{opcode: OpCall, operand: procedureIndicator{name: NewAtom("foo"), arity: 5}},
+								{opcode: OpExit},
+							},
+						},
+					},
+				},
+			},
+		)},
+		{title: "dict head", text: `
+point(point{x: 5}).
+`, result: buildOrderedMap(
+			procedurePair{
+				Key: procedureIndicator{name: NewAtom("foo"), arity: 1},
+				Value: &userDefined{
+					multifile: true,
+					clauses: clauses{
+						{
+							pi:  procedureIndicator{name: NewAtom("foo"), arity: 1},
+							raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}},
+							bytecode: bytecode{
+								{opcode: OpGetConst, operand: NewAtom("c")},
+								{opcode: OpExit},
+							},
+						},
+					},
+				},
+			},
+			procedurePair{
+				Key: procedureIndicator{name: NewAtom("point"), arity: 1},
+				Value: &userDefined{
+					clauses: clauses{
+						{
+							pi: procedureIndicator{name: NewAtom("point"), arity: 1},
+							raw: &compound{functor: NewAtom("point"), args: []Term{
+								&dict{compound: compound{functor: NewAtom("dict"), args: []Term{
+									NewAtom("point"), NewAtom("x"), Integer(5)}}},
+							}},
+							bytecode: bytecode{
+								{opcode: OpGetDict, operand: Integer(3)},
+								{opcode: OpGetConst, operand: NewAtom("point")},
+								{opcode: OpGetConst, operand: NewAtom("x")},
+								{opcode: OpGetConst, operand: Integer(5)},
+								{opcode: OpPop},
+								{opcode: OpExit},
+							},
+						},
+					},
+				},
+			},
+		)},
+		{title: "dict head (2)", text: `
+point(point{x: 5}.x).
+`, result: buildOrderedMap(
+			procedurePair{
+				Key: procedureIndicator{name: NewAtom("foo"), arity: 1},
+				Value: &userDefined{
+					multifile: true,
+					clauses: clauses{
+						{
+							pi:  procedureIndicator{name: NewAtom("foo"), arity: 1},
+							raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}},
+							bytecode: bytecode{
+								{opcode: OpGetConst, operand: NewAtom("c")},
+								{opcode: OpExit},
+							},
+						},
+					},
+				},
+			},
+			procedurePair{
+				Key: procedureIndicator{name: NewAtom("point"), arity: 1},
+				Value: &userDefined{
+					clauses: clauses{
+						{
+							pi: procedureIndicator{name: NewAtom("point"), arity: 1},
+							raw: &compound{functor: "point", args: []Term{
+								&compound{functor: "$dot", args: []Term{
+									&dict{compound: compound{functor: "dict", args: []Term{NewAtom("point"), NewAtom("x"), Integer(5)}}},
+									NewAtom("x"),
+								}},
+							}},
+							vars: []Variable{lastVariable() + 1},
+							bytecode: bytecode{
+								{opcode: OpGetVar, operand: Integer(0)},
+								{opcode: OpEnter},
+								{opcode: OpPutDict, operand: Integer(3)},
+								{opcode: OpPutConst, operand: NewAtom("point")},
+								{opcode: OpPutConst, operand: NewAtom("x")},
+								{opcode: OpPutConst, operand: Integer(5)},
+								{opcode: OpPop},
+								{opcode: OpPutConst, operand: NewAtom("x")},
+								{opcode: OpPutVar, operand: Integer(0)},
+								{opcode: OpCall, operand: procedureIndicator{name: atomDot, arity: Integer(3)}},
+								{opcode: OpExit},
+							},
+						},
+					},
+				},
+			},
+		)},
+		{title: "dict body", text: `
+p :- foo(point{x: 5}).
+`, result: buildOrderedMap(
+			procedurePair{
+				Key: procedureIndicator{name: NewAtom("foo"), arity: 1},
+				Value: &userDefined{
+					multifile: true,
+					clauses: clauses{
+						{
+							pi:  procedureIndicator{name: NewAtom("foo"), arity: 1},
+							raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}},
+							bytecode: bytecode{
+								{opcode: OpGetConst, operand: NewAtom("c")},
+								{opcode: OpExit},
+							},
+						},
+					},
+				},
+			},
+			procedurePair{
+				Key: procedureIndicator{name: NewAtom("p"), arity: 0},
+				Value: &userDefined{
+					clauses: clauses{
+						{
+							pi: procedureIndicator{name: NewAtom("p"), arity: 0},
+							raw: atomIf.Apply(
+								NewAtom("p"),
+								&compound{functor: NewAtom("foo"), args: []Term{
+									&dict{compound: compound{functor: NewAtom("dict"), args: []Term{
+										NewAtom("point"), NewAtom("x"), Integer(5)},
+									}}}}),
+							bytecode: bytecode{
+								{opcode: OpEnter},
+								{opcode: OpPutDict, operand: Integer(3)},
+								{opcode: OpPutConst, operand: NewAtom("point")},
+								{opcode: OpPutConst, operand: NewAtom("x")},
+								{opcode: OpPutConst, operand: Integer(5)},
+								{opcode: OpPop},
+								{opcode: OpCall, operand: procedureIndicator{name: NewAtom("foo"), arity: 1}},
 								{opcode: OpExit},
 							},
 						},

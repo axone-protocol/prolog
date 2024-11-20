@@ -1,6 +1,6 @@
 module github.com/axone-protocol/prolog
 
-go 1.19
+go 1.23
 
 require (
 	github.com/cockroachdb/apd/v3 v3.2.1

@@ -20,6 +20,10 @@ var (
 	errPlaceholder = errors.New("not enough arguments for placeholders")
 )
 
+var (
+	atomSpecialDot = NewAtom("$dot")
+)
+
 // Parser turns bytes into Term.
 type Parser struct {
 	lexer        Lexer
@@ -451,6 +455,19 @@ func (p *Parser) infix(maxPriority Integer) (operator, error) {
 			return op, nil
 		}
 	}
+	if a == atomDot {
+		// In case there is no current op-declaration for an operator . and the dot does not serve as operand: interpret
+		// dot as an infix operator that maps to '$dot'/2.
+		op := operator{
+			name:      atomSpecialDot,
+			specifier: operatorSpecifierYFX,
+			priority:  100,
+		}
+		l, _ := op.bindingPriorities()
+		if l <= maxPriority {
+			return op, nil
+		}
+	}
 
 	p.backup()
 	return operator{}, errNoOp
@@ -506,7 +523,13 @@ func (p *Parser) term0(maxPriority Integer) (Term, error) {
 	case tokenFloatNumber:
 		return float(1, t.val)
 	case tokenVariable:
-		return p.variable(t.val)
+		if t, _ := p.next(); t.kind == tokenOpenCurly {
+			p.backup()
+			p.backup()
+			return p.dict()
+		}
+		p.backup()
+		return p.variable(t.val), nil
 	case tokenOpenList:
 		if t, _ := p.next(); t.kind == tokenCloseList {
 			p.backup()
@@ -532,6 +555,14 @@ func (p *Parser) term0(maxPriority Integer) (Term, error) {
 		default:
 			p.backup()
 		}
+	case tokenLetterDigit:
+		if t, _ := p.next(); t.kind == tokenOpenCurly {
+			p.backup()
+			p.backup()
+			return p.dict()
+		}
+		p.backup()
+		p.backup()
 	default:
 		p.backup()
 	}
@@ -581,20 +612,20 @@ func (p *Parser) term0Atom(maxPriority Integer) (Term, error) {
 	return t, nil
 }
 
-func (p *Parser) variable(s string) (Term, error) {
+func (p *Parser) variable(s string) Term {
 	if s == "_" {
-		return NewVariable(), nil
+		return NewVariable()
 	}
 	n := NewAtom(s)
 	for i, pv := range p.Vars {
 		if pv.Name == n {
 			p.Vars[i].Count++
-			return pv.Variable, nil
+			return pv.Variable
 		}
 	}
 	v := NewVariable()
 	p.Vars = append(p.Vars, ParsedVariable{Name: n, Variable: v, Count: 1})
-	return v, nil
+	return v
 }
 
 func (p *Parser) openClose() (Term, error) {
@@ -776,6 +807,84 @@ func (p *Parser) arg() (Term, error) {
 	}
 
 	return p.term(999)
+}
+
+func (p *Parser) dict() (Term, error) {
+	var args []Term
+
+	var err error
+	var tag Term
+
+	tag, err = p.atom()
+	switch err {
+	case nil:
+	default:
+		return nil, err
+	case errExpectation:
+		t, err := p.next()
+		if err != nil {
+			return nil, err
+		}
+		switch t.kind {
+		case tokenVariable:
+			tag = p.variable(t.val)
+
+		default:
+			return nil, errExpectation
+		}
+	}
+
+	args = append(args, tag)
+
+	if t, _ := p.next(); t.kind != tokenOpenCurly {
+		p.backup()
+		return nil, errExpectation
+	}
+
+	if t, _ := p.next(); t.kind == tokenCloseCurly {
+		return NewDict(args)
+	}
+	p.backup()
+
+	for {
+		k, v, err := p.keyValue()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, k, v)
+
+		switch t, _ := p.next(); t.kind {
+		case tokenComma:
+		case tokenCloseCurly:
+			return NewDict(args)
+		default:
+			p.backup()
+			return nil, errExpectation
+		}
+	}
+}
+
+func (p *Parser) keyValue() (Atom, Term, error) {
+	key, err := p.atom()
+	if err != nil {
+		return "", nil, err
+	}
+	switch t, _ := p.next(); t.kind {
+	case tokenGraphic:
+		if t.val != ":" {
+			p.backup()
+			return "", nil, errExpectation
+		}
+	default:
+		p.backup()
+		return "", nil, errExpectation
+	}
+	value, err := p.term(999)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return key, value, nil
 }
 
 func integer(sign int64, s string) (Integer, error) {
