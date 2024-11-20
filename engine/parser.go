@@ -529,7 +529,7 @@ func (p *Parser) term0(maxPriority Integer) (Term, error) {
 			return p.dict()
 		}
 		p.backup()
-		return p.variable(t.val)
+		return p.variable(t.val), nil
 	case tokenOpenList:
 		if t, _ := p.next(); t.kind == tokenCloseList {
 			p.backup()
@@ -612,20 +612,20 @@ func (p *Parser) term0Atom(maxPriority Integer) (Term, error) {
 	return t, nil
 }
 
-func (p *Parser) variable(s string) (Term, error) {
+func (p *Parser) variable(s string) Term {
 	if s == "_" {
-		return NewVariable(), nil
+		return NewVariable()
 	}
 	n := NewAtom(s)
 	for i, pv := range p.Vars {
 		if pv.Name == n {
 			p.Vars[i].Count++
-			return pv.Variable, nil
+			return pv.Variable
 		}
 	}
 	v := NewVariable()
 	p.Vars = append(p.Vars, ParsedVariable{Name: n, Variable: v, Count: 1})
-	return v, nil
+	return v
 }
 
 func (p *Parser) openClose() (Term, error) {
@@ -827,10 +827,8 @@ func (p *Parser) dict() (Term, error) {
 		}
 		switch t.kind {
 		case tokenVariable:
-			tag, err = p.variable(t.val)
-			if err != nil {
-				return nil, err
-			}
+			tag = p.variable(t.val)
+
 		default:
 			return nil, errExpectation
 		}
