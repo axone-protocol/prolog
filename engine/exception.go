@@ -53,6 +53,7 @@ const (
 	validTypePredicateIndicator
 	validTypePair
 	validTypeFloat
+	validTypeDict
 )
 
 var validTypeAtoms = [...]Atom{
@@ -71,6 +72,7 @@ var validTypeAtoms = [...]Atom{
 	validTypePredicateIndicator: atomPredicateIndicator,
 	validTypePair:               atomPair,
 	validTypeFloat:              atomFloat,
+	validTypeDict:               atomDict,
 }
 
 // Term returns an Atom for the validType.
@@ -111,6 +113,7 @@ const (
 	validDomainWriteOption
 
 	validDomainOrder
+	validDomainDictKey
 )
 
 var validDomainAtoms = [...]Atom{
@@ -132,6 +135,7 @@ var validDomainAtoms = [...]Atom{
 	validDomainStreamProperty:    atomStreamProperty,
 	validDomainWriteOption:       atomWriteOption,
 	validDomainOrder:             atomOrder,
+	validDomainDictKey:           atomDictKey,
 }
 
 // Term returns an Atom for the validDomain.

@@ -69,6 +69,8 @@ const (
 	OpPutList
 	OpGetPartial
 	OpPutPartial
+	OpGetDict
+	OpPutDict
 )
 
 func (op Opcode) String() string {
@@ -88,6 +90,8 @@ func (op Opcode) String() string {
 		OpPutList:    "put_list",
 		OpGetPartial: "get_partial",
 		OpPutPartial: "put_partial",
+		OpGetDict:    "get_dict",
+		OpPutDict:    "put_dict",
 	}
 
 	if int(op) < 0 || int(op) >= len(opcodeStrings) {
@@ -304,6 +308,21 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 			l := operand.(Integer)
 			vs := make([]Term, int(l))
 			arg = list(vs)
+			args = append(args, arg)
+			astack = append(astack, args)
+			args = vs[:0]
+		case OpGetDict:
+			l := operand.(Integer)
+			arg, astack = args[0], append(astack, args[1:])
+			args = make([]Term, int(l))
+			for i := range args {
+				args[i] = NewVariable()
+			}
+			env, ok = env.Unify(arg, newDict(args))
+		case OpPutDict:
+			l := operand.(Integer)
+			vs := make([]Term, int(l))
+			arg = &dict{compound: compound{functor: atomDict, args: vs}}
 			args = append(args, arg)
 			astack = append(astack, args)
 			args = vs[:0]

@@ -453,6 +453,11 @@ func renamedCopy(t Term, copied map[termID]Term, env *Env) (Term, error) {
 			}
 			c.args[i] = cp
 		}
+
+		if _, ok := t.(Dict); ok {
+			return &dict{c}, nil
+		}
+
 		return &c, nil
 	default:
 		return t, nil

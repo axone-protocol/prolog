@@ -229,6 +229,11 @@ func simplify(t Term, simplified map[termID]Compound, env *Env) Term {
 		for i := 0; i < t.Arity(); i++ {
 			c.args[i] = simplify(t.Arg(i), simplified, env)
 		}
+
+		if _, ok := t.(Dict); ok {
+			return &dict{c}
+		}
+
 		return &c
 	default:
 		return t

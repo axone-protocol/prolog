@@ -65,6 +65,9 @@ func New(in io.Reader, out io.Writer) *Interpreter {
 	i.Register2(engine.NewAtom("copy_term"), engine.CopyTerm)
 	i.Register2(engine.NewAtom("term_variables"), engine.TermVariables)
 
+	// Dicts operator
+	i.Register3(engine.NewAtom("."), engine.Op3)
+
 	// Arithmetic evaluation
 	i.Register2(engine.NewAtom("is"), engine.Is)
 
