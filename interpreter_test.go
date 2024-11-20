@@ -844,6 +844,293 @@ func TestInterpreter_Query_close(t *testing.T) {
 	assert.NoError(t, sols.Close())
 }
 
+func TestDict(t *testing.T) {
+	type result struct {
+		solutions map[string]TermString
+		err       error
+	}
+	tests := []struct {
+		program    string
+		query      string
+		wantResult []result
+		wantError  error
+	}{
+		// pathological
+		{
+			query:     "A = point{x }.",
+			wantError: fmt.Errorf("unexpected token: close curly(})"),
+		},
+		{
+			query:     "A = point{x: }.",
+			wantError: fmt.Errorf("unexpected token: close curly(})"),
+		},
+		{
+			query:     "A = point{x: 5, }.",
+			wantError: fmt.Errorf("unexpected token: close curly(})"),
+		},
+		{
+			query:     "A = point{x: 5,, }.",
+			wantError: fmt.Errorf("unexpected token: comma(,)"),
+		},
+		{
+			query:     "A = point{x: 5 .",
+			wantError: fmt.Errorf("unexpected token: end(.)"),
+		},
+		{
+			query:     "A = point{}",
+			wantError: fmt.Errorf("unexpected token: close curly(})"),
+		},
+		{
+			query:     "A = point{}}.",
+			wantError: fmt.Errorf("unexpected token: close curly(})"),
+		},
+		{
+			query:     "A = point{x=1}.",
+			wantError: fmt.Errorf("unexpected token: graphic(=)"),
+		},
+		{
+			query:     "A = point{5=1}.",
+			wantError: fmt.Errorf("unexpected token: integer(5)"),
+		},
+		// construction
+		{
+			query: "A = point{}.",
+			wantResult: []result{{solutions: map[string]TermString{
+				"A": "point{}",
+			}}},
+		},
+		{
+			query: "A = point{x: 1, y: 2}.",
+			wantResult: []result{{solutions: map[string]TermString{
+				"A": "point{x:1,y:2}",
+			}}},
+		},
+		{
+			query: "A = point{y: 1, x: 2}.",
+			wantResult: []result{{solutions: map[string]TermString{
+
+				"A": "point{x:2,y:1}",
+			}}},
+		},
+		{
+			program: "point(point{x: 5}).",
+			query:   "point(X).",
+			wantResult: []result{{solutions: map[string]TermString{
+				"X": "point{x:5}",
+			}}},
+		},
+		{
+			program: "origin(point{y:Y, x:X}) :- [X, Y] = [0, 0].",
+			query:   "origin(X).",
+			wantResult: []result{{solutions: map[string]TermString{
+				"X": "point{x:0,y:0}",
+			}}},
+		},
+		{
+			program: "match(dict{x: X, y: 10}) :- X = 5.",
+			query:   "match(dict{x:5, y:Y}).",
+			wantResult: []result{{solutions: map[string]TermString{
+				"Y": "10",
+			}}},
+		},
+		{
+			program: "contains([dict{x: 1}, dict{y: 2}]).",
+			query:   "contains([A, B]).",
+			wantResult: []result{{solutions: map[string]TermString{
+				"A": "dict{x:1}",
+				"B": "dict{y:2}",
+			}}},
+		},
+		{
+			program: "combine(dict{a: A, b: B}) :- A = dict{x: 1}, B = dict{y: 2}.",
+			query:   "combine(X).",
+			wantResult: []result{{solutions: map[string]TermString{
+				"X": "dict{a:dict{x:1},b:dict{y:2}}",
+			}}},
+		},
+		{
+			query:     "A = point{x: 1, x: 2}.",
+			wantError: fmt.Errorf("duplicate key: x"),
+		},
+		{
+			program:    "fail_case(dict{x: 5}).",
+			query:      "fail_case(dict{x: 10}).",
+			wantResult: []result{},
+		},
+		{
+			query: "A = point{x:1,y:2}, B = point{x:10,y:20}, S = segment{from: A, to: B}.",
+			wantResult: []result{{solutions: map[string]TermString{
+				"A": "point{x:1,y:2}",
+				"B": "point{x:10,y:20}",
+				"S": "segment{from:point{x:1,y:2},to:point{x:10,y:20}}",
+			}}},
+		},
+		{
+			query: "S = segment{to:point{y:20, x:10}, from:point{y:2, x:1}}.",
+			wantResult: []result{{solutions: map[string]TermString{
+				"S": "segment{from:point{x:1,y:2},to:point{x:10,y:20}}",
+			}}},
+		},
+		// unification
+		{
+			query: "point{x:1, y:2} = point{y:2, x:X}.",
+			wantResult: []result{{solutions: map[string]TermString{
+				"X": "1",
+			}}},
+		},
+		{
+			query: "Tag = point, X = Tag{y:2, x:6}.",
+			wantResult: []result{{solutions: map[string]TermString{
+				"Tag": "point",
+				"X":   "point{x:6,y:2}",
+			}}},
+		},
+		{
+			query: "point{x:1, y:2} = Tag{y:2, x:X}.",
+			wantResult: []result{{solutions: map[string]TermString{
+				"Tag": "point",
+				"X":   "1",
+			}}},
+		},
+		{
+			program: "p(V) :- V = point{x:1}.x. p(V) :- V = point{y:2}.y.",
+			query:   "p(V).",
+			wantResult: []result{{solutions: map[string]TermString{
+				"V": "1",
+			}}, {solutions: map[string]TermString{
+				"V": "2",
+			}}},
+		},
+		{
+			query: "[A, B] = [point{x:1}, point{x:2}.x].",
+			wantResult: []result{{solutions: map[string]TermString{
+				"A": "point{x:1}",
+				"B": "2",
+			}}},
+		},
+		{
+			query: "[point{x: A}, point{x: B}] = [point{x:1}, point{x:2}].",
+			wantResult: []result{{solutions: map[string]TermString{
+				"A": "1",
+				"B": "2",
+			}}},
+		},
+		{
+			program: "p(point{x:1}.x).",
+			query:   "p(X).",
+			wantResult: []result{{solutions: map[string]TermString{
+				"X": "1",
+			}}},
+		},
+		// access
+		{
+			query: "A = point{x:1,y:2}.x.",
+			wantResult: []result{{solutions: map[string]TermString{
+				"A": "1",
+			}}},
+		},
+		{
+			query: "S = segment{to:point{y:20, x:10}, from:point{y:2, x:1}}.to.",
+			wantResult: []result{{solutions: map[string]TermString{
+				"S": "point{x:10,y:20}",
+			}}},
+		},
+		{
+			query: "S = segment{to:point{y:20, x:10}, from:point{y:2, x:1}}.to.x.",
+			wantResult: []result{{solutions: map[string]TermString{
+				"S": "10",
+			}}},
+		},
+		{
+			program: "v(point{x: 5}.x).",
+			query:   "v(X).",
+			wantResult: []result{{solutions: map[string]TermString{
+				"X": "5",
+			}}},
+		},
+		{
+			program: "v(segment{to:point{x:10, y:20}}.to.x).",
+			query:   "v(X).",
+			wantResult: []result{{solutions: map[string]TermString{
+				"X": "10",
+			}}},
+		},
+		{
+			query: "A = point{x:1,y:2}.z.",
+			wantResult: []result{
+				{err: fmt.Errorf("error(domain_error(dict_key,z),. /3)")},
+			},
+		},
+		{
+			query: "A = point{x:1,y:2}.unknown(foo).",
+			wantResult: []result{
+				{err: fmt.Errorf("error(existence_error(procedure,unknown(foo)),. /3)")},
+			},
+		},
+		{
+			query: "A = point{x:1,y:2}.42.",
+			wantResult: []result{
+				{err: fmt.Errorf("error(type_error(callable,42),. /3)")},
+			},
+		},
+		{
+			program: "p(x.y.z).",
+			query:   "p(X).",
+			wantResult: []result{
+				{err: fmt.Errorf("error(type_error(dict,x),. /3)")},
+			},
+		},
+		{
+			query: "A = point{x:1,y:2}.C.",
+			wantResult: []result{{solutions: map[string]TermString{
+				"A": "1",
+				"C": "x",
+			}},
+				{solutions: map[string]TermString{
+					"A": "2",
+					"C": "y",
+				}}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.query, func(t *testing.T) {
+			i := New(nil, nil)
+
+			if tt.program != "" {
+				assert.NoError(t, i.Exec(tt.program))
+			}
+
+			sols, err := i.Query(tt.query)
+			if tt.wantError != nil {
+				assert.EqualError(t, err, tt.wantError.Error())
+				return
+			}
+			assert.NoError(t, err)
+			assert.NotNil(t, sols)
+			defer sols.Close()
+
+			for _, tr := range tt.wantResult {
+				ok := sols.Next()
+
+				if tr.err != nil {
+					assert.EqualError(t, sols.Err(), tr.err.Error())
+					continue
+				}
+				assert.NoError(t, sols.Err())
+				assert.True(t, ok)
+
+				got := map[string]TermString{}
+				err = sols.Scan(&got)
+				assert.NoError(t, err)
+
+				assert.Equal(t, tr.solutions, got)
+			}
+			assert.False(t, sols.Next())
+		})
+	}
+}
+
 func TestMisc(t *testing.T) {
 	t.Run("negation", func(t *testing.T) {
 		i := New(nil, nil)
@@ -1284,13 +1571,13 @@ foo(c, d).
 		assert.Equal(t, ErrNoSolutions, sol.Scan(m))
 	})
 
-	t.Run("runtime error", func(t *testing.T) {
+	t.Run("runtime err", func(t *testing.T) {
 		err := errors.New("something went wrong")
 
-		i.Register0(engine.NewAtom("error"), func(_ *engine.VM, k engine.Cont, env *engine.Env) *engine.Promise {
+		i.Register0(engine.NewAtom("err"), func(_ *engine.VM, k engine.Cont, env *engine.Env) *engine.Promise {
 			return engine.Error(err)
 		})
-		sol := i.QuerySolution(`error.`)
+		sol := i.QuerySolution(`err.`)
 		assert.Equal(t, err, sol.Err())
 
 		var s struct{}

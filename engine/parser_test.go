@@ -141,7 +141,7 @@ func TestParser_Term(t *testing.T) {
 		{input: `a + ().`, err: unexpectedTokenError{actual: Token{kind: tokenClose, val: ")"}}},
 		{input: `a * b + c.`, term: &compound{functor: atomPlus, args: []Term{&compound{functor: NewAtom("*"), args: []Term{NewAtom("a"), NewAtom("b")}}, NewAtom("c")}}},
 		{input: `a [] b.`, err: unexpectedTokenError{actual: Token{kind: tokenOpenList, val: "["}}},
-		{input: `a {} b.`, err: unexpectedTokenError{actual: Token{kind: tokenOpenCurly, val: "{"}}},
+		{input: `a {} b.`, err: unexpectedTokenError{actual: Token{kind: tokenLetterDigit, val: "b"}}},
 		{input: `a, b.`, term: &compound{functor: atomComma, args: []Term{NewAtom("a"), NewAtom("b")}}},
 		{input: `+ * + .`, err: unexpectedTokenError{actual: Token{kind: tokenGraphic, val: "+"}}},
 
@@ -167,6 +167,40 @@ func TestParser_Term(t *testing.T) {
 		// https://github.com/ichiban/prolog/issues/219#issuecomment-1200489336
 		{input: `write('[]').`, term: &compound{functor: NewAtom(`write`), args: []Term{NewAtom(`[]`)}}},
 		{input: `write('{}').`, term: &compound{functor: NewAtom(`write`), args: []Term{NewAtom(`{}`)}}},
+
+		{input: `tag{}.`, term: &dict{compound{functor: "dict", args: []Term{NewAtom("tag")}}}},
+		{input: `tag{k:v}.`, term: &dict{compound{functor: "dict", args: []Term{NewAtom("tag"), NewAtom("k"), NewAtom("v")}}}},
+		{input: `t.d.`,
+			termLazy: func() Term {
+				return &compound{functor: "$dot", args: []Term{NewAtom("t"), NewAtom("d")}}
+			}},
+		{input: `X{}.`,
+			termLazy: func() Term {
+				return &dict{compound{functor: "dict", args: []Term{lastVariable()}}}
+			},
+			vars: func() []ParsedVariable {
+				return []ParsedVariable{
+					{Name: NewAtom("X"), Variable: lastVariable(), Count: 1},
+				}
+			},
+		},
+		{input: `t{k:V}.`,
+			termLazy: func() Term {
+				return &dict{compound{functor: "dict", args: []Term{NewAtom("t"), NewAtom("k"), lastVariable()}}}
+			},
+			vars: func() []ParsedVariable {
+				return []ParsedVariable{
+					{Name: NewAtom("V"), Variable: lastVariable(), Count: 1},
+				}
+			},
+		},
+		{input: `tag{.`, err: unexpectedTokenError{actual: Token{kind: tokenEnd, val: "."}}},
+		{input: `tag{{.`, err: unexpectedTokenError{actual: Token{kind: tokenOpenCurly, val: "{"}}},
+		{input: `tag{x}.`, err: unexpectedTokenError{actual: Token{kind: tokenCloseCurly, val: "}"}}},
+		{input: `tag{x:}.`, err: unexpectedTokenError{actual: Token{kind: tokenCloseCurly, val: "}"}}},
+		{input: `tag{1:2}.`, err: unexpectedTokenError{actual: Token{kind: tokenInteger, val: "1"}}},
+		{input: `tag{x: ,}.`, err: unexpectedTokenError{actual: Token{kind: tokenComma, val: ","}}},
+		{input: `tag{x:1 y:2}.`, err: unexpectedTokenError{actual: Token{kind: tokenLetterDigit, val: "y"}}},
 	}
 
 	for _, tc := range tests {
