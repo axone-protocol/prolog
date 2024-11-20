@@ -198,6 +198,7 @@ func TestParser_Term(t *testing.T) {
 		{input: `tag{{.`, err: unexpectedTokenError{actual: Token{kind: tokenOpenCurly, val: "{"}}},
 		{input: `tag{x}.`, err: unexpectedTokenError{actual: Token{kind: tokenCloseCurly, val: "}"}}},
 		{input: `tag{x:}.`, err: unexpectedTokenError{actual: Token{kind: tokenCloseCurly, val: "}"}}},
+		{input: `tag{x/1}.`, err: unexpectedTokenError{actual: Token{kind: tokenGraphic, val: "/"}}},
 		{input: `tag{1:2}.`, err: unexpectedTokenError{actual: Token{kind: tokenInteger, val: "1"}}},
 		{input: `tag{x: ,}.`, err: unexpectedTokenError{actual: Token{kind: tokenComma, val: ","}}},
 		{input: `tag{x:1 y:2}.`, err: unexpectedTokenError{actual: Token{kind: tokenLetterDigit, val: "y"}}},
