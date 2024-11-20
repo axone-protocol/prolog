@@ -345,3 +345,21 @@ func TestVM_DebugHook(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, "enter\ncall(foo/0)\nexit\n", buf.String())
 }
+func TestInstruction_String(t *testing.T) {
+	t.Run("with operand", func(t *testing.T) {
+		instr := instruction{
+			opcode:  OpCall,
+			operand: NewAtom("foo"),
+		}
+		expected := "call(foo)"
+		assert.Equal(t, expected, instr.String())
+	})
+
+	t.Run("without operand", func(t *testing.T) {
+		instr := instruction{
+			opcode: OpExit,
+		}
+		expected := "exit()"
+		assert.Equal(t, expected, instr.String())
+	})
+}
