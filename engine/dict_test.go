@@ -3,9 +3,11 @@ package engine
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
@@ -549,6 +551,91 @@ func TestOp3(t *testing.T) {
 					assert.False(t, ok)
 				}
 			}
+		})
+	}
+}
+
+func TestWriteDict(t *testing.T) {
+	tests := []struct {
+		name    string
+		fixture func(*mockWriter)
+		wantErr string
+	}{
+		{
+			name: "Error writing tag",
+			fixture: func(w *mockWriter) {
+				w.On("Write", mock.Anything).Return(0, fmt.Errorf("mock failure at writing tag")).Once()
+			},
+			wantErr: "mock failure at writing tag",
+		},
+		{
+			name: "Error writing opening brace",
+			fixture: func(w *mockWriter) {
+				w.On("Write", []byte("{")).Return(0, fmt.Errorf("mock failure at opening brace")).Once()
+				w.On("Write", mock.Anything).Return(0, nil)
+			},
+			wantErr: "mock failure at opening brace",
+		},
+		{
+			name: "Error writing colon",
+			fixture: func(w *mockWriter) {
+				w.On("Write", []byte(":")).Return(0, fmt.Errorf("mock failure at writing colon")).Once()
+				w.On("Write", mock.Anything).Return(0, nil)
+			},
+			wantErr: "mock failure at writing colon",
+		},
+		{
+			name: "Error writing comma",
+			fixture: func(w *mockWriter) {
+				w.On("Write", []byte(",")).Return(0, fmt.Errorf("mock failure at writing comma")).Once()
+				w.On("Write", mock.Anything).Return(0, nil)
+			},
+			wantErr: "mock failure at writing comma",
+		},
+		{
+			name: "Error writing key",
+			fixture: func(w *mockWriter) {
+				w.On("Write", []byte("point")).Return(len([]byte("testTag")), nil).Once().
+					On("Write", []byte("{")).Return(len([]byte("{")), nil).Once().
+					On("Write", []byte("x")).Return(0, fmt.Errorf("mock failure at writing key")).Once()
+			},
+			wantErr: "mock failure at writing key",
+		},
+		{
+			name: "Error writing value",
+			fixture: func(w *mockWriter) {
+				w.On("Write", []byte("point")).Return(len([]byte("testTag")), nil).Once().
+					On("Write", []byte("{")).Return(len([]byte("{")), nil).Once().
+					On("Write", []byte("x")).Return(len([]byte("x")), nil).Once().
+					On("Write", []byte(":")).Return(len([]byte(":")), nil).Once().
+					On("Write", []byte("1")).Return(0, fmt.Errorf("mock failure at writing value")).Once()
+			},
+			wantErr: "mock failure at writing value",
+		},
+		{
+			name: "Error writing closing brace",
+			fixture: func(w *mockWriter) {
+				w.On("Write", []byte("}")).Return(0, fmt.Errorf("mock failure at closing brace")).Once()
+				w.On("Write", mock.Anything).Return(0, nil)
+			},
+			wantErr: "mock failure at closing brace",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var w mockWriter
+			var env *Env
+			tt.fixture(&w)
+
+			d := makeDict(
+				NewAtom("point"),
+				NewAtom("x"), Integer(1), NewAtom("y"), Integer(2))
+
+			err := d.WriteTerm(&w, &defaultWriteOptions, env)
+
+			assert.EqualError(t, err, tt.wantErr)
+			w.AssertExpectations(t)
 		})
 	}
 }
