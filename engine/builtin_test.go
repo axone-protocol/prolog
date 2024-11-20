@@ -40,7 +40,7 @@ func TestCall(t *testing.T) {
 	assert.NoError(t, vm.Compile(context.Background(), `
 foo.
 foo(_, _).
-f(g([a, [b, c|X]])).
+f(g([a, [b, c|X], Y{x:5}])).
 `))
 
 	tests := []struct {
@@ -55,14 +55,14 @@ f(g([a, [b, c|X]])).
 		{title: `undefined atom`, goal: NewAtom("bar"), ok: false, err: existenceError(objectTypeProcedure, atomSlash.Apply(NewAtom("bar"), Integer(0)), nil)},
 		{title: `defined atom`, goal: NewAtom("foo"), ok: true},
 		{title: `undefined compound`, goal: NewAtom("bar").Apply(NewVariable(), NewVariable()), ok: false, err: existenceError(objectTypeProcedure, atomSlash.Apply(NewAtom("bar"), Integer(2)), nil)},
-		{title: `defined compound`, goal: NewAtom("foo").Apply(NewVariable(), NewVariable()), ok: true},
+		{title: `defined compound`, goal: NewAtom("foo").Apply(NewVariable(), makeDict(NewVariable())), ok: true},
 		{title: `variable: single predicate`, goal: NewVariable(), ok: false, err: InstantiationError(nil)},
 		{title: `variable: multiple predicates`, goal: atomComma.Apply(atomFail, NewVariable()), ok: false},
 		{title: `not callable: single predicate`, goal: Integer(0), ok: false, err: typeError(validTypeCallable, Integer(0), nil)},
 		{title: `not callable: conjunction`, goal: atomComma.Apply(atomTrue, Integer(0)), ok: false, err: typeError(validTypeCallable, atomComma.Apply(atomTrue, Integer(0)), nil)},
 		{title: `not callable: disjunction`, goal: atomSemiColon.Apply(Integer(1), atomTrue), ok: false, err: typeError(validTypeCallable, atomSemiColon.Apply(Integer(1), atomTrue), nil)},
 
-		{title: `cover all`, goal: atomComma.Apply(atomCut, NewAtom("f").Apply(NewAtom("g").Apply(List(NewAtom("a"), PartialList(NewVariable(), NewAtom("b"), NewAtom("c")))))), ok: true},
+		{title: `cover all`, goal: atomComma.Apply(atomCut, NewAtom("f").Apply(NewAtom("g").Apply(List(NewAtom("a"), PartialList(NewVariable(), NewAtom("b"), NewAtom("c")), makeDict(NewAtom("foo"), NewAtom("x"), Integer(5)))))), ok: true},
 		{title: `out of memory`, goal: NewAtom("foo").Apply(NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable()), err: resourceError(resourceMemory, nil), mem: 1},
 		{title: `panic`, goal: NewAtom("do_not_call"), err: PanicError{errors.New("told you")}},
 		{title: `panic (lazy)`, goal: NewAtom("lazy_do_not_call"), err: PanicError{errors.New("told you")}},
