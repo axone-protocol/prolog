@@ -1022,6 +1022,27 @@ func TestDict(t *testing.T) {
 				"X": "1",
 			}}},
 		},
+		{
+			program: "ok. p(point{x:1}.x) :- ok.",
+			query:   "p(X).",
+			wantResult: []result{{solutions: map[string]TermString{
+				"X": "1",
+			}}},
+		},
+		{
+			program: "point(point{x: X}.x) :- X = 5.",
+			query:   "point(X).",
+			wantResult: []result{{solutions: map[string]TermString{
+				"X": "5",
+			}}},
+		},
+		{
+			program: "point(point{x: 5}.X) :- X = x.",
+			query:   "point(X).",
+			wantResult: []result{{solutions: map[string]TermString{
+				"X": "5",
+			}}},
+		},
 		// access
 		{
 			query: "A = point{x:1,y:2}.x.",
@@ -1051,6 +1072,13 @@ func TestDict(t *testing.T) {
 		{
 			program: "v(segment{to:point{x:10, y:20}}.to.x).",
 			query:   "v(X).",
+			wantResult: []result{{solutions: map[string]TermString{
+				"X": "10",
+			}}},
+		},
+		{
+			program: "p(P) :- P = point{x:10, y:20}. x(X) :- p(P), X = P.x.",
+			query:   "x(X).",
 			wantResult: []result{{solutions: map[string]TermString{
 				"X": "10",
 			}}},
