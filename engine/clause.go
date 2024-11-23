@@ -64,19 +64,19 @@ type clause struct {
 }
 
 func compileClause(head Term, body Term, env *Env) (clause, error) {
+	head, preds := desugarHead(head, env)
+	body = desugarBody(body, env)
+
+	if len(preds) > 0 {
+		predSeq := seq(atomComma, preds...)
+		if body == nil {
+			body = predSeq
+		} else {
+			body = atomComma.Apply(body, predSeq)
+		}
+	}
+
 	var c clause
-	var goals []Term
-
-	head, goals = desugar(head, goals)
-	body, goals = desugar(body, goals)
-
-	if body != nil {
-		goals = append(goals, body)
-	}
-	if len(goals) > 0 {
-		body = seq(atomComma, goals...)
-	}
-
 	c.compileHead(head, env)
 
 	if body != nil {
@@ -86,22 +86,48 @@ func compileClause(head Term, body Term, env *Env) (clause, error) {
 	}
 
 	c.emit(instruction{opcode: OpExit})
+
 	return c, nil
 }
 
-func desugar(term Term, acc []Term) (Term, []Term) {
-	switch t := term.(type) {
+func desugarHead(head Term, env *Env) (Term, []Term) {
+	if head, ok := env.Resolve(head).(Compound); ok {
+		return desugarPred(head, nil, env)
+	}
+	return head, nil
+}
+
+func desugarBody(body Term, env *Env) Term {
+	if body == nil {
+		return body
+	}
+
+	var items []Term
+	iter := seqIterator{Seq: body, Env: env}
+	for iter.Next() {
+		t, preds := desugarPred(iter.Current(), nil, env)
+		if len(preds) > 0 {
+			items = append(items, preds...)
+		}
+		items = append(items, t)
+	}
+
+	return seq(atomComma, items...)
+}
+
+func desugarPred(term Term, acc []Term, env *Env) (Term, []Term) {
+	switch t := env.Resolve(term).(type) {
 	case charList, codeList:
 		return t, acc
 	case list:
 		l := make(list, len(t))
 		for i, e := range t {
-			l[i], acc = desugar(e, acc)
+			l[i], acc = desugarPred(e, acc, env)
 		}
 		return l, acc
 	case *partial:
-		c, acc := desugar(t.Compound, acc)
-		tail, acc := desugar(*t.tail, acc)
+		c, acc := desugarPred(t.Compound, acc, env)
+		tail, acc := desugarPred(*t.tail, acc, env)
 		return &partial{
 			Compound: c.(Compound),
 			tail:     &tail,
@@ -109,8 +135,8 @@ func desugar(term Term, acc []Term) (Term, []Term) {
 	case Compound:
 		if t.Functor() == atomSpecialDot && t.Arity() == 2 {
 			tempV := NewVariable()
-			lhs, acc := desugar(t.Arg(0), acc)
-			rhs, acc := desugar(t.Arg(1), acc)
+			lhs, acc := desugarPred(t.Arg(0), acc, env)
+			rhs, acc := desugarPred(t.Arg(1), acc, env)
 
 			return tempV, append(acc, atomDot.Apply(lhs, rhs, tempV))
 		}
@@ -120,7 +146,7 @@ func desugar(term Term, acc []Term) (Term, []Term) {
 			args:    make([]Term, t.Arity()),
 		}
 		for i := 0; i < t.Arity(); i++ {
-			c.args[i], acc = desugar(t.Arg(i), acc)
+			c.args[i], acc = desugarPred(t.Arg(i), acc, env)
 		}
 
 		if _, ok := t.(Dict); ok {
