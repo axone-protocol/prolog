@@ -37,6 +37,12 @@ func TestCall(t *testing.T) {
 	vm.Register0(NewAtom("do_not_call_wrapped"), func(*VM, Cont, *Env) *Promise {
 		panic(errors.New("told you"))
 	})
+	vm.Register0(NewAtom("do_not_call_exception"), func(*VM, Cont, *Env) *Promise {
+		panic(Exception{NewAtom("error").Apply(NewAtom("panic_error"), NewAtom("told you"))})
+	})
+	vm.Register0(NewAtom("do_not_call_misc_error"), func(*VM, Cont, *Env) *Promise {
+		panic(42)
+	})
 	assert.NoError(t, vm.Compile(context.Background(), `
 foo.
 foo(_, _).
@@ -64,9 +70,11 @@ f(g([a, [b, c|X], Y{x:5}])).
 
 		{title: `cover all`, goal: atomComma.Apply(atomCut, NewAtom("f").Apply(NewAtom("g").Apply(List(NewAtom("a"), PartialList(NewVariable(), NewAtom("b"), NewAtom("c")), makeDict(NewAtom("foo"), NewAtom("x"), Integer(5)))))), ok: true},
 		{title: `out of memory`, goal: NewAtom("foo").Apply(NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable()), err: resourceError(resourceMemory, nil), mem: 1},
-		{title: `panic`, goal: NewAtom("do_not_call"), err: PanicError{errors.New("told you")}},
-		{title: `panic (lazy)`, goal: NewAtom("lazy_do_not_call"), err: PanicError{errors.New("told you")}},
-		{title: `panic (wrapped)`, goal: NewAtom("do_not_call_wrapped"), err: PanicError{errors.New("told you")}},
+		{title: `panic`, goal: NewAtom("do_not_call"), err: Exception{NewAtom("error").Apply(NewAtom("panic_error").Apply(NewAtom("told you")))}},
+		{title: `panic (lazy)`, goal: NewAtom("lazy_do_not_call"), err: Exception{NewAtom("error").Apply(NewAtom("panic_error").Apply(NewAtom("told you")))}},
+		{title: `panic (wrapped)`, goal: NewAtom("do_not_call_wrapped"), err: Exception{NewAtom("error").Apply(NewAtom("panic_error").Apply(NewAtom("told you")))}},
+		{title: `panic (exception)`, goal: NewAtom("do_not_call_exception"), err: Exception{NewAtom("error").Apply(NewAtom("panic_error").Apply(NewAtom("told you")))}},
+		{title: `panic (misc)`, goal: NewAtom("do_not_call_misc_error"), err: Exception{NewAtom("error").Apply(NewAtom("panic_error").Apply(NewAtom("42")))}},
 	}
 
 	for _, tt := range tests {
