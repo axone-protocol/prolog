@@ -1960,7 +1960,9 @@ func PeekChar(vm *VM, streamOrAlias, char Term, k Cont, env *Env) *Promise {
 	}
 }
 
-var osExit = os.Exit
+var osExit = func(_ int) {
+	panic("halt/1 is not allowed")
+}
 
 // Halt exits the process with exit code of n.
 func Halt(_ *VM, n Term, k Cont, env *Env) *Promise {

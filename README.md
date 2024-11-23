@@ -42,6 +42,7 @@ The following customizations have been made to adapt the original `ichiban/prolo
 - Removed support for trigonometric functions (`sin`, `cos`, `tan`, `asin`, `acos`, `atan`).
 - Introduced VM hooks for enhanced Prolog execution control.
 - Added support for the `Dict` term.
+- `halt/0` and `halt/1` are forbidden and will throw an error.
 
 ## License
 

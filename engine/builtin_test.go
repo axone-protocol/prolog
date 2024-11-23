@@ -38,7 +38,7 @@ func TestCall(t *testing.T) {
 		panic(errors.New("told you"))
 	})
 	vm.Register0(NewAtom("do_not_call_exception"), func(*VM, Cont, *Env) *Promise {
-		panic(Exception{NewAtom("error").Apply(NewAtom("panic_error"), NewAtom("told you"))})
+		panic(Exception{NewAtom("error").Apply(NewAtom("panic_error").Apply(NewAtom("told you")))})
 	})
 	vm.Register0(NewAtom("do_not_call_misc_error"), func(*VM, Cont, *Env) *Promise {
 		panic(42)
@@ -5527,20 +5527,11 @@ func TestPeekChar(t *testing.T) {
 
 func Test_Halt(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
-		var exitCalled bool
-		osExit = func(code int) {
-			assert.Equal(t, 2, code)
-			exitCalled = true
-		}
-		defer func() {
-			osExit = os.Exit
-		}()
-
-		ok, err := Halt(nil, Integer(2), Success, nil).Force(context.Background())
-		assert.NoError(t, err)
-		assert.True(t, ok)
-
-		assert.True(t, exitCalled)
+		ok, err := Delay(func(ctx context.Context) *Promise {
+			return Halt(nil, Integer(2), Success, nil)
+		}).Force(context.Background())
+		assert.EqualError(t, err, "error(panic_error(halt/1 is not allowed))")
+		assert.False(t, ok)
 	})
 
 	t.Run("n is a variable", func(t *testing.T) {
