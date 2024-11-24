@@ -162,10 +162,12 @@ func ensurePromise(p **Promise) {
 
 func panicError(r interface{}) error {
 	switch r := r.(type) {
+	case Exception:
+		return r
 	case error:
-		return PanicError{r}
+		return Exception{term: atomError.Apply(NewAtom("panic_error").Apply(NewAtom(r.Error())))}
 	default:
-		return PanicError{fmt.Errorf("%v", r)}
+		return Exception{term: atomError.Apply(NewAtom("panic_error").Apply(NewAtom(fmt.Sprintf("%v", r))))}
 	}
 }
 
