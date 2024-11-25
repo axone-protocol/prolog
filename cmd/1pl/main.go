@@ -16,8 +16,8 @@ import (
 
 	"golang.org/x/crypto/ssh/terminal"
 
-	"github.com/axone-protocol/prolog"
-	"github.com/axone-protocol/prolog/engine"
+	"github.com/axone-protocol/prolog/v2"
+	"github.com/axone-protocol/prolog/v2/engine"
 )
 
 const (

@@ -4,8 +4,8 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/axone-protocol/prolog"
-	"github.com/axone-protocol/prolog/engine"
+	"github.com/axone-protocol/prolog/v2"
+	"github.com/axone-protocol/prolog/v2/engine"
 )
 
 func main() {

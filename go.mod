@@ -1,4 +1,4 @@
-module github.com/axone-protocol/prolog
+module github.com/axone-protocol/prolog/v2
 
 go 1.23
 

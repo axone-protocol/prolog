@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/axone-protocol/prolog"
+	"github.com/axone-protocol/prolog/v2"
 )
 
 // http://www.cse.unsw.edu.au/~billw/dictionaries/prolog/cut.html
