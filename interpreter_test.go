@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/axone-protocol/prolog/engine"
+	"github.com/axone-protocol/prolog/v2/engine"
 	"github.com/stretchr/testify/assert"
 )
 
