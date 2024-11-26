@@ -10,6 +10,10 @@ var (
 	falsePromise = &Promise{ok: false}
 )
 
+var (
+	AtomPanicError = NewAtom("panic_error")
+)
+
 // PromiseFunc defines the type of a function that returns a promise.
 type PromiseFunc = func(context.Context) *Promise
 
@@ -165,9 +169,9 @@ func panicError(r interface{}) error {
 	case Exception:
 		return r
 	case error:
-		return Exception{term: atomError.Apply(NewAtom("panic_error").Apply(NewAtom(r.Error())))}
+		return Exception{term: atomError.Apply(AtomPanicError.Apply(NewAtom(r.Error())))}
 	default:
-		return Exception{term: atomError.Apply(NewAtom("panic_error").Apply(NewAtom(fmt.Sprintf("%v", r))))}
+		return Exception{term: atomError.Apply(AtomPanicError.Apply(NewAtom(fmt.Sprintf("%v", r))))}
 	}
 }
 
@@ -216,13 +220,4 @@ func (s *promiseStack) recover(err error) error {
 
 	// went through all the ancestor promises and still got the unhandled error.
 	return err
-}
-
-// PanicError is an error thrown once panic occurs during the execution of a promise.
-type PanicError struct {
-	OriginErr error
-}
-
-func (p PanicError) Error() string {
-	return fmt.Sprintf("panic: %v", p.OriginErr)
 }
