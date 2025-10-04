@@ -18,11 +18,25 @@ var (
 	atomColon = NewAtom(":")
 )
 
+// dictFunction is the type for (predefined) functions that can be called on a Dict.
+type dictFunction func(*VM, []Term, Term, Term, Cont, *Env) *Promise
+
 var (
 	// predefinedFuncs are the predefined (reserved) functions that can be called on a Dict.
-	predefinedFuncs = map[Atom]func(*VM, Term, Term, Term, Cont, *Env) *Promise{
-		"get": GetDict3,
-		"put": PutDict3,
+	predefinedFuncs = map[Atom]map[int]dictFunction{
+		"get": {
+			1: func(vm *VM, args []Term, dict Term, result Term, cont Cont, env *Env) *Promise {
+				return GetDict3(vm, args[0], dict, result, cont, env)
+			},
+			2: func(vm *VM, args []Term, dict Term, result Term, cont Cont, env *Env) *Promise {
+				return GetDict4(vm, args[0], args[1], dict, result, cont, env)
+			},
+		},
+		"put": {
+			1: func(vm *VM, args []Term, dict Term, result Term, cont Cont, env *Env) *Promise {
+				return PutDict3(vm, args[0], dict, result, cont, env)
+			},
+		},
 		// TODO: to continue (https://www.swi-prolog.org/pldoc/man?section=ext-dicts-predefined)
 	}
 )
@@ -232,8 +246,15 @@ func Op3(vm *VM, dict, function, result Term, cont Cont, env *Env) *Promise {
 			}
 			return Unify(vm, result, extracted, cont, env)
 		case Compound:
-			if f, ok := predefinedFuncs[function.Functor()]; ok && function.Arity() == 1 {
-				return f(vm, function.Arg(0), dict, result, cont, env)
+			if funcs, ok := predefinedFuncs[function.Functor()]; ok {
+				if f, ok := funcs[function.Arity()]; ok {
+					args := make([]Term, function.Arity())
+					for i := 0; i < function.Arity(); i++ {
+						args[i] = function.Arg(i)
+					}
+					return f(vm, args, dict, result, cont, env)
+				}
+				return Error(existenceError(objectTypeProcedure, function, env))
 			}
 			return Error(existenceError(objectTypeProcedure, function, env))
 		default:
@@ -290,6 +311,32 @@ func GetDict3(vm *VM, keyPath Term, dict Term, result Term, cont Cont, env *Env)
 	default:
 		return Error(typeError(validTypeDict, dict, env))
 	}
+}
+
+// GetDict4 resolves a keyPath within dict like GetDict3, but unifies result with defaultValue
+// when no matches are found. If keyPath includes variables, all possible bindings are produced before
+// falling back to defaultValue.
+func GetDict4(vm *VM, keyPath Term, defaultValue Term, dict Term, result Term, cont Cont, env *Env) *Promise {
+	defaultValue = env.Resolve(defaultValue)
+	if _, ok := defaultValue.(Variable); ok {
+		return Error(InstantiationError(env))
+	}
+
+	found := false
+	return Delay(
+		func(ctx context.Context) *Promise {
+			return GetDict3(vm, keyPath, dict, result, func(env *Env) *Promise {
+				found = true
+				return cont(env)
+			}, env)
+		},
+		func(context.Context) *Promise {
+			if found {
+				return Bool(false)
+			}
+			return Unify(vm, result, defaultValue, cont, env)
+		},
+	)
 }
 
 // PutDict3 evaluates to a new dict where the key-values in dictIn replace or extend the key-values in the original dict.
