@@ -168,8 +168,7 @@ func TestDictAll(t *testing.T) {
 			wantPairs: []orderedmap.Pair[Atom, Term]{
 				{Key: NewAtom("x"), Value: Integer(1)},
 				{Key: NewAtom("y"), Value: Integer(2)},
-				{Key: NewAtom("z"), Value: makeDict(NewAtom("nested"), NewAtom("foo"), NewAtom("bar")),
-				},
+				{Key: NewAtom("z"), Value: makeDict(NewAtom("nested"), NewAtom("foo"), NewAtom("bar"))},
 			},
 		},
 	}
@@ -455,6 +454,18 @@ func TestOp3(t *testing.T) {
 			function:  NewAtom("get").Apply(Integer(1)),
 			wantError: "error(domain_error(dict_key,1),root)",
 		},
+		{
+			name:       "get existing key with default value",
+			dict:       makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+			function:   NewAtom("get").Apply(NewAtom("x"), Integer(99)),
+			wantResult: Integer(1),
+		},
+		{
+			name:       "get non-existing key with default value",
+			dict:       makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+			function:   NewAtom("get").Apply(NewAtom("z"), Integer(99)),
+			wantResult: Integer(99),
+		},
 		// Put
 		{
 			name:       "put new key(value) pair",
@@ -540,6 +551,12 @@ func TestOp3(t *testing.T) {
 			dict:      makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
 			function:  NewAtom("foo").Apply(NewAtom("bar")),
 			wantError: "error(existence_error(procedure,foo(bar)),root)",
+		},
+		{
+			name:      "invalid function arity for predefined function",
+			dict:      makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+			function:  NewAtom("get").Apply(NewAtom("x"), NewAtom("y"), NewAtom("z")),
+			wantError: "error(existence_error(procedure,get(x,y,z)),root)",
 		},
 	}
 
