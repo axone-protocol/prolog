@@ -169,12 +169,22 @@ func (d *dict) Len() int {
 }
 
 func (d *dict) Value(key Atom) (Term, bool) {
-	for k, v := range d.All() {
+	n := (d.Arity() - 1) / 2
+	lo, hi := 0, n-1
+
+	for lo <= hi {
+		mid := (lo + hi) / 2
+		i := 1 + 2*mid
+		k := d.Arg(i).(Atom)
 		if k == key {
-			return v, true
+			return d.Arg(i + 1), true
+		}
+		if k < key {
+			lo = mid + 1
+		} else {
+			hi = mid - 1
 		}
 	}
-
 	return nil, false
 }
 
