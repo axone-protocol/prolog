@@ -19,7 +19,7 @@ var (
 )
 
 var (
-	// predifinedFuncs are the predefined (reserved) functions that can be called on a Dict.
+	// predefinedFuncs are the predefined (reserved) functions that can be called on a Dict.
 	predefinedFuncs = map[Atom]func(*VM, Term, Term, Term, Cont, *Env) *Promise{
 		"get": GetDict3,
 		"put": PutDict3,
@@ -34,11 +34,16 @@ var (
 type Dict interface {
 	Compound
 
+	// Tag returns the tag of the dictionary.
 	Tag() Term
+	// All returns an iterator over all key-value pairs in the dictionary.
 	All() iter.Seq2[Atom, Term]
 
+	// Value returns the value associated with the given key and a boolean indicating if the key exists.
 	Value(key Atom) (Term, bool)
+	// At returns the key and value at the specified index and a boolean indicating if the index is valid.
 	At(i int) (Atom, Term, bool)
+	// Len returns the number of key-value pairs in the dictionary.
 	Len() int
 }
 
@@ -169,12 +174,22 @@ func (d *dict) Len() int {
 }
 
 func (d *dict) Value(key Atom) (Term, bool) {
-	for k, v := range d.All() {
+	n := (d.Arity() - 1) / 2
+	lo, hi := 0, n-1
+
+	for lo <= hi {
+		mid := (lo + hi) / 2
+		i := 1 + 2*mid
+		k := d.Arg(i).(Atom)
 		if k == key {
-			return v, true
+			return d.Arg(i + 1), true
+		}
+		if k < key {
+			lo = mid + 1
+		} else {
+			hi = mid - 1
 		}
 	}
-
 	return nil, false
 }
 
