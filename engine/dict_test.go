@@ -586,6 +586,136 @@ func TestOp3(t *testing.T) {
 	}
 }
 
+func TestDelDict4(t *testing.T) {
+	tests := []struct {
+		name        string
+		key         Term
+		dict        Term
+		value       Term
+		dictOut     Term
+		wantOK      bool
+		wantValue   Term
+		wantDictOut Term
+		wantError   string
+	}{
+		{
+			name:        "remove existing key",
+			key:         NewAtom("x"),
+			dict:        makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+			value:       NewVariable(),
+			dictOut:     NewVariable(),
+			wantOK:      true,
+			wantValue:   Integer(1),
+			wantDictOut: makeDict(NewAtom("point"), NewAtom("y"), Integer(2)),
+		},
+		{
+			name:        "remove existing key with bound value",
+			key:         NewAtom("x"),
+			dict:        makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+			value:       Integer(1),
+			dictOut:     NewVariable(),
+			wantOK:      true,
+			wantDictOut: makeDict(NewAtom("point"), NewAtom("y"), Integer(2)),
+		},
+		{
+			name:        "remove only key (empty dict)",
+			key:         NewAtom("x"),
+			dict:        makeDict(NewAtom("point"), NewAtom("x"), Integer(1)),
+			value:       NewVariable(),
+			dictOut:     NewVariable(),
+			wantOK:      true,
+			wantValue:   Integer(1),
+			wantDictOut: makeDict(NewAtom("point")),
+		},
+		{
+			name:    "fail on mismatched value",
+			key:     NewAtom("x"),
+			dict:    makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+			value:   Integer(2),
+			dictOut: NewVariable(),
+		},
+		{
+			name:    "fail on missing key",
+			key:     NewAtom("z"),
+			dict:    makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
+			value:   NewVariable(),
+			dictOut: NewVariable(),
+		},
+		{
+			name:      "error on variable key",
+			key:       NewVariable(),
+			dict:      makeDict(NewAtom("point"), NewAtom("x"), Integer(1)),
+			value:     NewVariable(),
+			dictOut:   NewVariable(),
+			wantError: "error(instantiation_error,root)",
+		},
+		{
+			name:      "error on variable dict",
+			key:       NewAtom("x"),
+			dict:      NewVariable(),
+			value:     NewVariable(),
+			dictOut:   NewVariable(),
+			wantError: "error(instantiation_error,root)",
+		},
+		{
+			name:      "error on non-dict term",
+			key:       NewAtom("x"),
+			dict:      Integer(42),
+			value:     NewVariable(),
+			dictOut:   NewVariable(),
+			wantError: "error(type_error(dict,42),root)",
+		},
+		{
+			name:      "error on invalid key type",
+			key:       Integer(1),
+			dict:      makeDict(NewAtom("point"), NewAtom("x"), Integer(1)),
+			value:     NewVariable(),
+			dictOut:   NewVariable(),
+			wantError: "error(domain_error(dict_key,1),root)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var vm VM
+			var env *Env
+			var contEnv *Env
+
+			promise := DelDict4(&vm, tt.key, tt.dict, tt.value, tt.dictOut, func(e *Env) *Promise {
+				contEnv = e
+				return Bool(true)
+			}, env)
+
+			ok, err := promise.Force(context.Background())
+
+			if tt.wantError != "" {
+				assert.False(t, ok)
+				assert.EqualError(t, err, tt.wantError)
+				return
+			}
+
+			assert.NoError(t, err)
+
+			if tt.wantOK {
+				assert.True(t, ok)
+				if tt.wantValue != nil {
+					if assert.NotNil(t, contEnv) {
+						assert.Equal(t, tt.wantValue, contEnv.Resolve(tt.value))
+					}
+				}
+				if tt.wantDictOut != nil {
+					if assert.NotNil(t, contEnv) {
+						assert.Equal(t, tt.wantDictOut, contEnv.Resolve(tt.dictOut))
+					}
+				}
+			} else {
+				assert.False(t, ok)
+				assert.Nil(t, contEnv)
+			}
+		})
+	}
+}
+
 func TestWriteDict(t *testing.T) {
 	tests := []struct {
 		name    string
