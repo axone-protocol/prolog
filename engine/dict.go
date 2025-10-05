@@ -368,6 +368,48 @@ func PutDict3(vm *VM, new Term, dictIn Term, dictOut Term, cont Cont, env *Env) 
 	}
 }
 
+// DelDict4 evaluates to a new dict where the key-value associated with key is removed from dictIn.
+// It unifies value with the removed value and dictOut with the resulting dict. The predicate fails
+// when key is not present in dictIn.
+func DelDict4(vm *VM, key Term, dictIn Term, value Term, dictOut Term, cont Cont, env *Env) *Promise {
+	dictIn = env.Resolve(dictIn)
+	switch dt := dictIn.(type) {
+	case Variable:
+		return Error(InstantiationError(env))
+	case Dict:
+		rk := env.Resolve(key)
+		switch k := rk.(type) {
+		case Variable:
+			return Error(InstantiationError(env))
+		case Atom:
+			removed, ok := dt.Value(k)
+			if !ok {
+				return Bool(false)
+			}
+
+			return Unify(vm, value, removed, func(env *Env) *Promise {
+				n := dt.Len()
+				args := make([]Term, 0, 1+2*(n-1))
+				args = append(args, dt.Tag())
+
+				dt.All()(func(kk Atom, vv Term) bool {
+					if kk != k {
+						args = append(args, kk, vv)
+					}
+					return true
+				})
+
+				newDict := newDict(args)
+				return Unify(vm, dictOut, newDict, cont, env)
+			}, env)
+		default:
+			return Error(domainError(validDomainDictKey, rk, env))
+		}
+	default:
+		return Error(typeError(validTypeDict, dt, env))
+	}
+}
+
 // mergeDict merge n into d returning a new Dict.
 func mergeDict(n Dict, d Dict) Dict {
 	totalLen := d.Len() + n.Len()
