@@ -6,7 +6,7 @@ require (
 	github.com/cockroachdb/apd/v3 v3.2.1
 	github.com/stretchr/testify v1.11.1
 	github.com/wk8/go-ordered-map/v2 v2.1.8
-	golang.org/x/crypto v0.44.0
+	golang.org/x/crypto v0.45.0
 )
 
 require (
