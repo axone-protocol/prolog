@@ -4452,12 +4452,14 @@ func TestPutByte(t *testing.T) {
 }
 
 func TestPutChar(t *testing.T) {
+	ResetStreamIDCounter()
+
 	tests := []struct {
 		title         string
 		streamOrAlias func() (Term, func(*testing.T))
 		char          Term
 		ok            bool
-		err           error
+		err           func(Term) error
 	}{
 		// 8.12.3.4 Examples
 		{title: "put_char(t)", streamOrAlias: func() (Term, func(*testing.T)) {
@@ -4478,34 +4480,34 @@ func TestPutChar(t *testing.T) {
 		// 8.12.3.3 Errors
 		{title: "a", streamOrAlias: func() (Term, func(*testing.T)) {
 			return NewVariable(), nil
-		}, char: NewAtom("a"), err: InstantiationError(nil)},
+		}, char: NewAtom("a"), err: func(Term) error { return InstantiationError(nil) }},
 		{title: "b", streamOrAlias: func() (Term, func(*testing.T)) {
 			return NewOutputTextStream(nil), nil
-		}, char: NewVariable(), err: InstantiationError(nil)},
+		}, char: NewVariable(), err: func(Term) error { return InstantiationError(nil) }},
 		{title: "b: atom but not one-char", streamOrAlias: func() (Term, func(*testing.T)) {
 			return NewOutputTextStream(nil), nil
-		}, char: NewAtom("foo"), err: typeError(validTypeCharacter, NewAtom("foo"), nil)},
+		}, char: NewAtom("foo"), err: func(Term) error { return typeError(validTypeCharacter, NewAtom("foo"), nil) }},
 		{title: "b: not even atom", streamOrAlias: func() (Term, func(*testing.T)) {
 			return NewOutputTextStream(nil), nil
-		}, char: Integer(1), err: typeError(validTypeCharacter, Integer(1), nil)},
+		}, char: Integer(1), err: func(Term) error { return typeError(validTypeCharacter, Integer(1), nil) }},
 		{title: "f", streamOrAlias: func() (Term, func(*testing.T)) {
 			return Integer(1), nil
-		}, char: NewAtom("a"), err: domainError(validDomainStreamOrAlias, Integer(1), nil)},
+		}, char: NewAtom("a"), err: func(Term) error { return domainError(validDomainStreamOrAlias, Integer(1), nil) }},
 		{title: "g", streamOrAlias: func() (Term, func(*testing.T)) {
 			return NewAtom("foo"), nil
-		}, char: NewAtom("a"), err: existenceError(objectTypeStream, NewAtom("foo"), nil)},
+		}, char: NewAtom("a"), err: func(Term) error { return existenceError(objectTypeStream, NewAtom("foo"), nil) }},
 		{title: "h", streamOrAlias: func() (Term, func(*testing.T)) {
 			return NewInputTextStream(nil), nil
-		}, char: NewAtom("a"), err: permissionError(operationOutput, permissionTypeStream, NewInputTextStream(nil), nil)},
+		}, char: NewAtom("a"), err: func(s Term) error { return permissionError(operationOutput, permissionTypeStream, s, nil) }},
 		{title: "i", streamOrAlias: func() (Term, func(*testing.T)) {
 			return NewOutputBinaryStream(nil), nil
-		}, char: NewAtom("a"), err: permissionError(operationOutput, permissionTypeBinaryStream, NewOutputBinaryStream(nil), nil)},
+		}, char: NewAtom("a"), err: func(s Term) error { return permissionError(operationOutput, permissionTypeBinaryStream, s, nil) }},
 
 		{title: "error on write", streamOrAlias: func() (Term, func(*testing.T)) {
 			var m mockWriter
 			m.On("Write", mock.Anything).Return(0, errors.New("failed"))
 			return NewOutputTextStream(&m), nil
-		}, char: NewAtom("a"), err: errors.New("failed")},
+		}, char: NewAtom("a"), err: func(Term) error { return errors.New("failed") }},
 	}
 
 	for _, tt := range tests {
@@ -4518,7 +4520,11 @@ func TestPutChar(t *testing.T) {
 			var vm VM
 			ok, err := PutChar(&vm, sOrA, tt.char, Success, nil).Force(context.Background())
 			assert.Equal(t, tt.ok, ok)
-			assert.Equal(t, tt.err, err)
+			if tt.err != nil {
+				assert.Equal(t, tt.err(sOrA), err)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }

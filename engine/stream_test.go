@@ -3,17 +3,21 @@ package engine
 import (
 	"bytes"
 	"errors"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"io"
 	"io/fs"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 func TestNewInputTextStream(t *testing.T) {
+	ResetStreamIDCounter()
+
 	assert.Equal(t, &Stream{
+		id:         1,
 		source:     os.Stdin,
 		mode:       ioModeRead,
 		eofAction:  eofActionReset,
@@ -22,7 +26,10 @@ func TestNewInputTextStream(t *testing.T) {
 }
 
 func TestNewInputBinaryStream(t *testing.T) {
+	ResetStreamIDCounter()
+
 	assert.Equal(t, &Stream{
+		id:         1,
 		source:     os.Stdin,
 		mode:       ioModeRead,
 		eofAction:  eofActionReset,
@@ -31,7 +38,10 @@ func TestNewInputBinaryStream(t *testing.T) {
 }
 
 func TestNewOutputTextStream(t *testing.T) {
+	ResetStreamIDCounter()
+
 	assert.Equal(t, &Stream{
+		id:         1,
 		sink:       os.Stdout,
 		mode:       ioModeAppend,
 		eofAction:  eofActionReset,
@@ -40,7 +50,10 @@ func TestNewOutputTextStream(t *testing.T) {
 }
 
 func TestNewOutputBinaryStream(t *testing.T) {
+	ResetStreamIDCounter()
+
 	assert.Equal(t, &Stream{
+		id:         1,
 		sink:       os.Stdout,
 		mode:       ioModeAppend,
 		eofAction:  eofActionReset,
@@ -49,28 +62,47 @@ func TestNewOutputBinaryStream(t *testing.T) {
 }
 
 func TestStream_WriteTerm(t *testing.T) {
+	ResetStreamIDCounter()
+
 	tests := []struct {
-		title  string
-		s      *Stream
-		opts   WriteOptions
-		output string
+		title   string
+		s       *Stream
+		prepare func(*Stream)
+		output  string
 	}{
-		{title: "stream", s: &Stream{}, output: `<stream>\(0x[[:xdigit:]]+\)`},
+		{title: "no alias", s: NewInputTextStream(nil), output: `<stream>\(0x1\)`},
+		{title: "registered", s: NewInputTextStream(nil), prepare: func(s *Stream) {
+			var vm VM
+			vm.streams.add(s)
+		}, output: `<stream>\(0x2\)`},
+		{title: "alias", s: &Stream{id: nextStreamID(), alias: NewAtom("foo")}, prepare: func(s *Stream) {
+			var vm VM
+			s.vm = &vm
+			vm.streams.add(s)
+		}, output: `<stream>\(foo\)`},
 	}
 
 	var buf bytes.Buffer
-	for _, tt := range tests {
-		t.Run(tt.title, func(t *testing.T) {
+	for _, testCase := range tests {
+		tc := testCase
+		t.Run(tc.title, func(t *testing.T) {
 			buf.Reset()
-			assert.NoError(t, tt.s.WriteTerm(&buf, &tt.opts, nil))
-			assert.Regexp(t, tt.output, buf.String())
+			if tc.prepare != nil {
+				tc.prepare(tc.s)
+			}
+			assert.NoError(t, tc.s.WriteTerm(&buf, nil, nil))
+			assert.Regexp(t, tc.output, buf.String())
 		})
 	}
 }
 
 func TestStream_Compare(t *testing.T) {
 	x := NewVariable()
-	var ss [3]Stream
+	ss := [3]Stream{
+		{id: 1},
+		{id: 2},
+		{id: 3},
+	}
 
 	tests := []struct {
 		title string
