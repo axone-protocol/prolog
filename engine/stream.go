@@ -7,7 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"unsafe"
+	"sync/atomic"
 )
 
 var (
@@ -17,9 +17,23 @@ var (
 	errReposition      = errors.New("reposition")
 )
 
+// streamIDCounter is a counter for generating unique stream IDs.
+var streamIDCounter uint64
+
+// nextStreamID returns a new unique stream ID.
+func nextStreamID() uint64 {
+	return atomic.AddUint64(&streamIDCounter, 1)
+}
+
+// ResetStreamIDCounter resets the stream ID counter to 0.
+func ResetStreamIDCounter() {
+	atomic.StoreUint64(&streamIDCounter, 0)
+}
+
 // Stream is a prolog stream.
 type Stream struct {
 	vm *VM
+	id uint64
 
 	source       io.Reader
 	sink         io.Writer
@@ -38,6 +52,7 @@ type Stream struct {
 // NewInputTextStream creates a new input text stream backed by the given io.Reader.
 func NewInputTextStream(r io.Reader) *Stream {
 	return &Stream{
+		id:         nextStreamID(),
 		source:     r,
 		mode:       ioModeRead,
 		eofAction:  eofActionReset,
@@ -49,6 +64,7 @@ func NewInputTextStream(r io.Reader) *Stream {
 // NewInputBinaryStream creates a new input binary stream backed by the given io.Reader.
 func NewInputBinaryStream(r io.Reader) *Stream {
 	return &Stream{
+		id:         nextStreamID(),
 		source:     r,
 		mode:       ioModeRead,
 		eofAction:  eofActionReset,
@@ -60,6 +76,7 @@ func NewInputBinaryStream(r io.Reader) *Stream {
 // NewOutputTextStream creates a new output text stream backed by the given io.Writer.
 func NewOutputTextStream(w io.Writer) *Stream {
 	return &Stream{
+		id:         nextStreamID(),
 		sink:       w,
 		mode:       ioModeAppend,
 		eofAction:  eofActionReset,
@@ -71,6 +88,7 @@ func NewOutputTextStream(w io.Writer) *Stream {
 // NewOutputBinaryStream creates a new output binary stream backed by the given io.Writer.
 func NewOutputBinaryStream(w io.Writer) *Stream {
 	return &Stream{
+		id:         nextStreamID(),
 		sink:       w,
 		mode:       ioModeAppend,
 		eofAction:  eofActionReset,
@@ -81,17 +99,21 @@ func NewOutputBinaryStream(w io.Writer) *Stream {
 
 // WriteTerm outputs the Stream to an io.Writer.
 func (s *Stream) WriteTerm(w io.Writer, _ *WriteOptions, _ *Env) error {
-	_, err := fmt.Fprintf(w, "<stream>(%p)", s)
+	if s.alias != "" {
+		_, err := fmt.Fprintf(w, "<stream>(%s)", s.alias)
+		return err
+	}
+	_, err := fmt.Fprintf(w, "<stream>(0x%x)", s.id)
 	return err
 }
 
 // Compare compares the Stream with a Term.
 func (s *Stream) Compare(t Term, env *Env) int {
 	return CompareAtomic[*Stream](s, t, func(s *Stream, t *Stream) int {
-		switch x, y := uintptr(unsafe.Pointer(s)), uintptr(unsafe.Pointer(t)); {
-		case x > y:
+		switch {
+		case s.id > t.id:
 			return 1
-		case x < y:
+		case s.id < t.id:
 			return -1
 		default:
 			return 0
