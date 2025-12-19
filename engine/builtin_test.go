@@ -4452,7 +4452,7 @@ func TestPutByte(t *testing.T) {
 }
 
 func TestPutChar(t *testing.T) {
-	ResetStreamIDCounter()
+	resetStreamIDCounter()
 
 	tests := []struct {
 		title         string
