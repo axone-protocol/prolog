@@ -393,6 +393,7 @@ func (vm *VM) ClearHook() {
 
 // ResetEnv is used to reset all global variable
 func (vm *VM) ResetEnv() {
+	resetStreamIDCounter()
 	varCounter.count = 0
 	varContext = NewVariable()
 	rootContext = NewAtom("root")
