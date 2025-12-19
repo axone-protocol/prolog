@@ -14,7 +14,7 @@ import (
 )
 
 func TestNewInputTextStream(t *testing.T) {
-	ResetStreamIDCounter()
+	resetStreamIDCounter()
 
 	assert.Equal(t, &Stream{
 		id:         1,
@@ -26,7 +26,7 @@ func TestNewInputTextStream(t *testing.T) {
 }
 
 func TestNewInputBinaryStream(t *testing.T) {
-	ResetStreamIDCounter()
+	resetStreamIDCounter()
 
 	assert.Equal(t, &Stream{
 		id:         1,
@@ -38,7 +38,7 @@ func TestNewInputBinaryStream(t *testing.T) {
 }
 
 func TestNewOutputTextStream(t *testing.T) {
-	ResetStreamIDCounter()
+	resetStreamIDCounter()
 
 	assert.Equal(t, &Stream{
 		id:         1,
@@ -50,7 +50,7 @@ func TestNewOutputTextStream(t *testing.T) {
 }
 
 func TestNewOutputBinaryStream(t *testing.T) {
-	ResetStreamIDCounter()
+	resetStreamIDCounter()
 
 	assert.Equal(t, &Stream{
 		id:         1,
@@ -62,7 +62,7 @@ func TestNewOutputBinaryStream(t *testing.T) {
 }
 
 func TestStream_WriteTerm(t *testing.T) {
-	ResetStreamIDCounter()
+	resetStreamIDCounter()
 
 	tests := []struct {
 		title   string

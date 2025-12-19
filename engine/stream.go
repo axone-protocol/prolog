@@ -7,7 +7,6 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"sync/atomic"
 )
 
 var (
@@ -22,12 +21,13 @@ var streamIDCounter uint64
 
 // nextStreamID returns a new unique stream ID.
 func nextStreamID() uint64 {
-	return atomic.AddUint64(&streamIDCounter, 1)
+	streamIDCounter++
+	return streamIDCounter
 }
 
-// ResetStreamIDCounter resets the stream ID counter to 0.
-func ResetStreamIDCounter() {
-	atomic.StoreUint64(&streamIDCounter, 0)
+// resetStreamIDCounter resets the stream ID counter to 0.
+func resetStreamIDCounter() {
+	streamIDCounter = 0
 }
 
 // Stream is a prolog stream.
