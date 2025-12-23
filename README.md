@@ -42,6 +42,7 @@ The following customizations have been made to adapt the original `ichiban/prolo
 - Removed support for trigonometric functions (`sin`, `cos`, `tan`, `asin`, `acos`, `atan`).
 - Introduced VM hooks for enhanced Prolog execution control.
 - Added support for the `Dict` term.
+- Added support for `read_write` mode for bidirectional file I/O, enabling half-duplex transactional devices in the host's VFS.
 - `halt/0` and `halt/1` are forbidden and will throw an error.
 
 ## License

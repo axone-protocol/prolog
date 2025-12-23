@@ -3364,6 +3364,7 @@ func TestSetInput(t *testing.T) {
 	foo, bar := NewAtom("foo"), NewAtom("bar")
 	input := Stream{mode: ioModeRead, alias: foo}
 	output := Stream{mode: ioModeAppend}
+	readWrite := Stream{mode: ioModeReadWrite, source: os.Stdin, sink: os.Stdout}
 	stream := NewVariable()
 
 	var vm VM
@@ -3378,6 +3379,7 @@ func TestSetInput(t *testing.T) {
 	}{
 		{title: "stream", streamOrAlias: &input, ok: true, input: &input},
 		{title: "alias", streamOrAlias: foo, ok: true, input: &input},
+		{title: "read-write stream", streamOrAlias: &readWrite, ok: true, input: &readWrite},
 
 		// 8.11.3.3 Errors
 		{title: "a", streamOrAlias: stream, err: InstantiationError(nil)},
@@ -3400,6 +3402,7 @@ func TestSetOutput(t *testing.T) {
 	foo, bar := NewAtom("foo"), NewAtom("bar")
 	input := Stream{mode: ioModeRead}
 	output := Stream{mode: ioModeAppend, alias: foo}
+	readWrite := Stream{mode: ioModeReadWrite, source: os.Stdin, sink: os.Stdout}
 	stream := NewVariable()
 
 	var vm VM
@@ -3414,6 +3417,7 @@ func TestSetOutput(t *testing.T) {
 	}{
 		{title: "stream", streamOrAlias: &output, ok: true, output: &output},
 		{title: "alias", streamOrAlias: foo, ok: true, output: &output},
+		{title: "read-write stream", streamOrAlias: &readWrite, ok: true, output: &readWrite},
 
 		// 8.11.4.3 Errors
 		{title: "a", streamOrAlias: stream, err: InstantiationError(nil)},
@@ -3682,6 +3686,102 @@ func TestOpen(t *testing.T) {
 		}, nil).Force(context.Background())
 		assert.NoError(t, err)
 		assert.True(t, ok)
+	})
+
+	t.Run("read_write", func(t *testing.T) {
+		f, err := os.CreateTemp("", "open_test_read_write")
+		assert.NoError(t, err)
+		defer func() {
+			assert.NoError(t, os.Remove(f.Name()))
+		}()
+
+		_, err = fmt.Fprintf(f, "initial content\n")
+		assert.NoError(t, err)
+		assert.NoError(t, f.Close())
+
+		t.Run("can read and write", func(t *testing.T) {
+			v := NewVariable()
+			ok, err := Open(&vm, NewAtom(f.Name()), atomReadWrite, v, List(), func(env *Env) *Promise {
+				ref, ok := env.lookup(v)
+				assert.True(t, ok)
+				s, ok := ref.(*Stream)
+				assert.True(t, ok)
+
+				// Should be able to read
+				assert.NoError(t, s.initRead())
+				b := make([]byte, 7)
+				n, err := s.source.(io.Reader).Read(b)
+				assert.NoError(t, err)
+				assert.Equal(t, 7, n)
+				assert.Equal(t, "initial", string(b))
+
+				// Should be able to write
+				_, err = fmt.Fprintf(s.sink, " + new")
+				assert.NoError(t, err)
+
+				return Bool(true)
+			}, nil).Force(context.Background())
+			assert.NoError(t, err)
+			assert.True(t, ok)
+		})
+
+		t.Run("stream has both input and output properties", func(t *testing.T) {
+			v := NewVariable()
+			ok, err := Open(&vm, NewAtom(f.Name()), atomReadWrite, v, List(), func(env *Env) *Promise {
+				ref, ok := env.lookup(v)
+				assert.True(t, ok)
+				s, ok := ref.(*Stream)
+				assert.True(t, ok)
+
+				ps := s.properties()
+				hasInput := false
+				hasOutput := false
+				for _, p := range ps {
+					if atom, ok := p.(Atom); ok {
+						if atom == atomInput {
+							hasInput = true
+						}
+						if atom == atomOutput {
+							hasOutput = true
+						}
+					}
+				}
+				assert.True(t, hasInput)
+				assert.True(t, hasOutput)
+
+				return Bool(true)
+			}, nil).Force(context.Background())
+			assert.NoError(t, err)
+			assert.True(t, ok)
+		})
+
+		t.Run("can be used with both SetInput and SetOutput", func(t *testing.T) {
+			v := NewVariable()
+			ok, err := Open(&vm, NewAtom(f.Name()), atomReadWrite, v, List(), func(env *Env) *Promise {
+				ref, ok := env.lookup(v)
+				assert.True(t, ok)
+				s, ok := ref.(*Stream)
+				assert.True(t, ok)
+
+				// Should work as input stream
+				ok2, err2 := SetInput(&vm, s, func(_ *Env) *Promise {
+					return Bool(true)
+				}, nil).Force(context.Background())
+				assert.NoError(t, err2)
+				assert.True(t, ok2)
+
+				// Should work as output stream
+				ok3, err3 := SetOutput(&vm, s, func(_ *Env) *Promise {
+					return Bool(true)
+				}, nil).Force(context.Background())
+				assert.NoError(t, err3)
+				assert.True(t, ok3)
+
+				return Bool(true)
+			}, nil).Force(context.Background())
+			assert.NoError(t, err)
+			assert.True(t, ok)
+		})
 	})
 
 	t.Run("append", func(t *testing.T) {
@@ -6398,6 +6498,34 @@ func TestSetStreamPosition(t *testing.T) {
 		assert.False(t, ok)
 	})
 
+	t.Run("position is not an integer", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			position Term
+		}{
+			{name: "atom", position: NewAtom("foo")},
+			{name: "float", position: newFloatFromFloat64Must(3.14)},
+			{name: "compound", position: NewAtom("foo").Apply(Integer(1), Integer(2))},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				f, err := os.Open("testdata/empty.txt")
+				assert.NoError(t, err)
+				defer func() {
+					assert.NoError(t, f.Close())
+				}()
+
+				s := &Stream{source: f, mode: ioModeRead, reposition: true}
+
+				var vm VM
+				ok, err := SetStreamPosition(&vm, s, tt.position, Success, nil).Force(context.Background())
+				assert.Equal(t, typeError(validTypeInteger, tt.position, nil), err)
+				assert.False(t, ok)
+			})
+		}
+	})
+
 	t.Run("streamOrAlias is neither a variable nor a stream term or alias", func(t *testing.T) {
 		var vm VM
 		ok, err := SetStreamPosition(&vm, Integer(2), Integer(0), Success, nil).Force(context.Background())
@@ -6424,6 +6552,21 @@ func TestSetStreamPosition(t *testing.T) {
 		var vm VM
 		ok, err := SetStreamPosition(&vm, s, Integer(0), Success, env).Force(context.Background())
 		assert.Equal(t, permissionError(operationReposition, permissionTypeStream, s, env), err)
+		assert.False(t, ok)
+	})
+
+	t.Run("reposition false with direct stream", func(t *testing.T) {
+		f, err := os.Open("testdata/empty.txt")
+		assert.NoError(t, err)
+		defer func() {
+			assert.NoError(t, f.Close())
+		}()
+
+		s := &Stream{source: f, mode: ioModeRead, reposition: false}
+
+		var vm VM
+		ok, err := SetStreamPosition(&vm, s, Integer(0), Success, nil).Force(context.Background())
+		assert.Equal(t, permissionError(operationReposition, permissionTypeStream, s, nil), err)
 		assert.False(t, ok)
 	})
 }

@@ -335,6 +335,13 @@ func TestStream_ReadByte(t *testing.T) {
 			s:     &Stream{source: bytes.NewReader([]byte{1, 2, 3}), mode: ioModeAppend},
 			err:   errWrongIOMode,
 		},
+		{
+			title: "read-write binary",
+			s:     &Stream{source: bytes.NewReader([]byte{1, 2, 3}), mode: ioModeReadWrite, streamType: streamTypeBinary},
+			b:     1,
+			pos:   1,
+			eos:   endOfStreamNot,
+		},
 	}
 
 	for _, tt := range tests {
@@ -446,6 +453,14 @@ func TestStream_ReadRune(t *testing.T) {
 			s:     &Stream{source: bytes.NewReader([]byte("abc")), mode: ioModeAppend},
 			err:   errWrongIOMode,
 		},
+		{
+			title: "read-write text",
+			s:     &Stream{source: bytes.NewReader([]byte("abc")), mode: ioModeReadWrite, streamType: streamTypeText},
+			r:     'a',
+			size:  1,
+			pos:   1,
+			eos:   endOfStreamNot,
+		},
 	}
 
 	for _, tt := range tests {
@@ -547,7 +562,7 @@ func TestStream_Seek(t *testing.T) {
 
 func TestStream_WriteByte(t *testing.T) {
 	var m mockWriter
-	m.On("Write", []byte("a")).Return(1, nil).Once()
+	m.On("Write", []byte("a")).Return(1, nil).Twice()
 	defer m.AssertExpectations(t)
 
 	tests := []struct {
@@ -560,6 +575,12 @@ func TestStream_WriteByte(t *testing.T) {
 		{
 			title: "writer",
 			s:     &Stream{sink: &m, mode: ioModeAppend, streamType: streamTypeBinary},
+			c:     byte('a'),
+			pos:   1,
+		},
+		{
+			title: "read-write",
+			s:     &Stream{sink: &m, mode: ioModeReadWrite, streamType: streamTypeBinary},
 			c:     byte('a'),
 			pos:   1,
 		},
@@ -591,7 +612,7 @@ func TestStream_WriteByte(t *testing.T) {
 
 func TestStream_WriteRune(t *testing.T) {
 	var m mockWriter
-	m.On("Write", []byte("a")).Return(1, nil).Once()
+	m.On("Write", []byte("a")).Return(1, nil).Twice()
 	defer m.AssertExpectations(t)
 
 	tests := []struct {
@@ -605,6 +626,13 @@ func TestStream_WriteRune(t *testing.T) {
 		{
 			title: "writer",
 			s:     &Stream{sink: &m, mode: ioModeAppend, streamType: streamTypeText},
+			r:     'a',
+			n:     1,
+			pos:   1,
+		},
+		{
+			title: "read-write",
+			s:     &Stream{sink: &m, mode: ioModeReadWrite, streamType: streamTypeText},
 			r:     'a',
 			n:     1,
 			pos:   1,
@@ -696,6 +724,87 @@ func newNonAbruptReader(b []byte) nonAbruptReader {
 	return nonAbruptReader{
 		Reader: bytes.NewReader(b),
 	}
+}
+
+// TestStream_ReadWrite tests the read-write mode functionality
+func TestStream_ReadWrite(t *testing.T) {
+	t.Run("read and write operations allowed", func(t *testing.T) {
+		f, err := os.CreateTemp("", "read_write_test")
+		assert.NoError(t, err)
+		defer func() {
+			assert.NoError(t, f.Close())
+			assert.NoError(t, os.Remove(f.Name()))
+		}()
+
+		// Write initial content
+		_, err = f.WriteString("test")
+		assert.NoError(t, err)
+		assert.NoError(t, f.Sync())
+		_, err = f.Seek(0, 0)
+		assert.NoError(t, err)
+
+		// Create read-write stream
+		s := &Stream{
+			source:     f,
+			sink:       f,
+			mode:       ioModeReadWrite,
+			streamType: streamTypeText,
+			reposition: true,
+		}
+
+		// Should be able to initialize reading (no error)
+		assert.NoError(t, s.initRead())
+
+		// Should be able to get textWriter (no error)
+		tw, err := s.textWriter()
+		assert.NoError(t, err)
+		assert.NotNil(t, tw)
+
+		// Should actually be able to read
+		r, _, err := s.ReadRune()
+		assert.NoError(t, err)
+		assert.Equal(t, 't', r)
+
+		// Should actually be able to write
+		_, err = s.WriteRune('X')
+		assert.NoError(t, err)
+	})
+
+	t.Run("properties of read-write stream", func(t *testing.T) {
+		f, err := os.CreateTemp("", "read_write_properties")
+		assert.NoError(t, err)
+		defer func() {
+			assert.NoError(t, f.Close())
+			assert.NoError(t, os.Remove(f.Name()))
+		}()
+
+		s := &Stream{
+			source:     f,
+			sink:       f,
+			mode:       ioModeReadWrite,
+			streamType: streamTypeText,
+			reposition: true,
+		}
+
+		ps := s.properties()
+
+		// Should have both input and output properties
+		hasInput := false
+		hasOutput := false
+		for _, p := range ps {
+			if atom, ok := p.(Atom); ok {
+				if atom == atomInput {
+					hasInput = true
+				}
+				if atom == atomOutput {
+					hasOutput = true
+				}
+			}
+		}
+
+		assert.True(t, hasInput, "read-write stream should have input property")
+		assert.True(t, hasOutput, "read-write stream should have output property")
+	})
 }
 
 func (r nonAbruptReader) Read(b []byte) (int, error) {
