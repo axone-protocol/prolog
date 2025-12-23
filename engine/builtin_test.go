@@ -6498,6 +6498,34 @@ func TestSetStreamPosition(t *testing.T) {
 		assert.False(t, ok)
 	})
 
+	t.Run("position is not an integer", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			position Term
+		}{
+			{name: "atom", position: NewAtom("foo")},
+			{name: "float", position: newFloatFromFloat64Must(3.14)},
+			{name: "compound", position: NewAtom("foo").Apply(Integer(1), Integer(2))},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				f, err := os.Open("testdata/empty.txt")
+				assert.NoError(t, err)
+				defer func() {
+					assert.NoError(t, f.Close())
+				}()
+
+				s := &Stream{source: f, mode: ioModeRead, reposition: true}
+
+				var vm VM
+				ok, err := SetStreamPosition(&vm, s, tt.position, Success, nil).Force(context.Background())
+				assert.Equal(t, typeError(validTypeInteger, tt.position, nil), err)
+				assert.False(t, ok)
+			})
+		}
+	})
+
 	t.Run("streamOrAlias is neither a variable nor a stream term or alias", func(t *testing.T) {
 		var vm VM
 		ok, err := SetStreamPosition(&vm, Integer(2), Integer(0), Success, nil).Force(context.Background())
@@ -6524,6 +6552,21 @@ func TestSetStreamPosition(t *testing.T) {
 		var vm VM
 		ok, err := SetStreamPosition(&vm, s, Integer(0), Success, env).Force(context.Background())
 		assert.Equal(t, permissionError(operationReposition, permissionTypeStream, s, env), err)
+		assert.False(t, ok)
+	})
+
+	t.Run("reposition false with direct stream", func(t *testing.T) {
+		f, err := os.Open("testdata/empty.txt")
+		assert.NoError(t, err)
+		defer func() {
+			assert.NoError(t, f.Close())
+		}()
+
+		s := &Stream{source: f, mode: ioModeRead, reposition: false}
+
+		var vm VM
+		ok, err := SetStreamPosition(&vm, s, Integer(0), Success, nil).Force(context.Background())
+		assert.Equal(t, permissionError(operationReposition, permissionTypeStream, s, nil), err)
 		assert.False(t, ok)
 	})
 }
