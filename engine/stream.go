@@ -268,7 +268,7 @@ func (s *Stream) Flush() error {
 		Sync() error
 	}
 
-	if s.mode != ioModeWrite && s.mode != ioModeAppend {
+	if s.mode != ioModeWrite && s.mode != ioModeAppend && s.mode != ioModeReadWrite {
 		return errWrongIOMode
 	}
 
@@ -304,7 +304,7 @@ func (s *Stream) Close() error {
 }
 
 func (s *Stream) initRead() error {
-	if s.mode != ioModeRead {
+	if s.mode != ioModeRead && s.mode != ioModeReadWrite {
 		return errWrongIOMode
 	}
 
@@ -325,7 +325,7 @@ func (s *Stream) initRead() error {
 }
 
 func (s *Stream) reset() {
-	if s.mode != ioModeRead {
+	if s.mode != ioModeRead && s.mode != ioModeReadWrite {
 		return
 	}
 
@@ -379,6 +379,8 @@ func (s *Stream) properties() []Term {
 		ps = append(ps, atomInput)
 	case ioModeWrite, ioModeAppend:
 		ps = append(ps, atomOutput)
+	case ioModeReadWrite:
+		ps = append(ps, atomInput, atomOutput)
 	}
 
 	if s.alias != "" {
@@ -403,7 +405,7 @@ func (s *Stream) properties() []Term {
 }
 
 func (s *Stream) textWriter() (textWriter, error) {
-	if s.mode != ioModeWrite && s.mode != ioModeAppend {
+	if s.mode != ioModeWrite && s.mode != ioModeAppend && s.mode != ioModeReadWrite {
 		return textWriter{}, errWrongIOMode
 	}
 
@@ -415,7 +417,7 @@ func (s *Stream) textWriter() (textWriter, error) {
 }
 
 func (s *Stream) binaryWriter() (binaryWriter, error) {
-	if s.mode != ioModeWrite && s.mode != ioModeAppend {
+	if s.mode != ioModeWrite && s.mode != ioModeAppend && s.mode != ioModeReadWrite {
 		return binaryWriter{}, errWrongIOMode
 	}
 
@@ -463,13 +465,16 @@ const (
 	ioModeWrite = ioMode(os.O_CREATE | os.O_WRONLY)
 	// ioModeAppend means you can append to the stream.
 	ioModeAppend = ioMode(os.O_APPEND) | ioModeWrite
+	// ioModeReadWrite means you can both read from and write to an existing stream.
+	ioModeReadWrite = ioMode(os.O_RDWR)
 )
 
 func (m ioMode) Term() Term {
 	return [...]Term{
-		ioModeRead:   atomRead,
-		ioModeWrite:  atomWrite,
-		ioModeAppend: atomAppend,
+		ioModeRead:      atomRead,
+		ioModeWrite:     atomWrite,
+		ioModeAppend:    atomAppend,
+		ioModeReadWrite: atomReadWrite,
 	}[m]
 }
 

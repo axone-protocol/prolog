@@ -1193,7 +1193,7 @@ func SetInput(vm *VM, streamOrAlias Term, k Cont, env *Env) *Promise {
 		return Error(err)
 	}
 
-	if s.mode != ioModeRead {
+	if s.mode != ioModeRead && s.mode != ioModeReadWrite {
 		return Error(permissionError(operationInput, permissionTypeStream, streamOrAlias, env))
 	}
 
@@ -1208,7 +1208,7 @@ func SetOutput(vm *VM, streamOrAlias Term, k Cont, env *Env) *Promise {
 		return Error(err)
 	}
 
-	if s.mode != ioModeWrite && s.mode != ioModeAppend {
+	if s.mode != ioModeWrite && s.mode != ioModeAppend && s.mode != ioModeReadWrite {
 		return Error(permissionError(operationOutput, permissionTypeStream, streamOrAlias, env))
 	}
 
@@ -1254,9 +1254,10 @@ func Open(vm *VM, sourceSink, mode, stream, options Term, k Cont, env *Env) *Pro
 	case Atom:
 		var ok bool
 		streamMode, ok = map[Atom]ioMode{
-			atomRead:   ioModeRead,
-			atomWrite:  ioModeWrite,
-			atomAppend: ioModeAppend,
+			atomRead:      ioModeRead,
+			atomWrite:     ioModeWrite,
+			atomAppend:    ioModeAppend,
+			atomReadWrite: ioModeReadWrite,
 		}[m]
 		if !ok {
 			return Error(domainError(validDomainIOMode, m, env))
@@ -1274,6 +1275,10 @@ func Open(vm *VM, sourceSink, mode, stream, options Term, k Cont, env *Env) *Pro
 	case err == nil:
 		if s.mode == ioModeRead {
 			s.source = f
+			_ = s.initRead()
+		} else if s.mode == ioModeReadWrite {
+			s.source = f
+			s.sink = f
 			_ = s.initRead()
 		} else {
 			s.sink = f

@@ -149,6 +149,7 @@ var (
 	atomPrologFlag              = NewAtom("prolog_flag")
 	atomQuoted                  = NewAtom("quoted")
 	atomRead                    = NewAtom("read")
+	atomReadWrite               = NewAtom("read_write")
 	atomReadOption              = NewAtom("read_option")
 	atomRem                     = NewAtom("rem")
 	atomReposition              = NewAtom("reposition")
