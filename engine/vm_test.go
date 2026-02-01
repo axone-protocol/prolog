@@ -249,6 +249,13 @@ func TestVM_Arrive(t *testing.T) {
 	})
 }
 
+func TestVM_open_nilFS(t *testing.T) {
+	var vm VM
+	env := NewEnv()
+	_, _, err := vm.open(NewAtom("foo"), env)
+	assert.Equal(t, permissionError(operationOpen, permissionTypeSourceSink, NewAtom("foo"), env), err)
+}
+
 func TestVM_SetUserInput(t *testing.T) {
 	t.Run("file", func(t *testing.T) {
 		var vm VM

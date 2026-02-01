@@ -126,8 +126,9 @@ type VM struct {
 	procedures *orderedmap.OrderedMap[procedureIndicator, procedure]
 	unknown    unknownAction
 
-	// FS is a file system that is referenced when the VM loads Prolog texts e.g. ensure_loaded/1.
-	// It has no effect on open/4 nor open/3 which always access the actual file system.
+	// FS is a file system that is referenced when the VM loads Prolog texts e.g. ensure_loaded/1
+	// and when open/3 or open/4 access a source/sink. Write modes are permitted only if FS
+	// supports OpenFile.
 	FS     fs.FS
 	loaded map[string]struct{}
 

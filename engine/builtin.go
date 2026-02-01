@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"io/fs"
-	"os"
 	"sort"
 	"strings"
 	"unicode"
@@ -1233,7 +1232,12 @@ func stream(vm *VM, streamOrAlias Term, env *Env) (*Stream, error) {
 	}
 }
 
-var openFile = os.OpenFile
+// OpenFileFS is implemented by file systems that support opening files with flags.
+// This enables open/3 and open/4 to use write, append, or read_write modes.
+type OpenFileFS interface {
+	fs.FS
+	OpenFile(name string, flag int, perm fs.FileMode) (fs.File, error)
+}
 
 // Open opens SourceSink in mode and unifies with stream.
 func Open(vm *VM, sourceSink, mode, stream, options Term, k Cont, env *Env) *Promise {
@@ -1270,28 +1274,41 @@ func Open(vm *VM, sourceSink, mode, stream, options Term, k Cont, env *Env) *Pro
 		return Error(InstantiationError(env))
 	}
 
-	s := Stream{vm: vm, mode: streamMode}
-	switch f, err := openFile(name, int(s.mode), 0644); {
-	case err == nil:
-		if s.mode == ioModeRead {
-			s.source = f
-			_ = s.initRead()
-		} else if s.mode == ioModeReadWrite {
-			s.source = f
-			s.sink = f
-			_ = s.initRead()
-		} else {
-			s.sink = f
-		}
-		if fi, err := f.Stat(); err == nil {
-			s.reposition = fi.Mode()&fs.ModeType == 0
-		}
-	case os.IsNotExist(err):
-		return Error(existenceError(objectTypeSourceSink, sourceSink, env))
-	case os.IsPermission(err):
+	if vm.FS == nil {
 		return Error(permissionError(operationOpen, permissionTypeSourceSink, sourceSink, env))
-	default:
+	}
+
+	s := Stream{vm: vm, mode: streamMode}
+	s.name = name
+	f, err := openSourceSink(vm.FS, name, s.mode, sourceSink, env)
+	if err != nil {
 		return Error(err)
+	}
+
+	switch s.mode {
+	case ioModeRead:
+		s.source = f
+		_ = s.initRead()
+	case ioModeReadWrite:
+		w, ok := f.(io.Writer)
+		if !ok {
+			_ = closeFile(f)
+			return Error(permissionError(operationOpen, permissionTypeSourceSink, sourceSink, env))
+		}
+		s.source = f
+		s.sink = w
+		_ = s.initRead()
+	default:
+		w, ok := f.(io.Writer)
+		if !ok {
+			_ = closeFile(f)
+			return Error(permissionError(operationOpen, permissionTypeSourceSink, sourceSink, env))
+		}
+		s.sink = w
+	}
+
+	if fi, err := f.Stat(); err == nil {
+		s.reposition = fi.Mode()&fs.ModeType == 0
 	}
 
 	iter := ListIterator{List: options, Env: env}
@@ -1305,6 +1322,41 @@ func Open(vm *VM, sourceSink, mode, stream, options Term, k Cont, env *Env) *Pro
 	}
 
 	return Unify(vm, stream, &s, k, env)
+}
+
+func openSourceSink(fsys fs.FS, name string, mode ioMode, sourceSink Term, env *Env) (fs.File, error) {
+	var (
+		f   fs.File
+		err error
+	)
+	switch mode {
+	case ioModeRead:
+		f, err = fsys.Open(name)
+	default:
+		ofs, ok := fsys.(OpenFileFS)
+		if !ok {
+			return nil, permissionError(operationOpen, permissionTypeSourceSink, sourceSink, env)
+		}
+		f, err = ofs.OpenFile(name, int(mode), 0644)
+	}
+
+	switch {
+	case err == nil:
+		return f, nil
+	case errors.Is(err, fs.ErrNotExist):
+		return nil, existenceError(objectTypeSourceSink, sourceSink, env)
+	case errors.Is(err, fs.ErrPermission):
+		return nil, permissionError(operationOpen, permissionTypeSourceSink, sourceSink, env)
+	default:
+		return nil, err
+	}
+}
+
+func closeFile(f fs.File) error {
+	if f == nil {
+		return nil
+	}
+	return f.Close()
 }
 
 func handleStreamOption(vm *VM, s *Stream, option Term, env *Env) error {

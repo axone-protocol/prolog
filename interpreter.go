@@ -258,3 +258,7 @@ type defaultFS struct{}
 func (d defaultFS) Open(name string) (fs.File, error) {
 	return os.Open(name)
 }
+
+func (d defaultFS) OpenFile(name string, flag int, perm fs.FileMode) (fs.File, error) {
+	return os.OpenFile(name, flag, perm)
+}
