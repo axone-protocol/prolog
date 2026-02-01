@@ -13,6 +13,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"testing/fstest"
+	"time"
 	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
@@ -3834,6 +3836,54 @@ func TestOpen(t *testing.T) {
 		assert.True(t, ok)
 	})
 
+	t.Run("nil FS", func(t *testing.T) {
+		var vm VM
+		ok, err := Open(&vm, NewAtom("foo"), atomRead, NewVariable(), List(), Success, nil).Force(context.Background())
+		assert.Equal(t, permissionError(operationOpen, permissionTypeSourceSink, NewAtom("foo"), nil), err)
+		assert.False(t, ok)
+	})
+
+	t.Run("write requires OpenFileFS", func(t *testing.T) {
+		vm := VM{FS: fstest.MapFS{"dummy": {Data: []byte("x")}}}
+		ok, err := Open(&vm, NewAtom("dummy"), atomWrite, NewVariable(), List(), Success, nil).Force(context.Background())
+		assert.Equal(t, permissionError(operationOpen, permissionTypeSourceSink, NewAtom("dummy"), nil), err)
+		assert.False(t, ok)
+	})
+
+	t.Run("write requires io.Writer", func(t *testing.T) {
+		fsys := &recordingOpenFileFS{}
+		vm := VM{FS: fsys}
+
+		dummy := NewAtom("dummy")
+		wantErr := permissionError(operationOpen, permissionTypeSourceSink, dummy, nil)
+
+		ok, err := Open(&vm, dummy, atomWrite, NewVariable(), List(), Success, nil).
+			Force(context.Background())
+
+		assert.Equal(t, wantErr, err)
+		assert.False(t, ok)
+		if assert.NotNil(t, fsys.last) {
+			assert.True(t, fsys.last.closed)
+		}
+	})
+
+	t.Run("read_write requires io.Writer", func(t *testing.T) {
+		fsys := &recordingOpenFileFS{}
+		vm := VM{FS: fsys}
+
+		dummy := NewAtom("dummy")
+		wantErr := permissionError(operationOpen, permissionTypeSourceSink, dummy, nil)
+
+		ok, err := Open(&vm, dummy, atomReadWrite, NewVariable(), List(), Success, nil).
+			Force(context.Background())
+
+		assert.Equal(t, wantErr, err)
+		assert.False(t, ok)
+		if assert.NotNil(t, fsys.last) {
+			assert.True(t, fsys.last.closed)
+		}
+	})
+
 	t.Run("sourceSink is a variable", func(t *testing.T) {
 		vm := newVM()
 		ok, err := Open(&vm, NewVariable(), atomRead, NewVariable(), List(), Success, nil).Force(context.Background())
@@ -3985,9 +4035,22 @@ func TestOpen(t *testing.T) {
 	})
 
 	t.Run("system error", func(t *testing.T) {
-		vm := VM{FS: errFS{err: errors.New("failed")}}
+		wantErr := errors.New("failed")
+		vm := VM{FS: errFS{err: wantErr}}
 		_, err := Open(&vm, NewAtom("foo"), atomRead, NewVariable(), List(), Success, nil).Force(context.Background())
-		assert.Equal(t, errors.New("failed"), err)
+		assert.ErrorIs(t, err, wantErr)
+	})
+}
+
+func TestCloseFile(t *testing.T) {
+	t.Run("nil", func(t *testing.T) {
+		assert.NoError(t, closeFile(nil))
+	})
+
+	t.Run("closes", func(t *testing.T) {
+		f := &stubFile{}
+		assert.NoError(t, closeFile(f))
+		assert.True(t, f.closed)
 	})
 }
 
@@ -7907,6 +7970,42 @@ func (e errFS) Open(name string) (fs.File, error) {
 
 func (e errFS) OpenFile(name string, flag int, perm fs.FileMode) (fs.File, error) {
 	return nil, e.err
+}
+
+type recordingOpenFileFS struct {
+	last *stubFile
+}
+
+func (r *recordingOpenFileFS) Open(name string) (fs.File, error) {
+	f := &stubFile{}
+	r.last = f
+	return f, nil
+}
+
+func (r *recordingOpenFileFS) OpenFile(name string, flag int, perm fs.FileMode) (fs.File, error) {
+	f := &stubFile{}
+	r.last = f
+	return f, nil
+}
+
+type stubFile struct {
+	closed bool
+}
+
+type stubFileInfo struct{}
+
+func (stubFileInfo) Name() string       { return "stub" }
+func (stubFileInfo) Size() int64        { return 0 }
+func (stubFileInfo) Mode() fs.FileMode  { return 0 }
+func (stubFileInfo) ModTime() time.Time { return time.Time{} }
+func (stubFileInfo) IsDir() bool        { return false }
+func (stubFileInfo) Sys() any           { return nil }
+
+func (f *stubFile) Stat() (fs.FileInfo, error) { return stubFileInfo{}, nil }
+func (f *stubFile) Read(p []byte) (int, error) { return 0, io.EOF }
+func (f *stubFile) Close() error {
+	f.closed = true
+	return nil
 }
 
 func setMemFree(n int64) func() {
