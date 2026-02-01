@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"math"
 	"os"
 	"path/filepath"
@@ -3437,7 +3438,10 @@ func TestSetOutput(t *testing.T) {
 }
 
 func TestOpen(t *testing.T) {
-	var vm VM
+	newVM := func() VM {
+		return VM{FS: osFS{}}
+	}
+	vm := newVM()
 
 	t.Run("read", func(t *testing.T) {
 		f, err := os.CreateTemp("", "open_test_read")
@@ -3831,14 +3835,14 @@ func TestOpen(t *testing.T) {
 	})
 
 	t.Run("sourceSink is a variable", func(t *testing.T) {
-		var vm VM
+		vm := newVM()
 		ok, err := Open(&vm, NewVariable(), atomRead, NewVariable(), List(), Success, nil).Force(context.Background())
 		assert.Equal(t, InstantiationError(nil), err)
 		assert.False(t, ok)
 	})
 
 	t.Run("mode is a variable", func(t *testing.T) {
-		var vm VM
+		vm := newVM()
 		ok, err := Open(&vm, NewAtom("/dev/null"), NewVariable(), NewVariable(), List(), Success, nil).Force(context.Background())
 		assert.Equal(t, InstantiationError(nil), err)
 		assert.False(t, ok)
@@ -3846,7 +3850,7 @@ func TestOpen(t *testing.T) {
 
 	t.Run("options is a partial list or a list with an element E which is a variable", func(t *testing.T) {
 		t.Run("partial list", func(t *testing.T) {
-			var vm VM
+			vm := newVM()
 			ok, err := Open(&vm, NewAtom("/dev/null"), atomRead, NewVariable(), PartialList(NewVariable(),
 				atomType.Apply(atomText),
 				atomAlias.Apply(NewAtom("foo")),
@@ -3856,7 +3860,7 @@ func TestOpen(t *testing.T) {
 		})
 
 		t.Run("variable element", func(t *testing.T) {
-			var vm VM
+			vm := newVM()
 			ok, err := Open(&vm, NewAtom("/dev/null"), atomRead, NewVariable(), List(
 				NewVariable(),
 				&compound{functor: atomType, args: []Term{atomText}},
@@ -3868,42 +3872,42 @@ func TestOpen(t *testing.T) {
 	})
 
 	t.Run("mode is neither a variable nor an atom", func(t *testing.T) {
-		var vm VM
+		vm := newVM()
 		ok, err := Open(&vm, NewAtom("/dev/null"), Integer(0), NewVariable(), List(), Success, nil).Force(context.Background())
 		assert.Equal(t, typeError(validTypeAtom, Integer(0), nil), err)
 		assert.False(t, ok)
 	})
 
 	t.Run("options is neither a partial list nor a list", func(t *testing.T) {
-		var vm VM
+		vm := newVM()
 		ok, err := Open(&vm, NewAtom("/dev/null"), atomRead, NewVariable(), NewAtom("list"), Success, nil).Force(context.Background())
 		assert.Equal(t, typeError(validTypeList, NewAtom("list"), nil), err)
 		assert.False(t, ok)
 	})
 
 	t.Run("stream is not a variable", func(t *testing.T) {
-		var vm VM
+		vm := newVM()
 		ok, err := Open(&vm, NewAtom("/dev/null"), atomRead, NewAtom("stream"), List(), Success, nil).Force(context.Background())
 		assert.Equal(t, InstantiationError(nil), err)
 		assert.False(t, ok)
 	})
 
 	t.Run("sourceSink is neither a variable nor a source/sink", func(t *testing.T) {
-		var vm VM
+		vm := newVM()
 		ok, err := Open(&vm, Integer(0), atomRead, NewVariable(), List(), Success, nil).Force(context.Background())
 		assert.Equal(t, domainError(validDomainSourceSink, Integer(0), nil), err)
 		assert.False(t, ok)
 	})
 
 	t.Run("mode is an atom but not an input/output mode", func(t *testing.T) {
-		var vm VM
+		vm := newVM()
 		ok, err := Open(&vm, NewAtom("/dev/null"), NewAtom("foo"), NewVariable(), List(), Success, nil).Force(context.Background())
 		assert.Equal(t, domainError(validDomainIOMode, NewAtom("foo"), nil), err)
 		assert.False(t, ok)
 	})
 
 	t.Run("an element E of the options list is neither a variable nor a stream-option", func(t *testing.T) {
-		var vm VM
+		vm := newVM()
 		for _, o := range []Term{
 			NewAtom("foo"),
 			&compound{functor: NewAtom("foo"), args: []Term{NewAtom("bar")}},
@@ -3920,7 +3924,7 @@ func TestOpen(t *testing.T) {
 
 	// Derived from 5.5.12 Options in Cor.3
 	t.Run("a component of an element E of the options list is a variable", func(t *testing.T) {
-		var vm VM
+		vm := newVM()
 		for _, o := range []Term{
 			NewVariable(),
 			&compound{functor: atomAlias, args: []Term{NewVariable()}},
@@ -3939,7 +3943,7 @@ func TestOpen(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NoError(t, os.Remove(f.Name()))
 
-		var vm VM
+		vm := newVM()
 		ok, err := Open(&vm, NewAtom(f.Name()), atomRead, NewVariable(), List(), Success, nil).Force(context.Background())
 		assert.Equal(t, existenceError(objectTypeSourceSink, NewAtom(f.Name()), nil), err)
 		assert.False(t, ok)
@@ -3954,7 +3958,7 @@ func TestOpen(t *testing.T) {
 
 		assert.NoError(t, f.Chmod(0200))
 
-		var vm VM
+		vm := newVM()
 		ok, err := Open(&vm, NewAtom(f.Name()), atomRead, NewVariable(), List(), Success, nil).Force(context.Background())
 		assert.Equal(t, permissionError(operationOpen, permissionTypeSourceSink, NewAtom(f.Name()), nil), err)
 		assert.False(t, ok)
@@ -3967,7 +3971,7 @@ func TestOpen(t *testing.T) {
 			assert.NoError(t, os.Remove(f.Name()))
 		}()
 
-		var vm VM
+		vm := newVM()
 		vm.streams.add(&Stream{alias: NewAtom("foo")})
 		ok, err := Open(&vm, NewAtom(f.Name()), atomRead, NewVariable(), List(&compound{
 			functor: atomAlias,
@@ -3981,14 +3985,7 @@ func TestOpen(t *testing.T) {
 	})
 
 	t.Run("system error", func(t *testing.T) {
-		openFile = func(name string, flag int, perm os.FileMode) (*os.File, error) {
-			return nil, errors.New("failed")
-		}
-		defer func() {
-			openFile = os.OpenFile
-		}()
-
-		var vm VM
+		vm := VM{FS: errFS{err: errors.New("failed")}}
 		_, err := Open(&vm, NewAtom("foo"), atomRead, NewVariable(), List(), Success, nil).Force(context.Background())
 		assert.Equal(t, errors.New("failed"), err)
 	})
@@ -7888,6 +7885,28 @@ type mockWriter struct {
 func (m *mockWriter) Write(p []byte) (int, error) {
 	args := m.Called(p)
 	return args.Int(0), args.Error(1)
+}
+
+type osFS struct{}
+
+func (osFS) Open(name string) (fs.File, error) {
+	return os.Open(name)
+}
+
+func (osFS) OpenFile(name string, flag int, perm fs.FileMode) (fs.File, error) {
+	return os.OpenFile(name, flag, perm)
+}
+
+type errFS struct {
+	err error
+}
+
+func (e errFS) Open(name string) (fs.File, error) {
+	return nil, e.err
+}
+
+func (e errFS) OpenFile(name string, flag int, perm fs.FileMode) (fs.File, error) {
+	return nil, e.err
 }
 
 func setMemFree(n int64) func() {

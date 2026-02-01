@@ -42,6 +42,7 @@ type Stream struct {
 
 	mode        ioMode
 	alias       Atom
+	name        string
 	position    int64
 	endOfStream endOfStream
 	eofAction   eofAction
@@ -125,6 +126,10 @@ func (s *Stream) Compare(t Term, env *Env) int {
 func (s *Stream) Name() string {
 	type namer interface {
 		Name() string
+	}
+
+	if s.name != "" {
+		return s.name
 	}
 
 	if f, ok := s.source.(namer); ok {

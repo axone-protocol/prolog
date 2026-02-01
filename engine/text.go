@@ -209,6 +209,9 @@ func (vm *VM) open(file Term, env *Env) (string, []byte, error) {
 	case Variable:
 		return "", nil, InstantiationError(env)
 	case Atom:
+		if vm.FS == nil {
+			return "", nil, permissionError(operationOpen, permissionTypeSourceSink, file, env)
+		}
 		s := f.String()
 		for _, f := range []string{s, s + ".pl"} {
 			b, err := fs.ReadFile(vm.FS, f)
