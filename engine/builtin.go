@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"sort"
@@ -2017,18 +2018,32 @@ func PeekChar(vm *VM, streamOrAlias, char Term, k Cont, env *Env) *Promise {
 	}
 }
 
-var osExit = func(_ int) {
-	panic("halt/1 is not allowed")
+// HaltError signals the host environment that Prolog execution requested a halt.
+// Host applications can inspect Code and decide how to stop execution.
+type HaltError struct {
+	Code int64
 }
 
-// Halt exits the process with exit code of n.
-func Halt(_ *VM, n Term, k Cont, env *Env) *Promise {
+func (e HaltError) Error() string {
+	return fmt.Sprintf("halt(%d)", e.Code)
+}
+
+// IsHalt reports whether err contains a HaltError and returns its code when present.
+func IsHalt(err error) (int64, bool) {
+	var haltErr HaltError
+	if errors.As(err, &haltErr) {
+		return haltErr.Code, true
+	}
+	return 0, false
+}
+
+// Halt signals a VM halt with the integer exit code n.
+func Halt(_ *VM, n Term, _ Cont, env *Env) *Promise {
 	switch code := env.Resolve(n).(type) {
 	case Variable:
 		return Error(InstantiationError(env))
 	case Integer:
-		osExit(int(code))
-		return k(env)
+		return Error(HaltError{Code: int64(code)})
 	default:
 		return Error(typeError(validTypeInteger, n, env))
 	}

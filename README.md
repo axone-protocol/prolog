@@ -43,7 +43,7 @@ The following customizations have been made to adapt the original `ichiban/prolo
 - Introduced VM hooks for enhanced Prolog execution control.
 - Added support for the `Dict` term.
 - Added support for `read_write` mode for bidirectional file I/O, enabling half-duplex transactional devices in the host's VFS.
-- `halt/0` and `halt/1` are forbidden and will throw an error.
+- `halt/0` and `halt/1` stop Prolog execution by signaling a VM halt (the host decides how to handle exit codes).
 
 ## License
 
