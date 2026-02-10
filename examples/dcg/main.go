@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/axone-protocol/prolog/v2"
+	"github.com/axone-protocol/prolog/v3"
 )
 
 // This example explains how to parse a simple English sentence with DCG (Definite Clause Grammar).
