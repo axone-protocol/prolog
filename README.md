@@ -10,7 +10,7 @@
 
 # Axone Prolog Virtual Machine
 
-[![build](https://img.shields.io/github/actions/workflow/status/axone-protocol/prolog/go.yml?label=build&style=for-the-badge&logo=github)](https://github.com/axone-protocol/prolog/actions/workflows/go.yml)
+[![build](https://img.shields.io/github/actions/workflow/status/axone-protocol/prolog/build.yml?label=build&style=for-the-badge&logo=github)](https://github.com/axone-protocol/prolog/actions/workflows/build.yml)
 [![codecov](https://img.shields.io/codecov/c/github/axone-protocol/prolog?style=for-the-badge&token=O3FJO5QDCA&logo=codecov)](https://codecov.io/gh/axone-protocol/prolog)
 [![GoDoc](https://img.shields.io/badge/godoc-reference-5272B4.svg?style=for-the-badge&logo=go)](https://pkg.go.dev/github.com/axone-protocol/prolog)
 [![Go Report Card](https://goreportcard.com/badge/github.com/axone-protocol/prolog?style=for-the-badge)](https://goreportcard.com/report/github.com/axone-protocol/prolog)
