@@ -1,19 +1,35 @@
 # Change Map
 
 Use this map to move from implementation edits to the right tests quickly.
+For VM model and design rationale, read `references/architecture.md`.
 
 ## Core Mapping
 
-| Change Area                                             | Primary Files            | First Tests to Run                        |
-| ------------------------------------------------------- | ------------------------ | ----------------------------------------- | ----------- | --------- | ----------------- | -------- | -------------------------------------------------------- |
-| Builtins, predicate semantics, exception shape          | `engine/builtin.go`      | `go test ./engine -run '^Test(Open        | SetInput    | SetOutput | SetStreamPosition | ReadTerm | WriteTerm)$'` (adapt pattern to touched predicate names) |
-| VM execution, registration, reset, hooks                | `engine/vm.go`           | `go test ./engine -run '^TestVM_'`        |
-| Stream internals, mode checks, seek/read/write behavior | `engine/stream.go`       | `go test ./engine -run '^TestStream_'`    |
-| Parser behavior, placeholders, term parsing             | `engine/parser.go`       | `go test ./engine -run '^TestParser_'`    |
-| Lexer/token behavior                                    | `engine/lexer.go`        | `go test ./engine -run '^TestLexer_'`     |
-| Text loading and consult/dynamic directives             | `engine/text.go`         | `go test ./engine -run '^TestVM\_(Compile | Consult)$'` |
-| Public interpreter API and default builtins wiring      | `interpreter.go`         | `go test . -run '^TestInterpreter\_       | ^TestNew'`  |
-| CLI helper wrapper behavior                             | `cmd/1pl/interpreter.go` | `go test ./cmd/1pl -run '^TestNew$'`      |
+- Builtins, predicate semantics, exception shape:
+  - Primary files: `engine/builtin.go`
+  - First tests: `go test ./engine -run '^Test(Open|SetInput|SetOutput|SetStreamPosition|ReadTerm|WriteTerm)$'`
+  - Note: adapt pattern to touched predicate names.
+- VM execution, registration, reset, hooks:
+  - Primary files: `engine/vm.go`
+  - First tests: `go test ./engine -run '^TestVM_'`
+- Stream internals, mode checks, seek/read/write behavior:
+  - Primary files: `engine/stream.go`
+  - First tests: `go test ./engine -run '^TestStream_'`
+- Parser behavior, placeholders, term parsing:
+  - Primary files: `engine/parser.go`
+  - First tests: `go test ./engine -run '^TestParser_'`
+- Lexer/token behavior:
+  - Primary files: `engine/lexer.go`
+  - First tests: `go test ./engine -run '^TestLexer_'`
+- Text loading and consult/dynamic directives:
+  - Primary files: `engine/text.go`
+  - First tests: `go test ./engine -run '^TestVM_(Compile|Consult)$'`
+- Public interpreter API and default builtins wiring:
+  - Primary files: `interpreter.go`
+  - First tests: `go test . -run '^TestInterpreter_|^TestNew'`
+- CLI helper wrapper behavior:
+  - Primary files: `cmd/1pl/interpreter.go`
+  - First tests: `go test ./cmd/1pl -run '^TestNew$'`
 
 ## Determinism Hot Spots
 

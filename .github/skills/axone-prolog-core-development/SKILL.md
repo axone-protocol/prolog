@@ -7,6 +7,11 @@ description: Implement and review core changes in Axone's Go-based Prolog VM and
 
 Use this workflow to implement behavior changes without breaking ISO-style error semantics, stream behavior, or deterministic VM state.
 
+## Architecture Context
+
+- Use `references/architecture.md` as canonical VM architecture context for instruction model, register semantics, and design intent.
+- Read it before structural VM changes (opcode behavior, registers, execution flow) and before introducing new execution state.
+
 ## Blockchain Execution Priority
 
 - Treat this engine as an embedded blockchain VM: deterministic behavior is mandatory.
