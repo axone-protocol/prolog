@@ -5715,6 +5715,16 @@ func Test_Halt(t *testing.T) {
 		assert.Equal(t, int64(2), code)
 	})
 
+	t.Run("halt error string", func(t *testing.T) {
+		assert.Equal(t, "halt(7)", HaltError{Code: 7}.Error())
+	})
+
+	t.Run("is halt false", func(t *testing.T) {
+		code, halted := IsHalt(nil)
+		assert.False(t, halted)
+		assert.Equal(t, int64(0), code)
+	})
+
 	t.Run("n is a variable", func(t *testing.T) {
 		n := NewVariable()
 
