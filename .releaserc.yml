@@ -1,0 +1,56 @@
+branches:
+  - main
+
+plugins:
+  - - "@semantic-release/commit-analyzer"
+    - preset: conventionalcommits
+      releaseRules:
+        - type: build
+          scope: deps
+          release: patch
+        - type: build
+          scope: deps-dev
+          release: patch
+        - type: refactor
+          release: patch
+        - type: style
+          release: patch
+        - type: ci
+          release: patch
+        - type: chore
+          release: patch
+        - type: docs
+          release: patch
+        - breaking: true
+          release: major
+  - - "@semantic-release/release-notes-generator"
+    - preset: conventionalcommits
+  - - "@semantic-release/changelog"
+    - changelogFile: CHANGELOG.md
+      changelogTitle: "# AXONE Prolog changelog"
+  - - "semantic-release-replace-plugin"
+    - replacements:
+        - files: [version]
+          from: ^.+$
+          to: ${nextRelease.version}
+          countMatches: true
+          results:
+            - file: version
+              hasChanged: true
+              numMatches: 1
+              numReplacements: 1
+  - - "@semantic-release/exec"
+    - prepareCmd: |
+        ./.github/bump-module.sh
+  - - "@semantic-release/exec"
+    - prepareCmd: |
+        make release-assets
+  - - "@semantic-release/git"
+    - assets:
+        - README.md
+        - CHANGELOG.md
+        - version
+        - go.mod
+        - go.sum
+        - "**/*.go"
+      message: "chore(release): perform release ${nextRelease.version}"
