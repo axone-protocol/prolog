@@ -42,9 +42,8 @@ plugins:
   - - "@semantic-release/exec"
     - prepareCmd: |
         ./.github/bump-module.sh
-  - - "@semantic-release/exec"
-    - prepareCmd: |
-        make release-assets
+  - - "@semantic-release/github"
+    - successComment: false
   - - "@semantic-release/git"
     - assets:
         - README.md
