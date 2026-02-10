@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
 
@@ -206,6 +207,12 @@ func (s *promiseStack) popUntil(p *Promise) {
 }
 
 func (s *promiseStack) recover(err error) error {
+	// halt/0 and halt/1 must bypass catch/3 and abort the whole VM execution.
+	var haltErr HaltError
+	if errors.As(err, &haltErr) {
+		return err
+	}
+
 	// look for an ancestor promise with a recovering function that is applicable to the error.
 	for len(*s) > 0 {
 		pop := s.pop()

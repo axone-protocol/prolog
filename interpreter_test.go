@@ -212,6 +212,35 @@ func TestNew(t *testing.T) {
 	})
 }
 
+func TestInterpreter_Halt(t *testing.T) {
+	t.Run("halt/0", func(t *testing.T) {
+		p := New(nil, nil)
+		err := p.QuerySolution(`halt.`).Err()
+
+		code, halted := engine.IsHalt(err)
+		assert.True(t, halted)
+		assert.Equal(t, int64(0), code)
+	})
+
+	t.Run("halt/1", func(t *testing.T) {
+		p := New(nil, nil)
+		err := p.QuerySolution(`halt(7).`).Err()
+
+		code, halted := engine.IsHalt(err)
+		assert.True(t, halted)
+		assert.Equal(t, int64(7), code)
+	})
+
+	t.Run("catch does not intercept halt", func(t *testing.T) {
+		p := New(nil, nil)
+		err := p.QuerySolution(`catch(halt(9), _, true).`).Err()
+
+		code, halted := engine.IsHalt(err)
+		assert.True(t, halted)
+		assert.Equal(t, int64(9), code)
+	})
+}
+
 func TestNew_variableNames(t *testing.T) {
 	// http://www.complang.tuwien.ac.at/ulrich/iso-prolog/variable_names
 	// I wanted to put this under TestNew() as t.Run("variable_names", ...) but GoLand didn't recognize it as a table-driven test.

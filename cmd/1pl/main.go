@@ -94,6 +94,12 @@ Type Ctrl-C or 'halt.' to exit.
 		case io.EOF:
 			return
 		default:
+			if code, halted := engine.IsHalt(err); halted {
+				if code != 0 {
+					os.Exit(int(code))
+				}
+				return
+			}
 			log.Panic(err)
 		}
 	}
@@ -164,6 +170,9 @@ func handleLine(ctx context.Context, buf *strings.Builder, p *prolog.Interpreter
 	}
 
 	if err := sols.Err(); err != nil {
+		if _, halted := engine.IsHalt(err); halted {
+			return err
+		}
 		log.Print(err)
 		return nil
 	}

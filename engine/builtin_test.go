@@ -2460,6 +2460,7 @@ func TestCatch(t *testing.T) {
 	var vm VM
 	vm.Register2(atomEqual, Unify)
 	vm.Register1(NewAtom("throw"), Throw)
+	vm.Register1(NewAtom("halt"), Halt)
 	vm.Register0(atomTrue, func(_ *VM, k Cont, env *Env) *Promise {
 		return k(env)
 	})
@@ -2509,6 +2510,15 @@ func TestCatch(t *testing.T) {
 		}, nil).Force(context.Background())
 		assert.Error(t, err)
 		assert.False(t, ok)
+	})
+
+	t.Run("halt is not catchable", func(t *testing.T) {
+		ok, err := Catch(&vm, NewAtom("halt").Apply(Integer(7)), NewVariable(), atomTrue, Success, nil).Force(context.Background())
+		assert.False(t, ok)
+
+		var haltErr HaltError
+		assert.ErrorAs(t, err, &haltErr)
+		assert.Equal(t, int64(7), haltErr.Code)
 	})
 }
 
@@ -5693,11 +5703,16 @@ func TestPeekChar(t *testing.T) {
 
 func Test_Halt(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
-		ok, err := Delay(func(ctx context.Context) *Promise {
-			return Halt(nil, Integer(2), Success, nil)
-		}).Force(context.Background())
-		assert.EqualError(t, err, "error(panic_error(halt/1 is not allowed))")
+		ok, err := Halt(nil, Integer(2), Success, nil).Force(context.Background())
 		assert.False(t, ok)
+
+		var haltErr HaltError
+		assert.ErrorAs(t, err, &haltErr)
+		assert.Equal(t, int64(2), haltErr.Code)
+
+		code, halted := IsHalt(err)
+		assert.True(t, halted)
+		assert.Equal(t, int64(2), code)
 	})
 
 	t.Run("n is a variable", func(t *testing.T) {
