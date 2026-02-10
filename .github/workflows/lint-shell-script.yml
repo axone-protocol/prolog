@@ -1,34 +1,34 @@
 name: Lint Shell Script
 
 on:
-    workflow_call:
-    push:
-        branches: [main]
-        paths:
-            - "**.sh"
-    pull_request:
-        branches: [main]
-        paths:
-            - "**.sh"
+  workflow_call:
+  push:
+    branches: [main]
+    paths:
+      - "**.sh"
+  pull_request:
+    branches: [main]
+    paths:
+      - "**.sh"
 
 concurrency:
-    group: lint-shell-script-${{ github.ref }}
-    cancel-in-progress: true
+  group: lint-shell-script-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
-    contents: read
+  contents: read
 
 jobs:
-    lint-shell-script:
-        runs-on: ubuntu-22.04
-        steps:
-            - name: Check out repository
-              uses: actions/checkout@v6
+  lint-shell-script:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
 
-            - name: Lint shell scripts
-              uses: ludeeus/action-shellcheck@2.0.0
-              with:
-                  scandir: .
-                  version: "v0.11.0"
-              env:
-                  SHELLCHECK_OPTS: -e SC2034
+      - name: Lint shell scripts
+        uses: ludeeus/action-shellcheck@2.0.0
+        with:
+          scandir: .
+          version: "v0.11.0"
+        env:
+          SHELLCHECK_OPTS: -e SC2034
