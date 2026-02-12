@@ -187,17 +187,17 @@ func (vm *VM) ensureLoaded(ctx context.Context, file Term, env *Env) error {
 	}
 
 	if vm.loaded == nil {
-		vm.loaded = map[string]struct{}{}
+		vm.loaded = orderedmap.New[string, struct{}]()
 	}
-	if _, ok := vm.loaded[f]; ok {
+	if _, ok := vm.loaded.Get(f); ok {
 		return nil
 	}
 
 	// It's too early to say it's fully loaded. Yet this avoids recursive load of the same file.
-	vm.loaded[f] = struct{}{}
+	vm.loaded.Set(f, struct{}{})
 
 	if err := vm.Compile(ctx, string(b)); err != nil {
-		delete(vm.loaded, f) // It wasn't fully loaded after all.
+		vm.loaded.Delete(f) // It wasn't fully loaded after all.
 		return err
 	}
 
