@@ -1,5 +1,12 @@
 # AXONE Prolog changelog
 
+## [3.1.0](https://github.com/axone-protocol/prolog/compare/v3.0.0...v3.1.0) (2026-02-12)
+
+
+### Features
+
+* **engine:** expose VM.LoadedSources() ([baa7d26](https://github.com/axone-protocol/prolog/commit/baa7d2686469f47825607383d3f9d4421fc81463))
+
 ## [3.0.0](https://github.com/axone-protocol/prolog/compare/v2.1.1...v3.0.0) (2026-02-10)
 
 
