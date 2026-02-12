@@ -256,6 +256,24 @@ func TestVM_open_nilFS(t *testing.T) {
 	assert.Equal(t, permissionError(operationOpen, permissionTypeSourceSink, NewAtom("foo"), env), err)
 }
 
+func TestVM_LoadedSources(t *testing.T) {
+	vm := VM{FS: testdata}
+	assert.Nil(t, vm.LoadedSources())
+
+	ok, err := Consult(&vm, List(
+		NewAtom("testdata/foo"),
+		NewAtom("testdata/empty.txt"),
+		NewAtom("testdata/empty.txt"),
+	), Success, nil).Force(context.Background())
+	assert.NoError(t, err)
+	assert.True(t, ok)
+	assert.Equal(t, []string{"testdata/foo.pl", "testdata/empty.txt"}, vm.LoadedSources())
+
+	loaded := vm.LoadedSources()
+	loaded[0] = "mutated"
+	assert.Equal(t, []string{"testdata/foo.pl", "testdata/empty.txt"}, vm.LoadedSources())
+}
+
 func TestVM_SetUserInput(t *testing.T) {
 	t.Run("file", func(t *testing.T) {
 		var vm VM

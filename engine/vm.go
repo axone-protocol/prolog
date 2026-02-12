@@ -130,7 +130,7 @@ type VM struct {
 	// and when open/3 or open/4 access a source/sink. Write modes are permitted only if FS
 	// supports OpenFile.
 	FS     fs.FS
-	loaded map[string]struct{}
+	loaded *orderedmap.OrderedMap[string, struct{}]
 
 	// Internal/external expression
 	_operators      *operators
@@ -373,6 +373,21 @@ func (vm *VM) SetUserOutput(s *Stream) {
 	s.alias = atomUserOutput
 	vm.streams.add(s)
 	vm.output = s
+}
+
+// LoadedSources returns a copy of source names loaded by ensure_loaded/1 or consult/1.
+// The result preserves insertion order.
+func (vm *VM) LoadedSources() []string {
+	if vm.loaded == nil || vm.loaded.Len() == 0 {
+		return nil
+	}
+
+	sources := make([]string, 0, vm.loaded.Len())
+	for source := vm.loaded.Oldest(); source != nil; source = source.Next() {
+		sources = append(sources, source.Key)
+	}
+
+	return sources
 }
 
 // SetMaxVariables sets the maximum number of variables that the VM can create.
