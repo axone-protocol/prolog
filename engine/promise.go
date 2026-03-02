@@ -165,8 +165,10 @@ func ensurePromise(p **Promise) {
 	}
 }
 
-func panicError(r interface{}) error {
+func panicError(r interface{}) Exception {
 	switch r := r.(type) {
+	case meterPanic:
+		return r.exception
 	case Exception:
 		return r
 	case error:

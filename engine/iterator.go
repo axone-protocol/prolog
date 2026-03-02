@@ -6,6 +6,7 @@ type ListIterator struct {
 	Env          *Env
 	AllowPartial bool
 	AllowCycle   bool
+	meter        MeterFunc
 
 	current Term
 	err     error
@@ -13,6 +14,14 @@ type ListIterator struct {
 	// Variables for Brent's cycle detection algorithm
 	tortoise, hare Term
 	power, lam     int
+}
+
+func (i *ListIterator) charge(kind MeterKind, units uint64) {
+	if i.meter != nil {
+		chargeMeter(i.meter, kind, units, i.Env)
+		return
+	}
+	i.Env.charge(kind, units)
 }
 
 // Next proceeds to the next element of the list and returns true if there's such an element.
@@ -55,6 +64,7 @@ func (i *ListIterator) Next() bool {
 			return false
 		}
 
+		i.charge(MeterListCell, 1)
 		i.current, i.hare = l.Arg(0), i.Env.Resolve(l.Arg(1))
 		i.lam++
 		return true

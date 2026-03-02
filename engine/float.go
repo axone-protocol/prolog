@@ -109,6 +109,7 @@ func (f Float) WriteTerm(w io.Writer, opts *WriteOptions, _ *Env) error {
 
 // Compare compares the Float with a Term.
 func (f Float) Compare(t Term, env *Env) int {
+	env.charge(MeterCompareStep, 1)
 	switch t := env.Resolve(t).(type) {
 	case Variable:
 		return 1

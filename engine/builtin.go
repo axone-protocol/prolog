@@ -401,12 +401,14 @@ func renamedCopy(t Term, copied map[termID]Term, env *Env) (Term, error) {
 	}
 	switch t := t.(type) {
 	case Variable:
+		env.charge(MeterCopyNode, 1)
 		v := NewVariable()
 		copied[id(t)] = v
 		return v, nil
 	case charList, codeList:
 		return t, nil
 	case list:
+		env.charge(MeterCopyNode, 1)
 		s, err := makeSlice(len(t))
 		if err != nil {
 			return nil, resourceError(resourceMemory, env)
@@ -422,6 +424,7 @@ func renamedCopy(t Term, copied map[termID]Term, env *Env) (Term, error) {
 		}
 		return l, nil
 	case *partial:
+		env.charge(MeterCopyNode, 1)
 		var p partial
 		copied[id(t)] = &p
 		cp, err := renamedCopy(t.Compound, copied, env)
@@ -437,6 +440,7 @@ func renamedCopy(t Term, copied map[termID]Term, env *Env) (Term, error) {
 		p.tail = &tail
 		return &p, nil
 	case Compound:
+		env.charge(MeterCopyNode, 1)
 		args, err := makeSlice(t.Arity())
 		if err != nil {
 			return nil, resourceError(resourceMemory, env)
@@ -3056,7 +3060,7 @@ func SkipMaxList(vm *VM, skip, max, list, suffix Term, k Cont, env *Env) *Promis
 func Append(vm *VM, xs, ys, zs Term, k Cont, env *Env) *Promise {
 	// A special case for non-empty lists without a variable in the spine.
 	if xs, ok := env.Resolve(xs).(Compound); ok {
-		iter := ListIterator{List: xs, Env: nil} // No variables allowed.
+		iter := ListIterator{List: xs, Env: nil, meter: env.meterFunc()} // No variables allowed.
 		for iter.Next() {
 		}
 		if err := iter.Err(); err == nil {
