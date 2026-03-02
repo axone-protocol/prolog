@@ -41,6 +41,7 @@ func (i Integer) WriteTerm(w io.Writer, opts *WriteOptions, _ *Env) error {
 
 // Compare compares the Integer with a Term.
 func (i Integer) Compare(t Term, env *Env) int {
+	env.charge(MeterCompareStep, 1)
 	switch t := env.Resolve(t).(type) {
 	case Variable, Float:
 		return 1

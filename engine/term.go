@@ -93,6 +93,7 @@ var defaultWriteOptions = WriteOptions{
 // where different types of custom atomic terms are ordered by the Go-syntax representation of the types.
 // It compares values of the same custom atomic term type T by the provided comparison function.
 func CompareAtomic[T Term](a T, t Term, cmp func(T, T) int, env *Env) int {
+	env.charge(MeterCompareStep, 1)
 	switch t := env.Resolve(t).(type) {
 	case Variable, Float, Integer, Atom:
 		return 1

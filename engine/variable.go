@@ -62,6 +62,7 @@ func (v Variable) WriteTerm(w io.Writer, opts *WriteOptions, env *Env) error {
 }
 
 func (v Variable) Compare(t Term, env *Env) int {
+	env.charge(MeterCompareStep, 1)
 	w := env.Resolve(v)
 	v, ok := w.(Variable)
 	if !ok {

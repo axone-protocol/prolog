@@ -29,6 +29,7 @@ type Env struct {
 	color       color
 	left, right *Env
 	binding
+	meter MeterFunc
 }
 
 type binding struct {
@@ -47,6 +48,41 @@ var rootEnv = &Env{
 // NewEnv creates an empty environment.
 func NewEnv() *Env {
 	return nil
+}
+
+func (e *Env) withMeter(m MeterFunc) *Env {
+	if e == nil {
+		if m == nil {
+			return nil
+		}
+		ret := *rootEnv
+		ret.meter = m
+		return &ret
+	}
+
+	ret := *e
+	ret.meter = m
+	return &ret
+}
+
+func (e *Env) withoutMeter() *Env {
+	if e == nil {
+		return nil
+	}
+	ret := *e
+	ret.meter = nil
+	return &ret
+}
+
+func (e *Env) charge(kind MeterKind, units uint64) {
+	chargeMeter(e.meterFunc(), kind, units, e)
+}
+
+func (e *Env) meterFunc() MeterFunc {
+	if e == nil {
+		return nil
+	}
+	return e.meter
 }
 
 // lookup returns a term that the given variable is bound to.
@@ -80,34 +116,39 @@ func (e *Env) bind(v Variable, t Term) *Env {
 	if node == nil {
 		node = rootEnv
 	}
-	ret := *node.insert(k, t)
+	ret := *node.insert(k, t, node.meter)
 	ret.color = black
+	ret.meter = node.meter
 	return &ret
 }
 
-func (e *Env) insert(k envKey, v Term) *Env {
+func (e *Env) insert(k envKey, v Term, meter MeterFunc) *Env {
 	if e == nil {
-		return &Env{color: red, binding: binding{key: k, value: v}}
+		return &Env{color: red, binding: binding{key: k, value: v}, meter: meter}
 	}
 	switch {
 	case k < e.key:
 		ret := *e
-		ret.left = e.left.insert(k, v)
+		ret.left = e.left.insert(k, v, meter)
 		ret.balance()
+		ret.meter = meter
 		return &ret
 	case k > e.key:
 		ret := *e
-		ret.right = e.right.insert(k, v)
+		ret.right = e.right.insert(k, v, meter)
 		ret.balance()
+		ret.meter = meter
 		return &ret
 	default:
 		ret := *e
 		ret.value = v
+		ret.meter = meter
 		return &ret
 	}
 }
 
 func (e *Env) balance() {
+	m := e.meter
 	var (
 		a, b, c, d *Env
 		x, y, z    binding
@@ -160,9 +201,10 @@ func (e *Env) balance() {
 	}
 	*e = Env{
 		color:   red,
-		left:    &Env{color: black, left: a, right: b, binding: x},
-		right:   &Env{color: black, left: c, right: d, binding: z},
+		left:    &Env{color: black, left: a, right: b, binding: x, meter: m},
+		right:   &Env{color: black, left: c, right: d, binding: z, meter: m},
 		binding: y,
+		meter:   m,
 	}
 }
 
@@ -274,6 +316,7 @@ func (e *Env) unifyWithOccursCheck(x, y Term) (*Env, bool) {
 }
 
 func (e *Env) unify(x, y Term, occursCheck bool) (*Env, bool) {
+	e.charge(MeterUnifyStep, 1)
 	x, y = e.Resolve(x), e.Resolve(y)
 	switch x := x.(type) {
 	case Variable:
@@ -328,6 +371,7 @@ func (e *Env) unify(x, y Term, occursCheck bool) (*Env, bool) {
 }
 
 func contains(t, s Term, env *Env) bool {
+	env.charge(MeterUnifyStep, 1)
 	switch t := t.(type) {
 	case Variable:
 		if t == s {

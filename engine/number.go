@@ -75,6 +75,8 @@ func eval(expression Term, env *Env) (_ Number, err error) {
 		}
 	}()
 
+	env.charge(MeterArithNode, 1)
+
 	switch t := env.Resolve(expression).(type) {
 	case Variable:
 		return nil, InstantiationError(env)

@@ -250,6 +250,7 @@ func (a Atom) WriteTerm(w io.Writer, opts *WriteOptions, _ *Env) error {
 
 // Compare compares the Atom with a Term.
 func (a Atom) Compare(t Term, env *Env) int {
+	env.charge(MeterCompareStep, 1)
 	switch t := env.Resolve(t).(type) {
 	case Variable, Float, Integer:
 		return 1

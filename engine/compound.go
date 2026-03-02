@@ -263,6 +263,7 @@ func writeCompoundFunctionalNotation(w io.Writer, c Compound, opts *WriteOptions
 
 // CompareCompound compares the Compound with a Term.
 func CompareCompound(c Compound, t Term, env *Env) int {
+	env.charge(MeterCompareStep, 1)
 	switch t := env.Resolve(t).(type) {
 	case Compound:
 		switch x, y := c.Arity(), t.Arity(); {

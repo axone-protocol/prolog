@@ -148,6 +148,9 @@ type VM struct {
 	// Hook
 	hook HookFunc
 
+	// Meter
+	meter MeterFunc
+
 	// Misc
 	debug bool
 }
@@ -242,6 +245,8 @@ func (vm *VM) Arrive(name Atom, args []Term, k Cont, env *Env) (promise *Promise
 		}
 	}
 
+	env = vm.prepareEnv(env)
+
 	// bind the special variable to inform the predicate about the context.
 	env = env.bind(varContext, pi.Term())
 
@@ -256,6 +261,7 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 	)
 	for ok {
 		op, pc = pc[0], pc[1:]
+		vm.charge(MeterInstruction, 1, env)
 		if vm.hook != nil {
 			if err := vm.hook(op.opcode, op.operand, env); err != nil {
 				return Error(err)
@@ -407,6 +413,16 @@ func (vm *VM) ClearHook() {
 	vm.hook = nil
 }
 
+// InstallMeter sets the given meter function in the VM.
+func (vm *VM) InstallMeter(f MeterFunc) {
+	vm.meter = f
+}
+
+// ClearMeter removes the installed meter function from the VM.
+func (vm *VM) ClearMeter() {
+	vm.meter = nil
+}
+
 // ResetEnv is used to reset all global variable
 func (vm *VM) ResetEnv() {
 	resetStreamIDCounter()
@@ -441,6 +457,20 @@ func (vm *VM) getOperators() *operators {
 		vm._operators = newOperators()
 	}
 	return vm._operators
+}
+
+func (vm *VM) charge(kind MeterKind, units uint64, env *Env) {
+	chargeMeter(vm.meter, kind, units, env)
+}
+
+func (vm *VM) prepareEnv(env *Env) *Env {
+	if vm.meter == nil {
+		return env
+	}
+	if env != nil && env.meter != nil {
+		return env
+	}
+	return env.withMeter(vm.meter)
 }
 
 // Predicate0 is a predicate of arity 0.
