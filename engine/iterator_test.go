@@ -89,6 +89,21 @@ func TestListIterator_Suffix(t *testing.T) {
 	assert.False(t, iter.Next())
 }
 
+func TestListIterator_Charge(t *testing.T) {
+	counts := map[MeterKind]uint64{}
+	iter := ListIterator{
+		List: List(NewAtom("a")),
+		meter: func(kind MeterKind, units uint64) Term {
+			counts[kind] += units
+			return nil
+		},
+	}
+
+	assert.True(t, iter.Next())
+	assert.Equal(t, NewAtom("a"), iter.Current())
+	assert.Equal(t, uint64(1), counts[MeterListCell])
+}
+
 func TestSeqIterator_Next(t *testing.T) {
 	t.Run("sequence", func(t *testing.T) {
 		iter := seqIterator{Seq: seq(atomComma, NewAtom("a"), NewAtom("b"), NewAtom("c"))}

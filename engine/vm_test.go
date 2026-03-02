@@ -370,6 +370,52 @@ func TestVM_DebugHook(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, "enter\ncall(foo/0)\nexit\n", buf.String())
 }
+
+func TestVM_Meter(t *testing.T) {
+	t.Run("install meter counts instructions", func(t *testing.T) {
+		var vm VM
+		vm.Register0(NewAtom("foo"), func(_ *VM, k Cont, env *Env) *Promise {
+			return k(env)
+		})
+
+		var count uint64
+		vm.InstallMeter(func(kind MeterKind, units uint64) Term {
+			if kind == MeterInstruction {
+				count += units
+			}
+			return nil
+		})
+
+		ok, err := Call(&vm, NewAtom("foo"), Success, nil).Force(context.Background())
+		assert.NoError(t, err)
+		assert.True(t, ok)
+		assert.Equal(t, uint64(3), count)
+		assert.NotNil(t, vm.meter)
+	})
+
+	t.Run("clear meter disables charging", func(t *testing.T) {
+		var vm VM
+		vm.Register0(NewAtom("foo"), func(_ *VM, k Cont, env *Env) *Promise {
+			return k(env)
+		})
+
+		var count uint64
+		vm.InstallMeter(func(kind MeterKind, units uint64) Term {
+			if kind == MeterInstruction {
+				count += units
+			}
+			return nil
+		})
+		vm.ClearMeter()
+
+		ok, err := Call(&vm, NewAtom("foo"), Success, nil).Force(context.Background())
+		assert.NoError(t, err)
+		assert.True(t, ok)
+		assert.Zero(t, count)
+		assert.Nil(t, vm.meter)
+	})
+}
+
 func TestInstruction_String(t *testing.T) {
 	t.Run("with operand", func(t *testing.T) {
 		instr := instruction{
