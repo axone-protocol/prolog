@@ -241,6 +241,47 @@ func TestInterpreter_Halt(t *testing.T) {
 	})
 }
 
+func TestInterpreter_MeterException(t *testing.T) {
+	t.Run("uncaught", func(t *testing.T) {
+		p := New(nil, nil)
+		want := engine.NewAtom("resource_error").Apply(engine.NewAtom("gas"))
+
+		p.InstallMeter(func(kind engine.MeterKind, units uint64) engine.Term {
+			if kind == engine.MeterUnifyStep {
+				return want
+			}
+			return nil
+		})
+
+		err := p.QuerySolution(`_X = 1.`).Err()
+		ex, ok := err.(engine.Exception)
+		assert.True(t, ok)
+		pattern := engine.NewAtom("error").Apply(
+			engine.NewAtom("resource_error").Apply(engine.NewAtom("gas")),
+			engine.NewAtom("/").Apply(engine.NewAtom("="), engine.Integer(2)),
+		)
+		_, matched := engine.NewEnv().Unify(pattern, ex.Term())
+		assert.True(t, matched)
+	})
+
+	t.Run("caught", func(t *testing.T) {
+		p := New(nil, nil)
+		want := engine.NewAtom("resource_error").Apply(engine.NewAtom("gas"))
+
+		var thrown bool
+		p.InstallMeter(func(kind engine.MeterKind, units uint64) engine.Term {
+			if kind != engine.MeterUnifyStep || thrown {
+				return nil
+			}
+			thrown = true
+			return want
+		})
+
+		err := p.QuerySolution(`catch(_X = 1, error(resource_error(gas), _), true).`).Err()
+		assert.NoError(t, err)
+	})
+}
+
 func TestNew_variableNames(t *testing.T) {
 	// http://www.complang.tuwien.ac.at/ulrich/iso-prolog/variable_names
 	// I wanted to put this under TestNew() as t.Run("variable_names", ...) but GoLand didn't recognize it as a table-driven test.
