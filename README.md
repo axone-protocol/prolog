@@ -44,6 +44,7 @@ The following customizations have been made to adapt the original `ichiban/prolo
 - Added support for the `Dict` term.
 - Added support for `read_write` mode for bidirectional file I/O, enabling half-duplex transactional devices in the host's VFS.
 - `halt/0` and `halt/1` stop Prolog execution by signaling a VM halt (the host decides how to handle exit codes).
+- Added VM metering capability to track and limit resource consumption across multiple dimensions (instructions, unifications, list processing, term copying, arithmetic evaluation, and structural comparisons).
 
 ## License
 
