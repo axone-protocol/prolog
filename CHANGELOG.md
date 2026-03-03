@@ -1,5 +1,12 @@
 # AXONE Prolog changelog
 
+## [3.2.0](https://github.com/axone-protocol/prolog/compare/v3.1.0...v3.2.0) (2026-03-03)
+
+
+### Features
+
+* **engine:** add VM metering ([11d1ec5](https://github.com/axone-protocol/prolog/commit/11d1ec539920bfff48733bb2cf279a3a40aa0b2d))
+
 ## [3.1.0](https://github.com/axone-protocol/prolog/compare/v3.0.0...v3.1.0) (2026-02-12)
 
 
