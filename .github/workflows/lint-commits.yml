@@ -17,6 +17,7 @@ permissions:
 
 jobs:
   lint-commits:
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-22.04
     steps:
       - name: Check out repository
