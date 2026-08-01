@@ -13,13 +13,11 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
+      - name: Install Nix
+        uses: cachix/install-nix-action@a49548c11d9846ad46ecc0115273879b045f001c  # v31.10.7
 
       - name: Test
-        run: go test -v -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.txt ./...
+        run: nix develop --command go test -v -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.txt ./...
 
       - name: Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6
