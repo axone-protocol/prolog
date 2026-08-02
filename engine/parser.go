@@ -388,7 +388,7 @@ func (p *Parser) term(maxPriority Integer) (Term, error) {
 		}
 	}
 
-	return lhs, nil
+	return lhs, nil //nolint:nilerr // An infix parse error ends the operator chain.
 }
 
 func (p *Parser) prefix(maxPriority Integer) (operator, error) {

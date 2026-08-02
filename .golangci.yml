@@ -6,6 +6,7 @@ linters:
     - errcheck
     - govet
     - ineffassign
+    - nilerr
     - staticcheck
     - unconvert
     - unused

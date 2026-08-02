@@ -296,7 +296,7 @@ type errWriter struct {
 
 func (ew *errWriter) Write(p []byte) (int, error) {
 	if ew.err != nil {
-		return 0, nil
+		return 0, nil //nolint:nilerr // errWriter retains the first error for the caller.
 	}
 	var n int
 	n, ew.err = ew.w.Write(p)
