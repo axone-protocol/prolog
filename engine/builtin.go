@@ -2849,7 +2849,7 @@ func expand(vm *VM, term Term, env *Env) (Term, error) {
 
 	t, err := expandDCG(term, env)
 	if err != nil {
-		return term, nil
+		return term, nil //nolint:nilerr // Failed DCG expansion leaves the input unchanged.
 	}
 	return t, err
 }

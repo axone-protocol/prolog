@@ -388,7 +388,7 @@ func (p *Parser) term(maxPriority Integer) (Term, error) {
 		}
 	}
 
-	return lhs, nil
+	return lhs, nil //nolint:nilerr // An infix parse error ends the operator chain.
 }
 
 func (p *Parser) prefix(maxPriority Integer) (operator, error) {
@@ -816,8 +816,6 @@ func (p *Parser) dict() (Term, error) {
 	tag, err = p.atom()
 	switch err {
 	case nil:
-	default:
-		return nil, err
 	case errExpectation:
 		t, err := p.next()
 		if err != nil {
@@ -830,6 +828,8 @@ func (p *Parser) dict() (Term, error) {
 		default:
 			return nil, errExpectation
 		}
+	default:
+		return nil, err
 	}
 
 	args = append(args, tag)

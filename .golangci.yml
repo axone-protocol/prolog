@@ -4,5 +4,10 @@ linters:
   default: none
   enable:
     - errcheck
+    - govet
     - ineffassign
+    - nilerr
+    - staticcheck
+    - unconvert
     - unused
+    - wastedassign

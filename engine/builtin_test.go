@@ -3760,7 +3760,7 @@ func TestOpen(t *testing.T) {
 				// Should be able to read
 				assert.NoError(t, s.initRead())
 				b := make([]byte, 7)
-				n, err := s.source.(io.Reader).Read(b)
+				n, err := s.source.Read(b)
 				assert.NoError(t, err)
 				assert.Equal(t, 7, n)
 				assert.Equal(t, "initial", string(b))
