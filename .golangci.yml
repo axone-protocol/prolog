@@ -8,3 +8,4 @@ linters:
     - ineffassign
     - staticcheck
     - unused
+    - wastedassign
