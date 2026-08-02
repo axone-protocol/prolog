@@ -39,7 +39,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer sols.Close()
+	defer func() {
+		if err := sols.Close(); err != nil {
+			panic(err)
+		}
+	}()
 
 	for sols.Next() {
 		var s struct {
