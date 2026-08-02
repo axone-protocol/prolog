@@ -1346,7 +1346,9 @@ func TestDict(t *testing.T) {
 			}
 			assert.NoError(t, err)
 			assert.NotNil(t, sols)
-			defer sols.Close()
+			defer func() {
+				assert.NoError(t, sols.Close())
+			}()
 
 			for _, tr := range tt.wantResult {
 				ok := sols.Next()
