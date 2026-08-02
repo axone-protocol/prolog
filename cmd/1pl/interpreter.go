@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
+	"io"
+
 	"github.com/axone-protocol/prolog/v3"
 	"github.com/axone-protocol/prolog/v3/engine"
-	"io"
 )
 
 // New creates a prolog.Interpreter with some helper predicates.

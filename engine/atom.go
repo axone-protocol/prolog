@@ -7,9 +7,7 @@ import (
 	"strings"
 )
 
-var (
-	quotedAtomEscapePattern = regexp.MustCompile(`[[:cntrl:]]|\\|'`)
-)
+var quotedAtomEscapePattern = regexp.MustCompile(`[[:cntrl:]]|\\|'`)
 
 // Well-known atoms.
 var (

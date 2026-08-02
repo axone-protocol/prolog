@@ -142,7 +142,8 @@ bar(X, "abc", [a, b], [a, b|Y], f(a)) :- X, !, foo(X, "abc", [a, b], [a, b|Y], f
 							pi: procedureIndicator{name: NewAtom("bar"), arity: 5},
 							raw: atomIf.Apply(
 								NewAtom("bar").Apply(lastVariable()+1, charList("abc"), List(NewAtom("a"), NewAtom("b")), PartialList(lastVariable()+2, NewAtom("a"), NewAtom("b")), NewAtom("f").Apply(NewAtom("a"))),
-								seq(atomComma,
+								seq(
+									atomComma,
 									lastVariable()+1,
 									atomCut,
 									NewAtom("foo").Apply(lastVariable()+1, charList("abc"), List(NewAtom("a"), NewAtom("b")), PartialList(lastVariable()+2, NewAtom("a"), NewAtom("b")), NewAtom("f").Apply(NewAtom("a"))),
@@ -217,7 +218,8 @@ point(point{x: 5}).
 							pi: procedureIndicator{name: NewAtom("point"), arity: 1},
 							raw: &compound{functor: NewAtom("point"), args: []Term{
 								&dict{compound: compound{functor: NewAtom("dict"), args: []Term{
-									NewAtom("point"), NewAtom("x"), Integer(5)}}},
+									NewAtom("point"), NewAtom("x"), Integer(5),
+								}}},
 							}},
 							bytecode: bytecode{
 								{opcode: OpGetDict, operand: Integer(3)},
@@ -312,8 +314,10 @@ point(point{x: 5}.x) :- true.
 									&compound{functor: "$dot", args: []Term{
 										&dict{compound: compound{functor: "dict", args: []Term{NewAtom("point"), NewAtom("x"), Integer(5)}}},
 										NewAtom("x"),
-									}}}},
-								NewAtom("true")),
+									}},
+								}},
+								NewAtom("true"),
+							),
 							vars: []Variable{lastVariable() + 1},
 							bytecode: bytecode{
 								{opcode: OpGetVar, operand: Integer(0)},
@@ -362,9 +366,13 @@ p :- foo(point{x: 5}).
 							raw: atomIf.Apply(
 								NewAtom("p"),
 								&compound{functor: NewAtom("foo"), args: []Term{
-									&dict{compound: compound{functor: NewAtom("dict"), args: []Term{
-										NewAtom("point"), NewAtom("x"), Integer(5)},
-									}}}}),
+									&dict{compound: compound{
+										functor: NewAtom("dict"), args: []Term{
+											NewAtom("point"), NewAtom("x"), Integer(5),
+										},
+									}},
+								}},
+							),
 							bytecode: bytecode{
 								{opcode: OpEnter},
 								{opcode: OpPutDict, operand: Integer(3)},
@@ -411,7 +419,8 @@ x(X) :- p(P), =(X, P.x).
 									atomComma,
 									NewAtom("p").Apply(lastVariable()+2),
 									atomEqual.Apply(lastVariable()+1, NewAtom("$dot").Apply(lastVariable()+2, NewAtom("x"))),
-								)),
+								),
+							),
 							vars: []Variable{lastVariable() + 1, lastVariable() + 2, lastVariable() + 3},
 							bytecode: bytecode{
 								{opcode: OpGetVar, operand: Integer(0)},

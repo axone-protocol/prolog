@@ -41,5 +41,13 @@ jobs:
       - name: Install Nix
         uses: cachix/install-nix-action@a49548c11d9846ad46ecc0115273879b045f001c  # v31.10.7
 
+      - name: Check Go formatting
+        run: |
+          if nix develop --command gofumpt -l . | grep -qE '\.go$'; then
+            echo "Go files must be formatted with gofumpt."
+            nix develop --command gofumpt -d .
+            exit 1
+          fi
+
       - name: Lint Go code
         run: nix develop --command golangci-lint run ./...

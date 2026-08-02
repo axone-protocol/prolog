@@ -2,8 +2,9 @@ package engine
 
 import (
 	"errors"
-	"github.com/cockroachdb/apd/v3"
 	"math"
+
+	"github.com/cockroachdb/apd/v3"
 )
 
 var (

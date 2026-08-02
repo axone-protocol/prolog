@@ -2,9 +2,10 @@ package engine
 
 import (
 	"fmt"
-	"github.com/cockroachdb/apd/v3"
 	"io"
 	"strings"
+
+	"github.com/cockroachdb/apd/v3"
 )
 
 // Float is a prolog "falsy" floating-point number.

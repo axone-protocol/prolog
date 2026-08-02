@@ -2,8 +2,9 @@ package engine
 
 import (
 	"bytes"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestIntegerNumber(t *testing.T) {

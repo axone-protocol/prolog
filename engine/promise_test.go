@@ -88,7 +88,8 @@ func TestPromise_ForceWithDelayedSequenceExecutions(t *testing.T) {
 					return Bool(v%((v%4)+1) == 0)
 				}, i < 11
 			}
-		}())
+		}(),
+	)
 
 	t.Run("ok", func(t *testing.T) {
 		cases := []struct {

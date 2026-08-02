@@ -14,32 +14,28 @@ var (
 	errKeyExpected = errors.New("key expected")
 )
 
-var (
-	atomColon = NewAtom(":")
-)
+var atomColon = NewAtom(":")
 
 // dictFunction is the type for (predefined) functions that can be called on a Dict.
 type dictFunction func(*VM, []Term, Term, Term, Cont, *Env) *Promise
 
-var (
-	// predefinedFuncs are the predefined (reserved) functions that can be called on a Dict.
-	predefinedFuncs = map[Atom]map[int]dictFunction{
-		"get": {
-			1: func(vm *VM, args []Term, dict Term, result Term, cont Cont, env *Env) *Promise {
-				return GetDict3(vm, args[0], dict, result, cont, env)
-			},
-			2: func(vm *VM, args []Term, dict Term, result Term, cont Cont, env *Env) *Promise {
-				return GetDict4(vm, args[0], args[1], dict, result, cont, env)
-			},
+// predefinedFuncs are the predefined (reserved) functions that can be called on a Dict.
+var predefinedFuncs = map[Atom]map[int]dictFunction{
+	"get": {
+		1: func(vm *VM, args []Term, dict Term, result Term, cont Cont, env *Env) *Promise {
+			return GetDict3(vm, args[0], dict, result, cont, env)
 		},
-		"put": {
-			1: func(vm *VM, args []Term, dict Term, result Term, cont Cont, env *Env) *Promise {
-				return PutDict3(vm, args[0], dict, result, cont, env)
-			},
+		2: func(vm *VM, args []Term, dict Term, result Term, cont Cont, env *Env) *Promise {
+			return GetDict4(vm, args[0], args[1], dict, result, cont, env)
 		},
-		// TODO: to continue (https://www.swi-prolog.org/pldoc/man?section=ext-dicts-predefined)
-	}
-)
+	},
+	"put": {
+		1: func(vm *VM, args []Term, dict Term, result Term, cont Cont, env *Env) *Promise {
+			return PutDict3(vm, args[0], dict, result, cont, env)
+		},
+	},
+	// TODO: to continue (https://www.swi-prolog.org/pldoc/man?section=ext-dicts-predefined)
+}
 
 // Dict is a term that represents a dictionary.
 //
