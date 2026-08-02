@@ -1342,7 +1342,7 @@ func openSourceSink(fsys fs.FS, name string, mode ioMode, sourceSink Term, env *
 		if !ok {
 			return nil, permissionError(operationOpen, permissionTypeSourceSink, sourceSink, env)
 		}
-		f, err = ofs.OpenFile(name, int(mode), 0644)
+		f, err = ofs.OpenFile(name, int(mode), 0o644)
 	}
 
 	switch {

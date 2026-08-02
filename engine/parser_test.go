@@ -170,11 +170,14 @@ func TestParser_Term(t *testing.T) {
 
 		{input: `tag{}.`, term: &dict{compound{functor: "dict", args: []Term{NewAtom("tag")}}}},
 		{input: `tag{k:v}.`, term: &dict{compound{functor: "dict", args: []Term{NewAtom("tag"), NewAtom("k"), NewAtom("v")}}}},
-		{input: `t.d.`,
+		{
+			input: `t.d.`,
 			termLazy: func() Term {
 				return &compound{functor: "$dot", args: []Term{NewAtom("t"), NewAtom("d")}}
-			}},
-		{input: `X{}.`,
+			},
+		},
+		{
+			input: `X{}.`,
 			termLazy: func() Term {
 				return &dict{compound{functor: "dict", args: []Term{lastVariable()}}}
 			},
@@ -184,7 +187,8 @@ func TestParser_Term(t *testing.T) {
 				}
 			},
 		},
-		{input: `t{k:V}.`,
+		{
+			input: `t{k:V}.`,
 			termLazy: func() Term {
 				return &dict{compound{functor: "dict", args: []Term{NewAtom("t"), NewAtom("k"), lastVariable()}}}
 			},

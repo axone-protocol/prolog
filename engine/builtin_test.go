@@ -619,7 +619,7 @@ func TestAcyclicTerm(t *testing.T) {
 
 	t.Run("compound", func(t *testing.T) {
 		t.Run("cyclic", func(t *testing.T) {
-			var c = compound{
+			c := compound{
 				functor: NewAtom("f"),
 				args: []Term{
 					NewAtom("a"),
@@ -998,7 +998,8 @@ func TestOp(t *testing.T) {
 									specifier: operatorSpecifierXFX,
 									name:      NewAtom("+++"),
 								},
-							}},
+							},
+						},
 						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
 							Key: NewAtom(`+`),
 							Value: [_operatorClassLen]operator{
@@ -1007,7 +1008,8 @@ func TestOp(t *testing.T) {
 									specifier: operatorSpecifierXFX,
 									name:      atomPlus,
 								},
-							}},
+							},
+						},
 						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
 							Key: NewAtom(`++`),
 							Value: [_operatorClassLen]operator{
@@ -1016,7 +1018,11 @@ func TestOp(t *testing.T) {
 									specifier: operatorSpecifierXFX,
 									name:      NewAtom("++"),
 								},
-							}}))}, vm.getOperators())
+							},
+						},
+					),
+				),
+			}, vm.getOperators())
 		})
 
 		t.Run("list", func(t *testing.T) {
@@ -1032,7 +1038,8 @@ func TestOp(t *testing.T) {
 										specifier: operatorSpecifierXFX,
 										name:      NewAtom("+++"),
 									},
-								}},
+								},
+							},
 							orderedmap.Pair[Atom, [_operatorClassLen]operator]{
 								Key: NewAtom(`+`),
 								Value: [_operatorClassLen]operator{
@@ -1041,7 +1048,11 @@ func TestOp(t *testing.T) {
 										specifier: operatorSpecifierXFX,
 										name:      atomPlus,
 									},
-								}}))},
+								},
+							},
+						),
+					),
+				},
 			}
 			ok, err := Op(&vm, Integer(1000), atomXFX, List(NewAtom("++"), NewAtom("++")), Success, nil).Force(context.Background())
 			assert.NoError(t, err)
@@ -1058,7 +1069,8 @@ func TestOp(t *testing.T) {
 									specifier: operatorSpecifierXFX,
 									name:      NewAtom("+++"),
 								},
-							}},
+							},
+						},
 						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
 							Key: NewAtom(`+`),
 							Value: [_operatorClassLen]operator{
@@ -1067,7 +1079,8 @@ func TestOp(t *testing.T) {
 									specifier: operatorSpecifierXFX,
 									name:      atomPlus,
 								},
-							}},
+							},
+						},
 						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
 							Key: NewAtom(`++`),
 							Value: [_operatorClassLen]operator{
@@ -1076,7 +1089,11 @@ func TestOp(t *testing.T) {
 									specifier: operatorSpecifierXFX,
 									name:      NewAtom("++"),
 								},
-							}}))}, vm.getOperators())
+							},
+						},
+					),
+				),
+			}, vm.getOperators())
 		})
 	})
 
@@ -1093,7 +1110,8 @@ func TestOp(t *testing.T) {
 									specifier: operatorSpecifierXFX,
 									name:      NewAtom("+++"),
 								},
-							}},
+							},
+						},
 						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
 							Key: NewAtom(`++`),
 							Value: [_operatorClassLen]operator{
@@ -1102,7 +1120,8 @@ func TestOp(t *testing.T) {
 									specifier: operatorSpecifierXFX,
 									name:      NewAtom("++"),
 								},
-							}},
+							},
+						},
 						orderedmap.Pair[Atom, [_operatorClassLen]operator]{
 							Key: NewAtom(`+`),
 							Value: [_operatorClassLen]operator{
@@ -1111,7 +1130,11 @@ func TestOp(t *testing.T) {
 									specifier: operatorSpecifierXFX,
 									name:      atomPlus,
 								},
-							}}))},
+							},
+						},
+					),
+				),
+			},
 		}
 		ok, err := Op(&vm, Integer(0), atomXFX, NewAtom("++"), Success, nil).Force(context.Background())
 		assert.NoError(t, err)
@@ -1128,7 +1151,8 @@ func TestOp(t *testing.T) {
 								specifier: operatorSpecifierXFX,
 								name:      NewAtom("+++"),
 							},
-						}},
+						},
+					},
 					orderedmap.Pair[Atom, [_operatorClassLen]operator]{
 						Key: NewAtom(`+`),
 						Value: [_operatorClassLen]operator{
@@ -1137,7 +1161,11 @@ func TestOp(t *testing.T) {
 								specifier: operatorSpecifierXFX,
 								name:      atomPlus,
 							},
-						}}))}, vm.getOperators())
+						},
+					},
+				),
+			),
+		}, vm.getOperators())
 	})
 
 	t.Run("priority is a variable", func(t *testing.T) {
@@ -1547,7 +1575,8 @@ func TestBagOf(t *testing.T) {
 		{
 			title:    "out of memory: goal",
 			template: x,
-			goal: seq(atomSemiColon,
+			goal: seq(
+				atomSemiColon,
 				atomEqual.Apply(x, NewVariable()),
 				atomEqual.Apply(x, NewVariable()),
 				atomEqual.Apply(x, NewVariable()),
@@ -1564,7 +1593,8 @@ func TestBagOf(t *testing.T) {
 		{
 			title:    "out of memory: free variables",
 			template: x,
-			goal: seq(atomSemiColon,
+			goal: seq(
+				atomSemiColon,
 				atomEqual.Apply(x, NewVariable()),
 				atomEqual.Apply(x, NewVariable()),
 				atomEqual.Apply(x, NewVariable()),
@@ -1946,7 +1976,8 @@ func TestSetOf(t *testing.T) {
 		{
 			title:    "out of memory: goal",
 			template: x,
-			goal: seq(atomSemiColon,
+			goal: seq(
+				atomSemiColon,
 				atomEqual.Apply(x, NewVariable()),
 				atomEqual.Apply(x, NewVariable()),
 				atomEqual.Apply(x, NewVariable()),
@@ -1963,7 +1994,8 @@ func TestSetOf(t *testing.T) {
 		{
 			title:    "out of memory: free variables",
 			template: x,
-			goal: seq(atomSemiColon,
+			goal: seq(
+				atomSemiColon,
 				atomEqual.Apply(x, NewVariable()),
 				atomEqual.Apply(x, NewVariable()),
 				atomEqual.Apply(x, NewVariable()),
@@ -3016,7 +3048,8 @@ func TestAsserta(t *testing.T) {
 					functor: atomComma,
 					args: []Term{
 						atomTrue,
-						Integer(0)},
+						Integer(0),
+					},
 				},
 			},
 		}, Success, nil).Force(context.Background())
@@ -3024,7 +3057,8 @@ func TestAsserta(t *testing.T) {
 			functor: atomComma,
 			args: []Term{
 				atomTrue,
-				Integer(0)},
+				Integer(0),
+			},
 		}, nil), err)
 		assert.False(t, ok)
 	})
@@ -3911,7 +3945,8 @@ func TestOpen(t *testing.T) {
 	t.Run("options is a partial list or a list with an element E which is a variable", func(t *testing.T) {
 		t.Run("partial list", func(t *testing.T) {
 			vm := newVM()
-			ok, err := Open(&vm, NewAtom("/dev/null"), atomRead, NewVariable(), PartialList(NewVariable(),
+			ok, err := Open(&vm, NewAtom("/dev/null"), atomRead, NewVariable(), PartialList(
+				NewVariable(),
 				atomType.Apply(atomText),
 				atomAlias.Apply(NewAtom("foo")),
 			), Success, nil).Force(context.Background())
@@ -4016,7 +4051,7 @@ func TestOpen(t *testing.T) {
 			assert.NoError(t, os.Remove(f.Name()))
 		}()
 
-		assert.NoError(t, f.Chmod(0200))
+		assert.NoError(t, f.Chmod(0o200))
 
 		vm := newVM()
 		ok, err := Open(&vm, NewAtom(f.Name()), atomRead, NewVariable(), List(), Success, nil).Force(context.Background())
@@ -4168,7 +4203,8 @@ func TestClose(t *testing.T) {
 	t.Run("options is a partial list or a list with an element E which is a variable", func(t *testing.T) {
 		t.Run("partial list", func(t *testing.T) {
 			var vm VM
-			ok, err := Close(&vm, &Stream{}, PartialList(NewVariable(),
+			ok, err := Close(&vm, &Stream{}, PartialList(
+				NewVariable(),
 				atomForce.Apply(atomTrue),
 			), Success, nil).Force(context.Background())
 			assert.Equal(t, InstantiationError(nil), err)
@@ -4904,7 +4940,8 @@ func TestReadTerm(t *testing.T) {
 	t.Run("options is a partial list or a list with an element which is a variable", func(t *testing.T) {
 		t.Run("partial list", func(t *testing.T) {
 			var vm VM
-			ok, err := ReadTerm(&vm, &Stream{source: os.Stdin}, NewVariable(), PartialList(NewVariable(),
+			ok, err := ReadTerm(&vm, &Stream{source: os.Stdin}, NewVariable(), PartialList(
+				NewVariable(),
 				atomVariables.Apply(NewVariable()),
 			), Success, nil).Force(context.Background())
 			assert.Equal(t, InstantiationError(nil), err)
@@ -5027,7 +5064,6 @@ func TestReadTerm(t *testing.T) {
 			assert.NoError(t, err)
 			assert.True(t, ok)
 		})
-
 	})
 
 	t.Run("the sequence of tokens cannot be parsed as a term using the current set of operator definitions", func(t *testing.T) {
@@ -6271,7 +6307,8 @@ func TestNumberChars(t *testing.T) {
 	})
 
 	t.Run("num is a variable and chars is a partial list", func(t *testing.T) {
-		chars := PartialList(NewVariable(),
+		chars := PartialList(
+			NewVariable(),
 			NewAtom("2"), NewAtom("3"), atomDot, NewAtom("4"),
 		)
 
@@ -7170,7 +7207,8 @@ term_expansion(f(X), g(X)).
 			out: func() Term {
 				return atomIf.Apply(
 					s.Apply(lastVariable()+1, lastVariable()+3),
-					seq(atomComma,
+					seq(
+						atomComma,
 						a.Apply(lastVariable()+1, lastVariable()+4),
 						b.Apply(lastVariable()+4, lastVariable()+3),
 					),
@@ -7196,7 +7234,8 @@ term_expansion(f(X), g(X)).
 			out: func() Term {
 				return atomIf.Apply(
 					s.Apply(lastVariable()+1, lastVariable()+3),
-					seq(atomSemiColon,
+					seq(
+						atomSemiColon,
 						a.Apply(lastVariable()+1, lastVariable()+3),
 						b.Apply(lastVariable()+1, lastVariable()+3),
 					),
@@ -7210,7 +7249,8 @@ term_expansion(f(X), g(X)).
 			out: func() Term {
 				return atomIf.Apply(
 					s.Apply(lastVariable()+1, lastVariable()+3),
-					seq(atomSemiColon,
+					seq(
+						atomSemiColon,
 						atomThen.Apply(
 							a.Apply(lastVariable()+1, lastVariable()+4),
 							b.Apply(lastVariable()+4, lastVariable()+3),
@@ -7239,7 +7279,8 @@ term_expansion(f(X), g(X)).
 			out: func() Term {
 				return atomIf.Apply(
 					s.Apply(lastVariable()+1, lastVariable()+3),
-					seq(atomSemiColon,
+					seq(
+						atomSemiColon,
 						a.Apply(lastVariable()+1, lastVariable()+3),
 						b.Apply(lastVariable()+1, lastVariable()+3),
 					),
@@ -7265,7 +7306,8 @@ term_expansion(f(X), g(X)).
 			out: func() Term {
 				return atomIf.Apply(
 					s.Apply(lastVariable()+1, lastVariable()+3),
-					seq(atomComma,
+					seq(
+						atomComma,
 						a,
 						atomEqual.Apply(lastVariable()+1, lastVariable()+3),
 					),
@@ -7301,7 +7343,8 @@ term_expansion(f(X), g(X)).
 			out: func() Term {
 				return atomIf.Apply(
 					s.Apply(lastVariable()+1, lastVariable()+3),
-					seq(atomComma,
+					seq(
+						atomComma,
 						atomCut,
 						atomEqual.Apply(lastVariable()+1, lastVariable()+3),
 					),
@@ -7315,7 +7358,8 @@ term_expansion(f(X), g(X)).
 			out: func() Term {
 				return atomIf.Apply(
 					s.Apply(lastVariable()+1, lastVariable()+3),
-					seq(atomComma,
+					seq(
+						atomComma,
 						atomNegation.Apply(a.Apply(lastVariable()+1, lastVariable()+4)),
 						atomEqual.Apply(lastVariable()+1, lastVariable()+3),
 					),

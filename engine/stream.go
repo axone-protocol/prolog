@@ -392,7 +392,8 @@ func (s *Stream) properties() []Term {
 		ps = append(ps, atomAlias.Apply(s.alias))
 	}
 
-	ps = append(ps,
+	ps = append(
+		ps,
 		atomPosition.Apply(Integer(s.position)),
 		atomEndOfStream.Apply(s.endOfStream.Term()),
 		atomEOFAction.Apply(s.eofAction.Term()),

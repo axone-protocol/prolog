@@ -10,8 +10,10 @@ func TestNewException(t *testing.T) {
 	assert.Equal(t, Exception{term: NewAtom("foo").Apply(NewAtom("bar"))}, NewException(NewAtom("foo").Apply(NewAtom("bar")), nil))
 
 	assert.Equal(t,
-		Exception{term: NewAtom("foo").Apply(
-			newDict([]Term{NewAtom("point"), NewAtom("x"), Integer(0), NewAtom("y"), Integer(1)})),
+		Exception{
+			term: NewAtom("foo").Apply(
+				newDict([]Term{NewAtom("point"), NewAtom("x"), Integer(0), NewAtom("y"), Integer(1)}),
+			),
 		},
 		NewException(NewAtom("foo").Apply(newDict([]Term{NewAtom("point"), NewAtom("x"), Integer(0), NewAtom("y"), Integer(1)})), nil))
 

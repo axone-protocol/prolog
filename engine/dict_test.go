@@ -124,17 +124,17 @@ func TestDictTag(t *testing.T) {
 			dict: &dict{
 				compound: compound{
 					functor: atomDict,
-					args:    []Term{NewAtom("empty")}}},
+					args:    []Term{NewAtom("empty")},
+				},
+			},
 			want: NewAtom("empty"),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			got := tt.dict.Tag()
 			assert.Equal(t, tt.want, got)
-
 		})
 	}
 }
@@ -164,7 +164,8 @@ func TestDictAll(t *testing.T) {
 				NewAtom("point"),
 				NewAtom("x"), Integer(1),
 				NewAtom("y"), Integer(2),
-				NewAtom("z"), makeDict(NewAtom("nested"), NewAtom("foo"), NewAtom("bar"))),
+				NewAtom("z"), makeDict(NewAtom("nested"), NewAtom("foo"), NewAtom("bar")),
+			),
 			wantPairs: []orderedmap.Pair[Atom, Term]{
 				{Key: NewAtom("x"), Value: Integer(1)},
 				{Key: NewAtom("y"), Value: Integer(2)},
@@ -175,7 +176,6 @@ func TestDictAll(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			want := orderedmap.New[Atom, Term]()
 			want.AddPairs(tt.wantPairs...)
 
@@ -212,17 +212,16 @@ func TestDictLen(t *testing.T) {
 				NewAtom("point"),
 				NewAtom("x"), Integer(1),
 				NewAtom("y"), Integer(2),
-				NewAtom("z"), makeDict(NewAtom("nested"), NewAtom("foo"), NewAtom("bar"))),
+				NewAtom("z"), makeDict(NewAtom("nested"), NewAtom("foo"), NewAtom("bar")),
+			),
 			want: 3,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			got := tt.dict.Len()
 			assert.Equal(t, tt.want, got)
-
 		})
 	}
 }
@@ -249,7 +248,8 @@ func TestDictWrite(t *testing.T) {
 				NewAtom("point"),
 				NewAtom("x"), Integer(1),
 				NewAtom("y"), Integer(2),
-				NewAtom("z"), makeDict(NewAtom("nested"), NewAtom("foo"), NewAtom("bar"))),
+				NewAtom("z"), makeDict(NewAtom("nested"), NewAtom("foo"), NewAtom("bar")),
+			),
 			want: "point{x:1,y:2,z:nested{foo:bar}}",
 		},
 	}
@@ -262,10 +262,10 @@ func TestDictWrite(t *testing.T) {
 			assert.NoError(t, err)
 			got := buf.String()
 			assert.Equal(t, tt.want, got)
-
 		})
 	}
 }
+
 func TestDictValue(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -315,7 +315,8 @@ func TestDictValue(t *testing.T) {
 				NewAtom("point"),
 				NewAtom("x"), Integer(1),
 				NewAtom("y"), Integer(2),
-				NewAtom("z"), makeDict(NewAtom("nested"), NewAtom("foo"), NewAtom("bar"))),
+				NewAtom("z"), makeDict(NewAtom("nested"), NewAtom("foo"), NewAtom("bar")),
+			),
 			key:       NewAtom("z"),
 			wantValue: makeDict(NewAtom("nested"), NewAtom("foo"), NewAtom("bar")),
 			wantFound: true,
@@ -330,6 +331,7 @@ func TestDictValue(t *testing.T) {
 		})
 	}
 }
+
 func TestDictAt(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -390,6 +392,7 @@ func TestDictAt(t *testing.T) {
 		})
 	}
 }
+
 func TestOp3(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -417,7 +420,9 @@ func TestOp3(t *testing.T) {
 			dict: &dict{
 				compound: compound{
 					functor: atomDict,
-					args:    []Term{NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)}}},
+					args:    []Term{NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)},
+				},
+			},
 			function:   NewAtom("get").Apply(NewAtom("x")),
 			wantResult: Integer(1),
 		},
@@ -433,7 +438,8 @@ func TestOp3(t *testing.T) {
 				NewAtom("point"),
 				NewAtom("x"), Integer(1),
 				NewAtom("y"), Integer(2),
-				NewAtom("z"), makeDict(NewAtom("nested"), NewAtom("foo"), NewAtom("bar"))),
+				NewAtom("z"), makeDict(NewAtom("nested"), NewAtom("foo"), NewAtom("bar")),
+			),
 			function:   NewAtom("get").Apply(atomSlash.Apply(NewAtom("z"), NewAtom("foo"))),
 			wantResult: NewAtom("bar"),
 		},
@@ -791,7 +797,8 @@ func TestWriteDict(t *testing.T) {
 
 			d := makeDict(
 				NewAtom("point"),
-				NewAtom("x"), Integer(1), NewAtom("y"), Integer(2))
+				NewAtom("x"), Integer(1), NewAtom("y"), Integer(2),
+			)
 
 			err := d.WriteTerm(&w, &defaultWriteOptions, env)
 

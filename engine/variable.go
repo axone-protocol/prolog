@@ -9,13 +9,15 @@ import (
 
 var ErrMaxVariables = errors.New("maximum number of variables reached")
 
-var maxVariables uint64
-var varCounter = struct {
-	sync.Mutex
-	count uint64
-}{
-	count: 0,
-}
+var (
+	maxVariables uint64
+	varCounter   = struct {
+		sync.Mutex
+		count uint64
+	}{
+		count: 0,
+	}
+)
 
 func lastVariable() Variable {
 	defer varCounter.Unlock()

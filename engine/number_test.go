@@ -2,10 +2,11 @@ package engine
 
 import (
 	"context"
-	"github.com/cockroachdb/apd/v3"
 	"io"
 	"math"
 	"testing"
+
+	"github.com/cockroachdb/apd/v3"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"

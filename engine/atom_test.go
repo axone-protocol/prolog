@@ -2,9 +2,10 @@ package engine
 
 import (
 	"bytes"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
-	"testing"
 )
 
 func TestAtom_WriteTerm(t *testing.T) {

@@ -11,9 +11,7 @@ var (
 	falsePromise = &Promise{ok: false}
 )
 
-var (
-	AtomPanicError = NewAtom("panic_error")
-)
+var AtomPanicError = NewAtom("panic_error")
 
 // PromiseFunc defines the type of a function that returns a promise.
 type PromiseFunc = func(context.Context) *Promise

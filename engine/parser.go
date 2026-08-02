@@ -20,9 +20,7 @@ var (
 	errPlaceholder = errors.New("not enough arguments for placeholders")
 )
 
-var (
-	atomSpecialDot = NewAtom("$dot")
-)
+var atomSpecialDot = NewAtom("$dot")
 
 // Parser turns bytes into Term.
 type Parser struct {

@@ -2,12 +2,13 @@ package engine
 
 import (
 	"errors"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestErrWriter_Write(t *testing.T) {
-	var failed = errors.New("failed")
+	failed := errors.New("failed")
 
 	var m mockWriter
 	m.On("Write", []byte("foo")).Return(0, failed).Once()
