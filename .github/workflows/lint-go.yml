@@ -1,0 +1,45 @@
+name: Lint Go
+
+on:
+  workflow_call:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/lint-go.yml"
+      - ".golangci.yml"
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - "flake.nix"
+      - "flake.lock"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/lint-go.yml"
+      - ".golangci.yml"
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - "flake.nix"
+      - "flake.lock"
+
+concurrency:
+  group: lint-go-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint-go:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@a49548c11d9846ad46ecc0115273879b045f001c  # v31.10.7
+
+      - name: Lint Go code
+        run: nix develop --command golangci-lint run ./...
