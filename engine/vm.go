@@ -299,7 +299,7 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 		case OpPop:
 			args, astack = astack[len(astack)-1], astack[:len(astack)-1]
 		case OpEnter:
-			break
+			// Enter marks the start of a clause; no register changes are needed.
 		case OpCall:
 			pi := operand.(procedureIndicator)
 			return vm.Arrive(pi.name, args, func(env *Env) *Promise {

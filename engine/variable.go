@@ -54,7 +54,7 @@ func (v Variable) WriteTerm(w io.Writer, opts *WriteOptions, env *Env) error {
 	if a, ok := opts.variableNames[v]; ok {
 		_ = a.WriteTerm(&ew, opts.withQuoted(false).withLeft(operator{}).withRight(operator{}), env)
 	} else {
-		_, _ = ew.Write([]byte(fmt.Sprintf("_%d", v)))
+		_, _ = fmt.Fprintf(&ew, "_%d", v)
 	}
 	if letterDigit(opts.right.name) {
 		_, _ = ew.Write([]byte(" "))

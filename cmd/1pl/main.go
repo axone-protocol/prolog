@@ -14,7 +14,7 @@ import (
 	"sort"
 	"strings"
 
-	"golang.org/x/crypto/ssh/terminal"
+	terminal "golang.org/x/term"
 
 	"github.com/axone-protocol/prolog/v3"
 	"github.com/axone-protocol/prolog/v3/engine"
@@ -89,8 +89,6 @@ Type Ctrl-C or 'halt.' to exit.
 	keys := bufio.NewReader(os.Stdin)
 	for {
 		switch err := handleLine(ctx, &buf, i, t, keys); err {
-		case nil:
-			break
 		case io.EOF:
 			return
 		default:

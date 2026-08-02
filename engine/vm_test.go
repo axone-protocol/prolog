@@ -349,8 +349,8 @@ func TestVM_ResetEnv(t *testing.T) {
 
 		assert.Equal(t, uint64(1), varCounter.count) // 1 because NewVariable() is called in ResetEnv()
 		assert.Equal(t, "root", rootContext.String())
-		assert.Equal(t, newEnvKey(varContext), rootEnv.binding.key)
-		assert.Equal(t, NewAtom("root"), rootEnv.binding.value)
+		assert.Equal(t, newEnvKey(varContext), rootEnv.key)
+		assert.Equal(t, NewAtom("root"), rootEnv.value)
 		assert.Equal(t, uint64(20), maxVariables)
 	})
 }

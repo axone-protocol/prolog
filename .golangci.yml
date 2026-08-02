@@ -6,4 +6,5 @@ linters:
     - errcheck
     - govet
     - ineffassign
+    - staticcheck
     - unused
