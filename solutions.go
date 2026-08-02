@@ -52,7 +52,7 @@ func (s *Solutions) Next() bool {
 // Scan copies the variable values of the current solution into the specified struct/map.
 func (s *Solutions) Scan(dest interface{}) error {
 	o := reflect.ValueOf(dest)
-	for o.Kind() == reflect.Ptr {
+	for o.Kind() == reflect.Pointer {
 		o = o.Elem()
 	}
 	switch o.Kind() {
