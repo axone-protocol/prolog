@@ -49,5 +49,8 @@ jobs:
             exit 1
           fi
 
+      - name: Verify Go modules are tidy
+        run: nix develop --command go mod tidy -diff
+
       - name: Lint Go code
         run: nix develop --command golangci-lint run ./...
