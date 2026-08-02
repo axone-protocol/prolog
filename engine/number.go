@@ -667,7 +667,7 @@ func bitwiseRightShift(n, s Number) (Number, error) {
 	case Integer:
 		switch s := s.(type) {
 		case Integer:
-			return Integer(n >> s), nil
+			return n >> s, nil
 		default:
 			return nil, typeError(validTypeInteger, s, nil)
 		}
@@ -682,7 +682,7 @@ func bitwiseLeftShift(n, s Number) (Number, error) {
 	case Integer:
 		switch s := s.(type) {
 		case Integer:
-			return Integer(n << s), nil
+			return n << s, nil
 		default:
 			return nil, typeError(validTypeInteger, s, nil)
 		}
