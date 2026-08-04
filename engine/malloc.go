@@ -22,6 +22,9 @@ var memFree = func() int64 {
 // There's still a chance to breach the limit due to a race condition.
 // Yet, it can still prevent allocation of unreasonably large slices.
 func makeSlice(n int) (_ []Term, err error) {
+	if n < 0 {
+		return nil, errOutOfMemory
+	}
 	if n <= 8 { // Overlook small slices for better performance.
 		return make([]Term, n), nil
 	}
