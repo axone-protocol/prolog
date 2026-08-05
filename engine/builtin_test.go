@@ -4085,6 +4085,47 @@ func TestOpen(t *testing.T) {
 		_, err := Open(&vm, NewAtom("foo"), atomRead, NewVariable(), List(), Success, nil).Force(context.Background())
 		assert.ErrorIs(t, err, wantErr)
 	})
+
+	t.Run("invalid option after alias rolls back file and alias", func(t *testing.T) {
+		fsys := &recordingOpenFileFS{}
+		vm := VM{FS: fsys}
+
+		foo := NewAtom("foo")
+		invalid := &compound{functor: NewAtom("unknown"), args: []Term{NewAtom("option")}}
+		wantErr := domainError(validDomainStreamOption, invalid, nil)
+
+		ok, err := Open(&vm, NewAtom("dummy"), atomRead, NewVariable(), List(
+			atomAlias.Apply(foo),
+			invalid,
+		), Success, nil).Force(context.Background())
+
+		assert.Equal(t, wantErr, err)
+		assert.False(t, ok)
+		if assert.NotNil(t, fsys.last) {
+			assert.True(t, fsys.last.closed)
+			assert.Equal(t, 1, fsys.last.closes)
+		}
+		_, found := vm.streams.lookup(foo)
+		assert.False(t, found)
+	})
+
+	t.Run("invalid option without alias closes file once", func(t *testing.T) {
+		fsys := &recordingOpenFileFS{}
+		vm := VM{FS: fsys}
+
+		invalid := &compound{functor: NewAtom("unknown"), args: []Term{NewAtom("option")}}
+		wantErr := domainError(validDomainStreamOption, invalid, nil)
+
+		ok, err := Open(&vm, NewAtom("dummy"), atomRead, NewVariable(), List(invalid), Success, nil).
+			Force(context.Background())
+
+		assert.Equal(t, wantErr, err)
+		assert.False(t, ok)
+		if assert.NotNil(t, fsys.last) {
+			assert.True(t, fsys.last.closed)
+			assert.Equal(t, 1, fsys.last.closes)
+		}
+	})
 }
 
 func TestCloseFile(t *testing.T) {
@@ -8059,6 +8100,7 @@ func (r *recordingOpenFileFS) OpenFile(name string, flag int, perm fs.FileMode) 
 
 type stubFile struct {
 	closed bool
+	closes int
 }
 
 type stubFileInfo struct{}
@@ -8073,6 +8115,7 @@ func (stubFileInfo) Sys() any           { return nil }
 func (f *stubFile) Stat() (fs.FileInfo, error) { return stubFileInfo{}, nil }
 func (f *stubFile) Read(p []byte) (int, error) { return 0, io.EOF }
 func (f *stubFile) Close() error {
+	f.closes++
 	f.closed = true
 	return nil
 }
