@@ -1319,14 +1319,23 @@ func Open(vm *VM, sourceSink, mode, stream, options Term, k Cont, env *Env) *Pro
 	iter := ListIterator{List: options, Env: env}
 	for iter.Next() {
 		if err := handleStreamOption(vm, &s, iter.Current(), env); err != nil {
+			rollbackOpen(vm, &s, f)
 			return Error(err)
 		}
 	}
 	if err := iter.Err(); err != nil {
+		rollbackOpen(vm, &s, f)
 		return Error(err)
 	}
 
 	return Unify(vm, stream, &s, k, env)
+}
+
+func rollbackOpen(vm *VM, s *Stream, f fs.File) {
+	_ = closeFile(f)
+	if s.alias != "" {
+		vm.streams.remove(s)
+	}
 }
 
 func openSourceSink(fsys fs.FS, name string, mode ioMode, sourceSink Term, env *Env) (fs.File, error) {
