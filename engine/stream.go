@@ -468,9 +468,9 @@ const (
 	// ioModeRead means you can read from the stream.
 	ioModeRead = ioMode(os.O_RDONLY)
 	// ioModeWrite means you can write to the stream.
-	ioModeWrite = ioMode(os.O_CREATE | os.O_WRONLY)
+	ioModeWrite = ioMode(os.O_CREATE | os.O_WRONLY | os.O_TRUNC)
 	// ioModeAppend means you can append to the stream.
-	ioModeAppend = ioMode(os.O_APPEND) | ioModeWrite
+	ioModeAppend = ioMode(os.O_APPEND | os.O_CREATE | os.O_WRONLY)
 	// ioModeReadWrite means you can both read from and write to an existing stream.
 	ioModeReadWrite = ioMode(os.O_RDWR)
 )

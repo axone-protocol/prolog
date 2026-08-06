@@ -3703,8 +3703,10 @@ func TestOpen(t *testing.T) {
 		defer func() {
 			assert.NoError(t, os.Remove(n))
 		}()
+		assert.NoError(t, os.WriteFile(n, []byte("longer existing payload"), 0o644))
 
 		v := NewVariable()
+		var s *Stream
 
 		ok, err := Open(&vm, NewAtom(n), atomWrite, v, List(&compound{
 			functor: atomAlias,
@@ -3712,7 +3714,7 @@ func TestOpen(t *testing.T) {
 		}), func(env *Env) *Promise {
 			ref, ok := env.lookup(v)
 			assert.True(t, ok)
-			s, ok := ref.(*Stream)
+			s, ok = ref.(*Stream)
 			assert.True(t, ok)
 
 			l, ok := vm.streams.lookup(atomOutput)
@@ -3722,20 +3724,15 @@ func TestOpen(t *testing.T) {
 			_, err := fmt.Fprintf(s.sink, "test\n")
 			assert.NoError(t, err)
 
-			f, err := os.Open(n)
-			assert.NoError(t, err)
-			defer func() {
-				assert.NoError(t, f.Close())
-			}()
-
-			b, err := io.ReadAll(f)
-			assert.NoError(t, err)
-			assert.Equal(t, "test\n", string(b))
-
 			return Bool(true)
 		}, nil).Force(context.Background())
 		assert.NoError(t, err)
 		assert.True(t, ok)
+		assert.NoError(t, s.Close())
+
+		b, err := os.ReadFile(n)
+		assert.NoError(t, err)
+		assert.Equal(t, "test\n", string(b))
 	})
 
 	t.Run("read_write", func(t *testing.T) {
