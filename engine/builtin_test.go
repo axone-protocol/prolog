@@ -3925,6 +3925,25 @@ func TestOpen(t *testing.T) {
 		}
 	})
 
+	t.Run("read_write closes its file once", func(t *testing.T) {
+		fsys := &recordingReadWriteOpenFileFS{}
+		vm := VM{FS: fsys}
+		v := NewVariable()
+
+		ok, err := Open(&vm, NewAtom("dummy"), atomReadWrite, v, List(), func(env *Env) *Promise {
+			s, ok := env.Resolve(v).(*Stream)
+			assert.True(t, ok)
+			assert.NoError(t, s.Close())
+			return Bool(true)
+		}, nil).Force(context.Background())
+
+		assert.NoError(t, err)
+		assert.True(t, ok)
+		if assert.NotNil(t, fsys.last) {
+			assert.Equal(t, 1, fsys.last.closes)
+		}
+	})
+
 	t.Run("sourceSink is a variable", func(t *testing.T) {
 		vm := newVM()
 		ok, err := Open(&vm, NewVariable(), atomRead, NewVariable(), List(), Success, nil).Force(context.Background())
@@ -4213,6 +4232,26 @@ func TestClose(t *testing.T) {
 		assert.True(t, ok)
 	})
 
+	t.Run("force true unregisters failing alias", func(t *testing.T) {
+		var m struct {
+			mockReader
+			mockCloser
+		}
+		m.mockCloser.On("Close").Return(errors.New("failed")).Once()
+		defer m.mockCloser.AssertExpectations(t)
+
+		var vm VM
+		alias := NewAtom("failing")
+		s := &Stream{vm: &vm, source: &m, alias: alias}
+		vm.streams.add(s)
+
+		ok, err := Close(&vm, alias, List(atomForce.Apply(atomTrue)), Success, nil).Force(context.Background())
+		assert.NoError(t, err)
+		assert.True(t, ok)
+		_, found := vm.streams.lookup(alias)
+		assert.False(t, found)
+	})
+
 	t.Run("valid stream alias", func(t *testing.T) {
 		var m struct {
 			mockReader
@@ -4222,13 +4261,15 @@ func TestClose(t *testing.T) {
 		defer m.mockCloser.AssertExpectations(t)
 
 		foo := NewAtom("foo")
-		s := &Stream{source: &m, alias: foo}
 
 		var vm VM
+		s := &Stream{vm: &vm, source: &m, alias: foo}
 		vm.streams.add(s)
 		ok, err := Close(&vm, NewAtom("foo"), List(), Success, nil).Force(context.Background())
 		assert.NoError(t, err)
 		assert.True(t, ok)
+		_, found := vm.streams.lookup(foo)
+		assert.False(t, found)
 	})
 
 	t.Run("streamOrAlias ia a variable", func(t *testing.T) {
@@ -8081,6 +8122,30 @@ func (e errFS) OpenFile(name string, flag int, perm fs.FileMode) (fs.File, error
 
 type recordingOpenFileFS struct {
 	last *stubFile
+}
+
+type recordingReadWriteOpenFileFS struct {
+	last *recordingReadWriteFile
+}
+
+func (r *recordingReadWriteOpenFileFS) Open(name string) (fs.File, error) {
+	f := &recordingReadWriteFile{}
+	r.last = f
+	return f, nil
+}
+
+func (r *recordingReadWriteOpenFileFS) OpenFile(name string, flag int, perm fs.FileMode) (fs.File, error) {
+	f := &recordingReadWriteFile{}
+	r.last = f
+	return f, nil
+}
+
+type recordingReadWriteFile struct {
+	stubFile
+}
+
+func (f *recordingReadWriteFile) Write(p []byte) (int, error) {
+	return len(p), nil
 }
 
 func (r *recordingOpenFileFS) Open(name string) (fs.File, error) {

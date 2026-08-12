@@ -1289,6 +1289,7 @@ func Open(vm *VM, sourceSink, mode, stream, options Term, k Cont, env *Env) *Pro
 	if err != nil {
 		return Error(err)
 	}
+	s.closer = f
 
 	switch s.mode {
 	case ioModeRead:
