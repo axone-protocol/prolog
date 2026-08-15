@@ -37,6 +37,7 @@ type Stream struct {
 
 	source       io.Reader
 	sink         io.Writer
+	closer       io.Closer
 	buf          bufReader
 	lastRuneSize int
 
@@ -289,23 +290,32 @@ func (s *Stream) Flush() error {
 
 // Close closes the underlying source/sink.
 func (s *Stream) Close() error {
+	defer func() {
+		if s.vm != nil {
+			s.vm.streams.remove(s)
+		}
+	}()
+
+	if s.closer != nil {
+		return s.closer.Close()
+	}
+
+	var firstErr error
 	if c, ok := s.source.(io.Closer); ok {
 		if err := c.Close(); err != nil {
-			return err
+			firstErr = err
 		}
 	}
 
 	if c, ok := s.sink.(io.Closer); ok {
 		if err := c.Close(); err != nil {
-			return err
+			if firstErr == nil {
+				firstErr = err
+			}
 		}
 	}
 
-	if s.vm != nil {
-		s.vm.streams.remove(s)
-	}
-
-	return nil
+	return firstErr
 }
 
 func (s *Stream) initRead() error {

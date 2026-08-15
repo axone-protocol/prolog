@@ -263,6 +263,34 @@ func TestStream_Close(t *testing.T) {
 			assert.Equal(t, tt.err, tt.s.Close())
 		})
 	}
+
+	t.Run("returns first error and unregisters", func(t *testing.T) {
+		firstErr := errors.New("first")
+		secondErr := errors.New("second")
+
+		var source struct {
+			mockReader
+			mockCloser
+		}
+		source.mockCloser.On("Close").Return(firstErr).Once()
+		defer source.mockCloser.AssertExpectations(t)
+
+		var sink struct {
+			mockWriter
+			mockCloser
+		}
+		sink.mockCloser.On("Close").Return(secondErr).Once()
+		defer sink.mockCloser.AssertExpectations(t)
+
+		var vm VM
+		alias := NewAtom("failing")
+		s := &Stream{vm: &vm, source: &source, sink: &sink, alias: alias}
+		vm.streams.add(s)
+
+		assert.Equal(t, firstErr, s.Close())
+		_, found := vm.streams.lookup(alias)
+		assert.False(t, found)
+	})
 }
 
 type mockReader struct {
