@@ -24,7 +24,7 @@ func mustOpen(fs fs.FS, name string) fs.File {
 }
 
 func TestVM_Compile(t *testing.T) {
-	varCounter.count = 1
+	var expectedVM VM
 
 	tests := []struct {
 		title  string
@@ -141,15 +141,15 @@ bar(X, "abc", [a, b], [a, b|Y], f(a)) :- X, !, foo(X, "abc", [a, b], [a, b|Y], f
 						{
 							pi: procedureIndicator{name: NewAtom("bar"), arity: 5},
 							raw: atomIf.Apply(
-								NewAtom("bar").Apply(lastVariable()+1, charList("abc"), List(NewAtom("a"), NewAtom("b")), PartialList(lastVariable()+2, NewAtom("a"), NewAtom("b")), NewAtom("f").Apply(NewAtom("a"))),
+								NewAtom("bar").Apply(Variable(expectedVM.variableCount+1), charList("abc"), List(NewAtom("a"), NewAtom("b")), PartialList(Variable(expectedVM.variableCount+2), NewAtom("a"), NewAtom("b")), NewAtom("f").Apply(NewAtom("a"))),
 								seq(
 									atomComma,
-									lastVariable()+1,
+									Variable(expectedVM.variableCount+1),
 									atomCut,
-									NewAtom("foo").Apply(lastVariable()+1, charList("abc"), List(NewAtom("a"), NewAtom("b")), PartialList(lastVariable()+2, NewAtom("a"), NewAtom("b")), NewAtom("f").Apply(NewAtom("a"))),
+									NewAtom("foo").Apply(Variable(expectedVM.variableCount+1), charList("abc"), List(NewAtom("a"), NewAtom("b")), PartialList(Variable(expectedVM.variableCount+2), NewAtom("a"), NewAtom("b")), NewAtom("f").Apply(NewAtom("a"))),
 								),
 							),
-							vars: []Variable{lastVariable() + 1, lastVariable() + 2},
+							vars: []Variable{Variable(expectedVM.variableCount + 1), Variable(expectedVM.variableCount + 2)},
 							bytecode: bytecode{
 								{opcode: OpGetVar, operand: Integer(0)},
 								{opcode: OpGetConst, operand: charList("abc")},
@@ -265,7 +265,7 @@ point(point{x: 5}.x).
 									NewAtom("x"),
 								}},
 							}},
-							vars: []Variable{lastVariable() + 1},
+							vars: []Variable{Variable(expectedVM.variableCount + 1)},
 							bytecode: bytecode{
 								{opcode: OpGetVar, operand: Integer(0)},
 								{opcode: OpEnter},
@@ -318,7 +318,7 @@ point(point{x: 5}.x) :- true.
 								}},
 								NewAtom("true"),
 							),
-							vars: []Variable{lastVariable() + 1},
+							vars: []Variable{Variable(expectedVM.variableCount + 1)},
 							bytecode: bytecode{
 								{opcode: OpGetVar, operand: Integer(0)},
 								{opcode: OpEnter},
@@ -414,14 +414,14 @@ x(X) :- p(P), =(X, P.x).
 						{
 							pi: procedureIndicator{name: NewAtom("x"), arity: 1},
 							raw: atomIf.Apply(
-								NewAtom("x").Apply(lastVariable()+1),
+								NewAtom("x").Apply(Variable(expectedVM.variableCount+1)),
 								seq(
 									atomComma,
-									NewAtom("p").Apply(lastVariable()+2),
-									atomEqual.Apply(lastVariable()+1, NewAtom("$dot").Apply(lastVariable()+2, NewAtom("x"))),
+									NewAtom("p").Apply(Variable(expectedVM.variableCount+2)),
+									atomEqual.Apply(Variable(expectedVM.variableCount+1), NewAtom("$dot").Apply(Variable(expectedVM.variableCount+2), NewAtom("x"))),
 								),
 							),
-							vars: []Variable{lastVariable() + 1, lastVariable() + 2, lastVariable() + 3},
+							vars: []Variable{Variable(expectedVM.variableCount + 1), Variable(expectedVM.variableCount + 2), Variable(expectedVM.variableCount + 3)},
 							bytecode: bytecode{
 								{opcode: OpGetVar, operand: Integer(0)},
 								{opcode: OpEnter},
@@ -734,7 +734,6 @@ bar(b).
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
 			var vm VM
-			varCounter.count = 1 // Global var cause issues in testing environment that call in randomly order for checking equality between procedure clause args
 
 			vm.getOperators().define(1200, operatorSpecifierXFX, atomIf)
 			vm.getOperators().define(1200, operatorSpecifierXFX, atomArrow)
@@ -771,7 +770,8 @@ bar(b).
 }
 
 func TestVM_Consult(t *testing.T) {
-	x := NewVariable()
+	vm := VM{FS: testdata}
+	x := vm.NewVariable()
 
 	tests := []struct {
 		title string
@@ -790,7 +790,7 @@ func TestVM_Consult(t *testing.T) {
 		{title: `:- consult(X).`, files: x, err: InstantiationError(nil)},
 		{title: `:- consult(foo(bar)).`, files: NewAtom("foo").Apply(NewAtom("bar")), err: typeError(validTypeAtom, NewAtom("foo").Apply(NewAtom("bar")), nil)},
 		{title: `:- consult(1).`, files: Integer(1), err: typeError(validTypeAtom, Integer(1), nil)},
-		{title: `:- consult(['testdata/empty.txt'|_]).`, files: PartialList(NewVariable(), NewAtom("testdata/empty.txt")), err: typeError(validTypeAtom, PartialList(NewVariable(), NewAtom("testdata/empty.txt")), nil)},
+		{title: `:- consult(['testdata/empty.txt'|_]).`, files: PartialList(vm.NewVariable(), NewAtom("testdata/empty.txt")), err: typeError(validTypeAtom, PartialList(vm.NewVariable(), NewAtom("testdata/empty.txt")), nil)},
 		{title: `:- consult([X]).`, files: List(x), err: InstantiationError(nil)},
 		{title: `:- consult([1]).`, files: List(Integer(1)), err: typeError(validTypeAtom, Integer(1), nil)},
 
@@ -800,13 +800,10 @@ func TestVM_Consult(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			vm := VM{
-				FS: testdata,
-			}
 			ok, err := Consult(&vm, tt.files, Success, nil).Force(context.Background())
 			assert.Equal(t, tt.ok, ok)
 			if e, ok := tt.err.(Exception); ok {
-				_, ok := NewEnv().Unify(e.Term(), err.(Exception).Term())
+				_, ok := vm.NewEnv().Unify(e.Term(), err.(Exception).Term())
 				assert.True(t, ok)
 			} else {
 				assert.Equal(t, tt.err, err)

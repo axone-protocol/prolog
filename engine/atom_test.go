@@ -44,7 +44,8 @@ func TestAtom_WriteTerm(t *testing.T) {
 }
 
 func TestAtom_Compare(t *testing.T) {
-	x := NewVariable()
+	var vm VM
+	x := vm.NewVariable()
 
 	tests := []struct {
 		title string

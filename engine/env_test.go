@@ -10,28 +10,20 @@ import (
 )
 
 func TestEnv_Bind(t *testing.T) {
-	a := NewVariable()
-
-	var env *Env
-	assert.Equal(t, &Env{
-		color: black,
-		left: &Env{
-			binding: binding{
-				key:   newEnvKey(a),
-				value: NewAtom("a"),
-			},
-		},
-		binding: binding{
-			key:   newEnvKey(varContext),
-			value: NewAtom("root"),
-		},
-	}, env.bind(a, NewAtom("a")))
+	var vm VM
+	a := vm.NewVariable()
+	env := vm.prepareEnv(nil)
+	bound := env.bind(a, NewAtom("a"))
+	assert.Equal(t, a, env.Resolve(a))
+	assert.Equal(t, NewAtom("a"), bound.Resolve(a))
+	assert.Equal(t, rootContext, bound.Resolve(varContext))
 }
 
 func TestEnv_Lookup(t *testing.T) {
+	var vm VM
 	vars := make([]Variable, 1000)
 	for i := range vars {
-		vars[i] = NewVariable()
+		vars[i] = vm.NewVariable()
 	}
 
 	rand.Shuffle(len(vars), func(i, j int) {
@@ -57,13 +49,14 @@ func TestEnv_Lookup(t *testing.T) {
 }
 
 func TestEnv_BindPreservesMeter(t *testing.T) {
+	var vm VM
 	m := func(kind MeterKind, units uint64) Term {
 		return nil
 	}
 
-	env := NewEnv().withMeter(m)
-	for i := 0; i < 8; i++ {
-		v := NewVariable()
+	env := vm.NewEnv().withMeter(m)
+	for range 8 {
+		v := vm.NewVariable()
 		env = env.bind(v, v)
 	}
 
@@ -94,8 +87,7 @@ func TestEnv_WithMeter(t *testing.T) {
 		var env *Env
 		metered := env.withMeter(m)
 		if assert.NotNil(t, metered) {
-			assert.Equal(t, rootEnv.key, metered.key)
-			assert.Equal(t, rootEnv.value, metered.value)
+			assert.Equal(t, rootContext, metered.Resolve(varContext))
 			assert.Equal(t, reflect.ValueOf(m).Pointer(), reflect.ValueOf(metered.meter).Pointer())
 		}
 	})
@@ -108,11 +100,12 @@ func TestEnv_WithoutMeter(t *testing.T) {
 	})
 
 	t.Run("clears meter", func(t *testing.T) {
+		var vm VM
 		m := func(kind MeterKind, units uint64) Term {
 			return nil
 		}
 
-		env := NewEnv().withMeter(m)
+		env := vm.NewEnv().withMeter(m)
 		cleared := env.withoutMeter()
 		if assert.NotNil(t, cleared) {
 			assert.Nil(t, cleared.meter)
@@ -123,10 +116,11 @@ func TestEnv_WithoutMeter(t *testing.T) {
 }
 
 func TestEnv_Simplify(t *testing.T) {
+	var vm VM
 	// L = [a, b|L] ==> [a, b, a, b, ...]
-	l := NewVariable()
+	l := vm.NewVariable()
 	p := PartialList(l, NewAtom("a"), NewAtom("b"))
-	env := NewEnv().bind(l, p)
+	env := vm.NewEnv().bind(l, p)
 	c := env.simplify(l)
 	iter := ListIterator{List: c, Env: env}
 	assert.True(t, iter.Next())
@@ -141,10 +135,11 @@ func TestEnv_Simplify(t *testing.T) {
 }
 
 func TestContains(t *testing.T) {
+	var vm VM
 	var env *Env
 	assert.True(t, contains(NewAtom("a"), NewAtom("a"), env))
-	assert.False(t, contains(NewVariable(), NewAtom("a"), env))
-	v := NewVariable()
+	assert.False(t, contains(vm.NewVariable(), NewAtom("a"), env))
+	v := vm.NewVariable()
 	env = env.bind(v, NewAtom("a"))
 	assert.True(t, contains(v, NewAtom("a"), env))
 	assert.True(t, contains(&compound{functor: NewAtom("a")}, NewAtom("a"), env))

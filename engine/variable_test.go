@@ -10,7 +10,8 @@ import (
 )
 
 func TestVariable_WriteTerm(t *testing.T) {
-	x := NewVariable()
+	var vm VM
+	x := vm.NewVariable()
 
 	tests := []struct {
 		title  string
@@ -36,7 +37,8 @@ func TestVariable_WriteTerm(t *testing.T) {
 }
 
 func TestVariable_Compare(t *testing.T) {
-	w, x, y := NewVariable(), NewVariable(), NewVariable()
+	var vm VM
+	w, x, y := vm.NewVariable(), vm.NewVariable(), vm.NewVariable()
 
 	tests := []struct {
 		title string
@@ -61,8 +63,9 @@ func TestVariable_Compare(t *testing.T) {
 }
 
 func Test_variableSet(t *testing.T) {
+	var vm VM
 	f := NewAtom("f")
-	x, y := NewVariable(), NewVariable()
+	x, y := vm.NewVariable(), vm.NewVariable()
 
 	tests := []struct {
 		term Term
@@ -92,8 +95,9 @@ func Test_variableSet(t *testing.T) {
 }
 
 func Test_existentialVariableSet(t *testing.T) {
+	var vm VM
 	f := NewAtom("f")
-	x, y, z := NewVariable(), NewVariable(), NewVariable()
+	x, y, z := vm.NewVariable(), vm.NewVariable(), vm.NewVariable()
 
 	tests := []struct {
 		term Term
@@ -119,9 +123,10 @@ func Test_existentialVariableSet(t *testing.T) {
 }
 
 func Test_freeVariablesSet(t *testing.T) {
+	var vm VM
 	f := NewAtom("f")
-	x, y, z := NewVariable(), NewVariable(), NewVariable()
-	a := NewVariable()
+	x, y, z := vm.NewVariable(), vm.NewVariable(), vm.NewVariable()
+	a := vm.NewVariable()
 
 	tests := []struct {
 		t, v Term
@@ -142,38 +147,27 @@ func Test_freeVariablesSet(t *testing.T) {
 	}
 }
 
-func Test_maxVariables(t *testing.T) {
-	tests := []struct {
-		title         string
-		init          func()
-		max           uint64
-		expectedCount uint64
-		shouldPanic   bool
-	}{
-		{title: "no limits", init: func() {
-			NewVariable()
-			NewVariable()
-		}, max: 0, expectedCount: 2},
-		{title: "limit", init: func() {
-			NewVariable()
-			NewVariable()
-		}, max: 2, expectedCount: 2},
-		{title: "limit reached", init: func() {
-			NewVariable()
-			NewVariable()
-		}, max: 1, expectedCount: 1, shouldPanic: true},
+func TestVM_NewVariableLimits(t *testing.T) {
+	var a, b VM
+	a.SetMaxVariables(2)
+	a.NewVariable()
+	a.NewVariable()
+	assert.PanicsWithValue(t, ErrMaxVariables, func() { a.NewVariable() })
+
+	b.SetMaxVariables(0)
+	for range 4 {
+		b.NewVariable()
 	}
+	assert.PanicsWithValue(t, ErrMaxVariables, func() { a.NewVariable() })
 
-	for _, tt := range tests {
-		varCounter.count = 0 // reset at each test
-
-		maxVariables = tt.max
-
-		if tt.shouldPanic {
-			assert.Panics(t, tt.init)
-		} else {
-			tt.init()
-		}
-		assert.Equal(t, varCounter.count, tt.expectedCount)
-	}
+	a.SetMaxVariables(0)
+	assert.Equal(t, Variable(3), a.NewVariable())
+	a.SetMaxVariables(3)
+	assert.PanicsWithValue(t, ErrMaxVariables, func() { a.NewVariable() })
+	a.ResetEnv()
+	assert.Equal(t, Variable(1), a.NewVariable())
+	a.NewVariable()
+	a.NewVariable()
+	assert.PanicsWithValue(t, ErrMaxVariables, func() { a.NewVariable() })
+	assert.Equal(t, Variable(5), b.NewVariable())
 }

@@ -228,7 +228,6 @@ func TestVM_Arrive(t *testing.T) {
 				Unknown: func(name Atom, args []Term, env *Env) {
 					assert.Equal(t, NewAtom("foo"), name)
 					assert.Equal(t, []Term{NewAtom("a")}, args)
-					assert.Nil(t, env)
 					warned = true
 				},
 			}
@@ -251,7 +250,7 @@ func TestVM_Arrive(t *testing.T) {
 
 func TestVM_open_nilFS(t *testing.T) {
 	var vm VM
-	env := NewEnv()
+	env := vm.NewEnv()
 	_, _, err := vm.open(NewAtom("foo"), env)
 	assert.Equal(t, permissionError(operationOpen, permissionTypeSourceSink, NewAtom("foo"), env), err)
 }
@@ -277,7 +276,7 @@ func TestVM_LoadedSources(t *testing.T) {
 func TestVM_SetUserInput(t *testing.T) {
 	t.Run("file", func(t *testing.T) {
 		var vm VM
-		vm.SetUserInput(NewInputTextStream(os.Stdin))
+		vm.SetUserInput(vm.NewInputTextStream(os.Stdin))
 
 		s, ok := vm.streams.lookup(atomUserInput)
 		assert.True(t, ok)
@@ -288,27 +287,11 @@ func TestVM_SetUserInput(t *testing.T) {
 func TestVM_SetUserOutput(t *testing.T) {
 	t.Run("file", func(t *testing.T) {
 		var vm VM
-		vm.SetUserOutput(NewOutputTextStream(os.Stdout))
+		vm.SetUserOutput(vm.NewOutputTextStream(os.Stdout))
 
 		s, ok := vm.streams.lookup(atomUserOutput)
 		assert.True(t, ok)
 		assert.Equal(t, os.Stdout, s.sink)
-	})
-}
-
-func TestVM_SetMaxVariables(t *testing.T) {
-	t.Run("limits", func(t *testing.T) {
-		var vm VM
-		vm.SetMaxVariables(10)
-		assert.Equal(t, uint64(10), maxVariables)
-		assert.Equal(t, uint64(10), vm.maxVariables)
-	})
-
-	t.Run("no limit", func(t *testing.T) {
-		var vm VM
-		vm.SetMaxVariables(0)
-		assert.Equal(t, uint64(0), maxVariables)
-		assert.Equal(t, uint64(0), vm.maxVariables)
 	})
 }
 
@@ -329,30 +312,40 @@ func TestProcedureIndicator_Apply(t *testing.T) {
 	})
 }
 
-func TestVM_ResetEnv(t *testing.T) {
+func TestVM_ResetEnvIsolation(t *testing.T) {
+	var a, b VM
+	a.SetMaxVariables(2)
+	a.NewVariable()
+	env := a.prepareEnv(nil).bind(varContext, NewAtom("active").Apply(Integer(1)))
+
+	b.NewVariable()
+	b.SetMaxVariables(1)
+	b.ResetEnv()
+	assert.Equal(t, Variable(2), a.NewVariable())
+	assert.PanicsWithValue(t, ErrMaxVariables, func() { a.NewVariable() })
+	assert.Equal(t, NewAtom("active").Apply(Integer(1)), env.Resolve(varContext))
+
+	a.ResetEnv()
+	assert.Equal(t, Variable(1), a.NewVariable())
+	assert.Equal(t, rootContext, a.prepareEnv(nil).Resolve(varContext))
+	assert.Equal(t, Variable(1), b.NewVariable())
+	assert.PanicsWithValue(t, ErrMaxVariables, func() { b.NewVariable() })
+}
+
+func TestVM_ExceptionVariablesUseEnvironmentOwner(t *testing.T) {
 	var vm VM
-	vm.SetMaxVariables(20)
-
-	varCounter.count = 10
-	varContext = NewVariable()
-	rootContext = NewAtom("non-root")
-	rootEnv = &Env{
-		binding: binding{
-			key:   newEnvKey(varContext),
-			value: NewAtom("non-root"),
-		},
+	vm.SetMaxVariables(10)
+	env := vm.NewEnv()
+	for n := range 8 {
+		env = env.bind(vm.NewVariable(), Integer(n))
 	}
-	maxVariables = 30
-
-	t.Run("Reset environment", func(t *testing.T) {
-		vm.ResetEnv()
-
-		assert.Equal(t, uint64(1), varCounter.count) // 1 because NewVariable() is called in ResetEnv()
-		assert.Equal(t, "root", rootContext.String())
-		assert.Equal(t, newEnvKey(varContext), rootEnv.key)
-		assert.Equal(t, NewAtom("root"), rootEnv.value)
-		assert.Equal(t, uint64(20), maxVariables)
-	})
+	x := vm.NewVariable()
+	ex := NewException(NewAtom("f").Apply(x, x), env)
+	c := ex.Term().(Compound)
+	assert.NotEqual(t, x, c.Arg(0))
+	assert.Equal(t, c.Arg(0), c.Arg(1))
+	assert.Equal(t, x, env.Resolve(x))
+	assert.PanicsWithValue(t, ErrMaxVariables, func() { vm.NewVariable() })
 }
 
 func TestVM_DebugHook(t *testing.T) {

@@ -15,6 +15,36 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestInterpreter_VMIsolation(t *testing.T) {
+	a := New(nil, nil)
+	sols, err := a.Query(`member(X, [a,b]), copy_term(pair(X,Y), pair(Z,W)), var(Y), W = kept.`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		assert.NoError(t, sols.Close())
+	}()
+
+	for _, want := range []string{"a", "b"} {
+		b := New(nil, nil)
+		b.SetMaxVariables(1)
+		b.ResetEnv()
+		b.NewVariable()
+		assert.PanicsWithValue(t, engine.ErrMaxVariables, func() { b.NewVariable() })
+
+		if !sols.Next() {
+			t.Fatalf("missing %s solution: %v", want, sols.Err())
+		}
+		var got struct{ X, Z, W string }
+		if err := sols.Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, struct{ X, Z, W string }{want, want, "kept"}, got)
+	}
+	assert.False(t, sols.Next())
+	assert.NoError(t, sols.Err())
+}
+
 func TestNew(t *testing.T) {
 	i := New(nil, nil)
 	assert.NotNil(t, i)
@@ -260,7 +290,8 @@ func TestInterpreter_MeterException(t *testing.T) {
 			engine.NewAtom("resource_error").Apply(engine.NewAtom("gas")),
 			engine.NewAtom("/").Apply(engine.NewAtom("="), engine.Integer(2)),
 		)
-		_, matched := engine.NewEnv().Unify(pattern, ex.Term())
+		var env *engine.Env
+		_, matched := env.Unify(pattern, ex.Term())
 		assert.True(t, matched)
 	})
 
@@ -392,12 +423,12 @@ func TestNew_variableNames(t *testing.T) {
 			defer cancel()
 
 			if tt.input == "" {
-				p.SetUserInput(engine.NewInputTextStream(readFn(func(p []byte) (n int, err error) {
+				p.SetUserInput(p.NewInputTextStream(readFn(func(p []byte) (n int, err error) {
 					<-ctx.Done()
 					return 0, io.EOF
 				})))
 			} else {
-				p.SetUserInput(engine.NewInputTextStream(bytes.NewBufferString(tt.input)))
+				p.SetUserInput(p.NewInputTextStream(bytes.NewBufferString(tt.input)))
 			}
 			out.Reset()
 			assert.Equal(t, tt.err, p.QuerySolutionContext(ctx, tt.query).Err())

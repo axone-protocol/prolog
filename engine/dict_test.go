@@ -96,7 +96,8 @@ func TestDictCompare(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			env := NewEnv()
+			var vm VM
+			env := vm.NewEnv()
 			thisDict, err := NewDict(tt.thisDictArgs)
 			assert.NoError(t, err)
 			thatDict, err := NewDict(tt.thatDictArgs)
@@ -394,6 +395,7 @@ func TestDictAt(t *testing.T) {
 }
 
 func TestOp3(t *testing.T) {
+	var vm VM
 	tests := []struct {
 		name       string
 		dict       Term
@@ -429,7 +431,7 @@ func TestOp3(t *testing.T) {
 		{
 			name:       "get keys",
 			dict:       makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
-			function:   NewVariable(),
+			function:   vm.NewVariable(),
 			wantResult: Integer(1),
 		},
 		{
@@ -542,7 +544,7 @@ func TestOp3(t *testing.T) {
 		},
 		{
 			name:      "not enough instantiated",
-			dict:      NewVariable(),
+			dict:      vm.NewVariable(),
 			function:  NewAtom("x"),
 			wantError: "error(instantiation_error,root)",
 		},
@@ -568,10 +570,9 @@ func TestOp3(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var vm VM
 			var env *Env
 
-			result := NewVariable()
+			result := vm.NewVariable()
 			ok, err := Op3(&vm, tt.dict, tt.function, result, func(env *Env) *Promise {
 				assert.Equal(t, tt.wantResult, env.Resolve(result))
 				return Bool(true)
@@ -593,6 +594,7 @@ func TestOp3(t *testing.T) {
 }
 
 func TestDelDict4(t *testing.T) {
+	var vm VM
 	tests := []struct {
 		name        string
 		key         Term
@@ -608,8 +610,8 @@ func TestDelDict4(t *testing.T) {
 			name:        "remove existing key",
 			key:         NewAtom("x"),
 			dict:        makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
-			value:       NewVariable(),
-			dictOut:     NewVariable(),
+			value:       vm.NewVariable(),
+			dictOut:     vm.NewVariable(),
 			wantOK:      true,
 			wantValue:   Integer(1),
 			wantDictOut: makeDict(NewAtom("point"), NewAtom("y"), Integer(2)),
@@ -619,7 +621,7 @@ func TestDelDict4(t *testing.T) {
 			key:         NewAtom("x"),
 			dict:        makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
 			value:       Integer(1),
-			dictOut:     NewVariable(),
+			dictOut:     vm.NewVariable(),
 			wantOK:      true,
 			wantDictOut: makeDict(NewAtom("point"), NewAtom("y"), Integer(2)),
 		},
@@ -627,8 +629,8 @@ func TestDelDict4(t *testing.T) {
 			name:        "remove only key (empty dict)",
 			key:         NewAtom("x"),
 			dict:        makeDict(NewAtom("point"), NewAtom("x"), Integer(1)),
-			value:       NewVariable(),
-			dictOut:     NewVariable(),
+			value:       vm.NewVariable(),
+			dictOut:     vm.NewVariable(),
 			wantOK:      true,
 			wantValue:   Integer(1),
 			wantDictOut: makeDict(NewAtom("point")),
@@ -638,52 +640,51 @@ func TestDelDict4(t *testing.T) {
 			key:     NewAtom("x"),
 			dict:    makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
 			value:   Integer(2),
-			dictOut: NewVariable(),
+			dictOut: vm.NewVariable(),
 		},
 		{
 			name:    "fail on missing key",
 			key:     NewAtom("z"),
 			dict:    makeDict(NewAtom("point"), NewAtom("x"), Integer(1), NewAtom("y"), Integer(2)),
-			value:   NewVariable(),
-			dictOut: NewVariable(),
+			value:   vm.NewVariable(),
+			dictOut: vm.NewVariable(),
 		},
 		{
 			name:      "error on variable key",
-			key:       NewVariable(),
+			key:       vm.NewVariable(),
 			dict:      makeDict(NewAtom("point"), NewAtom("x"), Integer(1)),
-			value:     NewVariable(),
-			dictOut:   NewVariable(),
+			value:     vm.NewVariable(),
+			dictOut:   vm.NewVariable(),
 			wantError: "error(instantiation_error,root)",
 		},
 		{
 			name:      "error on variable dict",
 			key:       NewAtom("x"),
-			dict:      NewVariable(),
-			value:     NewVariable(),
-			dictOut:   NewVariable(),
+			dict:      vm.NewVariable(),
+			value:     vm.NewVariable(),
+			dictOut:   vm.NewVariable(),
 			wantError: "error(instantiation_error,root)",
 		},
 		{
 			name:      "error on non-dict term",
 			key:       NewAtom("x"),
 			dict:      Integer(42),
-			value:     NewVariable(),
-			dictOut:   NewVariable(),
+			value:     vm.NewVariable(),
+			dictOut:   vm.NewVariable(),
 			wantError: "error(type_error(dict,42),root)",
 		},
 		{
 			name:      "error on invalid key type",
 			key:       Integer(1),
 			dict:      makeDict(NewAtom("point"), NewAtom("x"), Integer(1)),
-			value:     NewVariable(),
-			dictOut:   NewVariable(),
+			value:     vm.NewVariable(),
+			dictOut:   vm.NewVariable(),
 			wantError: "error(domain_error(dict_key,1),root)",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var vm VM
 			var env *Env
 			var contEnv *Env
 

@@ -13,73 +13,32 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-func TestNewInputTextStream(t *testing.T) {
-	resetStreamIDCounter()
+func TestVM_StreamIDSequencesAreIndependent(t *testing.T) {
+	var first, second VM
 
-	assert.Equal(t, &Stream{
-		id:         1,
-		source:     os.Stdin,
-		mode:       ioModeRead,
-		eofAction:  eofActionReset,
-		streamType: streamTypeText,
-	}, NewInputTextStream(os.Stdin))
-}
+	assert.Equal(t, uint64(1), first.NewInputTextStream(nil).id)
+	assert.Equal(t, uint64(2), first.NewOutputTextStream(nil).id)
+	assert.Equal(t, uint64(1), second.NewInputBinaryStream(nil).id)
+	assert.Equal(t, uint64(2), second.NewOutputBinaryStream(nil).id)
 
-func TestNewInputBinaryStream(t *testing.T) {
-	resetStreamIDCounter()
+	second.ResetEnv()
 
-	assert.Equal(t, &Stream{
-		id:         1,
-		source:     os.Stdin,
-		mode:       ioModeRead,
-		eofAction:  eofActionReset,
-		streamType: streamTypeBinary,
-	}, NewInputBinaryStream(os.Stdin))
-}
-
-func TestNewOutputTextStream(t *testing.T) {
-	resetStreamIDCounter()
-
-	assert.Equal(t, &Stream{
-		id:         1,
-		sink:       os.Stdout,
-		mode:       ioModeAppend,
-		eofAction:  eofActionReset,
-		streamType: streamTypeText,
-	}, NewOutputTextStream(os.Stdout))
-}
-
-func TestNewOutputBinaryStream(t *testing.T) {
-	resetStreamIDCounter()
-
-	assert.Equal(t, &Stream{
-		id:         1,
-		sink:       os.Stdout,
-		mode:       ioModeAppend,
-		eofAction:  eofActionReset,
-		streamType: streamTypeBinary,
-	}, NewOutputBinaryStream(os.Stdout))
+	assert.Equal(t, uint64(3), first.NewOutputBinaryStream(nil).id)
+	assert.Equal(t, uint64(1), second.NewInputTextStream(nil).id)
 }
 
 func TestStream_WriteTerm(t *testing.T) {
-	resetStreamIDCounter()
+	var vm VM
+	alias := vm.NewInputTextStream(nil)
+	alias.alias = NewAtom("foo")
 
 	tests := []struct {
-		title   string
-		s       *Stream
-		prepare func(*Stream)
-		output  string
+		title  string
+		s      *Stream
+		output string
 	}{
-		{title: "no alias", s: NewInputTextStream(nil), output: `<stream>\(0x1\)`},
-		{title: "registered", s: NewInputTextStream(nil), prepare: func(s *Stream) {
-			var vm VM
-			vm.streams.add(s)
-		}, output: `<stream>\(0x2\)`},
-		{title: "alias", s: &Stream{id: nextStreamID(), alias: NewAtom("foo")}, prepare: func(s *Stream) {
-			var vm VM
-			s.vm = &vm
-			vm.streams.add(s)
-		}, output: `<stream>\(foo\)`},
+		{title: "no alias", s: vm.NewInputTextStream(nil), output: `<stream>\(0x[0-9a-f]+\)`},
+		{title: "alias", s: alias, output: `<stream>\(foo\)`},
 	}
 
 	var buf bytes.Buffer
@@ -87,9 +46,6 @@ func TestStream_WriteTerm(t *testing.T) {
 		tc := testCase
 		t.Run(tc.title, func(t *testing.T) {
 			buf.Reset()
-			if tc.prepare != nil {
-				tc.prepare(tc.s)
-			}
 			assert.NoError(t, tc.s.WriteTerm(&buf, nil, nil))
 			assert.Regexp(t, tc.output, buf.String())
 		})
@@ -97,11 +53,12 @@ func TestStream_WriteTerm(t *testing.T) {
 }
 
 func TestStream_Compare(t *testing.T) {
-	x := NewVariable()
-	ss := [3]Stream{
-		{id: 1},
-		{id: 2},
-		{id: 3},
+	var vm VM
+	x := vm.NewVariable()
+	ss := [3]*Stream{
+		vm.NewInputTextStream(nil),
+		vm.NewInputTextStream(nil),
+		vm.NewInputTextStream(nil),
 	}
 
 	tests := []struct {
@@ -110,14 +67,14 @@ func TestStream_Compare(t *testing.T) {
 		t     Term
 		o     int
 	}{
-		{title: `s > X`, s: &ss[1], t: x, o: 1},
-		{title: `s > 1.0`, s: &ss[1], t: NewFloatFromInt64(1), o: 1},
-		{title: `s > 1`, s: &ss[1], t: Integer(2), o: 1},
-		{title: `s > a`, s: &ss[1], t: NewAtom("a"), o: 1},
-		{title: `s > s`, s: &ss[1], t: &ss[0], o: 1},
-		{title: `s = s`, s: &ss[1], t: &ss[1], o: 0},
-		{title: `s < s`, s: &ss[1], t: &ss[2], o: -1},
-		{title: `s < f(a)`, s: &ss[1], t: NewAtom("f").Apply(NewAtom("a")), o: -1},
+		{title: `s > X`, s: ss[1], t: x, o: 1},
+		{title: `s > 1.0`, s: ss[1], t: NewFloatFromInt64(1), o: 1},
+		{title: `s > 1`, s: ss[1], t: Integer(2), o: 1},
+		{title: `s > a`, s: ss[1], t: NewAtom("a"), o: 1},
+		{title: `s > s`, s: ss[1], t: ss[0], o: 1},
+		{title: `s = s`, s: ss[1], t: ss[1], o: 0},
+		{title: `s < s`, s: ss[1], t: ss[2], o: -1},
+		{title: `s < f(a)`, s: ss[1], t: NewAtom("f").Apply(NewAtom("a")), o: -1},
 	}
 
 	for _, tt := range tests {

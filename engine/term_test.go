@@ -25,6 +25,7 @@ func TestErrWriter_Write(t *testing.T) {
 }
 
 func TestCompareAtomic(t *testing.T) {
+	var vm VM
 	type x struct {
 		mockTerm
 	}
@@ -46,7 +47,7 @@ func TestCompareAtomic(t *testing.T) {
 		cmp func(*y, *y) int
 		o   int
 	}{
-		{a: &y{}, t: NewVariable(), o: 1},
+		{a: &y{}, t: vm.NewVariable(), o: 1},
 		{a: &y{}, t: NewFloatFromInt64(0), o: 1},
 		{a: &y{}, t: Integer(0), o: 1},
 		{a: &y{}, t: Atom(""), o: 1},

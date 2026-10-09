@@ -33,8 +33,8 @@ func TestParser_Term(t *testing.T) {
 		input        string
 		doubleQuotes doubleQuotes
 		term         Term
-		termLazy     func() Term
-		vars         func() []ParsedVariable
+		termLazy     func(*VM) Term
+		vars         func(*VM) []ParsedVariable
 		err          error
 	}{
 		{input: ``, err: io.EOF},
@@ -86,14 +86,14 @@ func TestParser_Term(t *testing.T) {
 		{input: `- 1.0.`, term: NewFloatFromInt64(-1)},
 		{input: `'-'1.0.`, term: NewFloatFromInt64(-1)},
 
-		{input: `_.`, termLazy: func() Term {
-			return lastVariable()
+		{input: `_.`, termLazy: func(vm *VM) Term {
+			return Variable(vm.variableCount)
 		}},
-		{input: `X.`, termLazy: func() Term {
-			return lastVariable()
-		}, vars: func() []ParsedVariable {
+		{input: `X.`, termLazy: func(vm *VM) Term {
+			return Variable(vm.variableCount)
+		}, vars: func(vm *VM) []ParsedVariable {
 			return []ParsedVariable{
-				{Name: NewAtom("X"), Variable: lastVariable(), Count: 1},
+				{Name: NewAtom("X"), Variable: Variable(vm.variableCount), Count: 1},
 			}
 		}},
 
@@ -110,18 +110,18 @@ func TestParser_Term(t *testing.T) {
 		{input: `[(), b].`, err: unexpectedTokenError{actual: Token{kind: tokenClose, val: ")"}}},
 		{input: `[a, ()].`, err: unexpectedTokenError{actual: Token{kind: tokenClose, val: ")"}}},
 		{input: `[a b].`, err: unexpectedTokenError{actual: Token{kind: tokenLetterDigit, val: "b"}}},
-		{input: `[a|X].`, termLazy: func() Term {
-			return Cons(NewAtom("a"), lastVariable())
-		}, vars: func() []ParsedVariable {
+		{input: `[a|X].`, termLazy: func(vm *VM) Term {
+			return Cons(NewAtom("a"), Variable(vm.variableCount))
+		}, vars: func(vm *VM) []ParsedVariable {
 			return []ParsedVariable{
-				{Name: NewAtom("X"), Variable: lastVariable(), Count: 1},
+				{Name: NewAtom("X"), Variable: Variable(vm.variableCount), Count: 1},
 			}
 		}},
-		{input: `[a, b|X].`, termLazy: func() Term {
-			return PartialList(lastVariable(), NewAtom("a"), NewAtom("b"))
-		}, vars: func() []ParsedVariable {
+		{input: `[a, b|X].`, termLazy: func(vm *VM) Term {
+			return PartialList(Variable(vm.variableCount), NewAtom("a"), NewAtom("b"))
+		}, vars: func(vm *VM) []ParsedVariable {
 			return []ParsedVariable{
-				{Name: NewAtom("X"), Variable: lastVariable(), Count: 1},
+				{Name: NewAtom("X"), Variable: Variable(vm.variableCount), Count: 1},
 			}
 		}},
 		{input: `[a, b|()].`, err: unexpectedTokenError{actual: Token{kind: tokenClose, val: ")"}}},
@@ -172,29 +172,27 @@ func TestParser_Term(t *testing.T) {
 		{input: `tag{k:v}.`, term: &dict{compound{functor: "dict", args: []Term{NewAtom("tag"), NewAtom("k"), NewAtom("v")}}}},
 		{
 			input: `t.d.`,
-			termLazy: func() Term {
-				return &compound{functor: "$dot", args: []Term{NewAtom("t"), NewAtom("d")}}
-			},
+			term:  &compound{functor: "$dot", args: []Term{NewAtom("t"), NewAtom("d")}},
 		},
 		{
 			input: `X{}.`,
-			termLazy: func() Term {
-				return &dict{compound{functor: "dict", args: []Term{lastVariable()}}}
+			termLazy: func(vm *VM) Term {
+				return &dict{compound{functor: "dict", args: []Term{Variable(vm.variableCount)}}}
 			},
-			vars: func() []ParsedVariable {
+			vars: func(vm *VM) []ParsedVariable {
 				return []ParsedVariable{
-					{Name: NewAtom("X"), Variable: lastVariable(), Count: 1},
+					{Name: NewAtom("X"), Variable: Variable(vm.variableCount), Count: 1},
 				}
 			},
 		},
 		{
 			input: `t{k:V}.`,
-			termLazy: func() Term {
-				return &dict{compound{functor: "dict", args: []Term{NewAtom("t"), NewAtom("k"), lastVariable()}}}
+			termLazy: func(vm *VM) Term {
+				return &dict{compound{functor: "dict", args: []Term{NewAtom("t"), NewAtom("k"), Variable(vm.variableCount)}}}
 			},
-			vars: func() []ParsedVariable {
+			vars: func(vm *VM) []ParsedVariable {
 				return []ParsedVariable{
-					{Name: NewAtom("V"), Variable: lastVariable(), Count: 1},
+					{Name: NewAtom("V"), Variable: Variable(vm.variableCount), Count: 1},
 				}
 			},
 		},
@@ -210,24 +208,21 @@ func TestParser_Term(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.input, func(t *testing.T) {
-			p := Parser{
-				lexer: Lexer{
-					input: newRuneRingBuffer(strings.NewReader(tc.input)),
-				},
-				_operators:   ops,
-				doubleQuotes: tc.doubleQuotes,
-			}
+			var vm VM
+			p := NewParser(&vm, strings.NewReader(tc.input))
+			p._operators = ops
+			p.doubleQuotes = tc.doubleQuotes
 			term, err := p.Term()
 			assertEqualFloatAware(t, tc.err, err)
 			if tc.termLazy == nil {
 				assertEqualFloatAware(t, tc.term, term)
 			} else {
-				assertEqualFloatAware(t, tc.termLazy(), term)
+				assertEqualFloatAware(t, tc.termLazy(&vm), term)
 			}
 			if tc.vars == nil {
 				assert.Empty(t, p.Vars)
 			} else {
-				assertEqualFloatAware(t, tc.vars(), p.Vars)
+				assertEqualFloatAware(t, tc.vars(&vm), p.Vars)
 			}
 		})
 	}
@@ -285,12 +280,9 @@ func TestParser_Replace(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			p := Parser{
-				doubleQuotes: tt.doubleQuotes,
-				lexer: Lexer{
-					input: newRuneRingBuffer(strings.NewReader(tt.input)),
-				},
-			}
+			var vm VM
+			p := NewParser(&vm, strings.NewReader(tt.input))
+			p.doubleQuotes = tt.doubleQuotes
 			err := p.SetPlaceholder(NewAtom("?"), tt.args...)
 			assert.Equal(t, tt.err, err)
 
@@ -346,11 +338,8 @@ func TestParser_Number(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.input, func(t *testing.T) {
-			p := Parser{
-				lexer: Lexer{
-					input: newRuneRingBuffer(strings.NewReader(tc.input)),
-				},
-			}
+			var vm VM
+			p := NewParser(&vm, strings.NewReader(tc.input))
 			n, err := p.number()
 			assert.Equal(t, tc.err, err)
 			assert.Equal(t, tc.number, n)
@@ -359,11 +348,8 @@ func TestParser_Number(t *testing.T) {
 }
 
 func TestParser_More(t *testing.T) {
-	p := Parser{
-		lexer: Lexer{
-			input: newRuneRingBuffer(strings.NewReader(`foo. bar.`)),
-		},
-	}
+	var vm VM
+	p := NewParser(&vm, strings.NewReader(`foo. bar.`))
 	term, err := p.Term()
 	assert.NoError(t, err)
 	assert.Equal(t, NewAtom("foo"), term)
