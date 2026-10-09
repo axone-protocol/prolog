@@ -4,39 +4,23 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sync"
+	"math"
 )
 
 var ErrMaxVariables = errors.New("maximum number of variables reached")
 
-var (
-	maxVariables uint64
-	varCounter   = struct {
-		sync.Mutex
-		count uint64
-	}{
-		count: 0,
-	}
-)
-
-func lastVariable() Variable {
-	defer varCounter.Unlock()
-	varCounter.Lock()
-	return Variable(varCounter.count)
-}
-
-// Variable is a prolog variable.
+// Variable is a VM-local Prolog variable. Variables from different VMs must not
+// be combined in the same term or environment.
 type Variable int64
 
-// NewVariable creates a new anonymous variable.
-func NewVariable() Variable {
-	defer varCounter.Unlock()
-	varCounter.Lock()
-	if maxVariables != 0 && varCounter.count >= maxVariables {
+// NewVariable creates an anonymous variable owned by vm.
+// It panics with ErrMaxVariables if the VM's variable limit is reached.
+func (vm *VM) NewVariable() Variable {
+	if vm.variableCount == math.MaxInt64 || vm.maxVariables != 0 && vm.variableCount >= vm.maxVariables {
 		panic(ErrMaxVariables)
 	}
-	varCounter.count++
-	return Variable(varCounter.count)
+	vm.variableCount++
+	return Variable(vm.variableCount)
 }
 
 func (v Variable) WriteTerm(w io.Writer, opts *WriteOptions, env *Env) error {

@@ -39,6 +39,7 @@ func Negate(vm *VM, goal Term, k Cont, env *Env) *Promise {
 // Call executes goal. it succeeds if goal followed by k succeeds. A cut inside goal doesn't affect outside of Call.
 func Call(vm *VM, goal Term, k Cont, env *Env) (promise *Promise) {
 	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
 	switch g := env.Resolve(goal).(type) {
 	case Variable:
 		return Error(InstantiationError(env))
@@ -51,7 +52,7 @@ func Call(vm *VM, goal Term, k Cont, env *Env) (promise *Promise) {
 		for i, fv := range fvs {
 			args[i] = fv
 		}
-		cs, err := compile(atomIf.Apply(tuple(args...), g), env)
+		cs, err := compile(vm, atomIf.Apply(tuple(args...), g), env)
 		if err != nil {
 			return Error(err)
 		}
@@ -291,7 +292,7 @@ func Functor(vm *VM, t, name, arity Term, k Cont, env *Env) *Promise {
 				return Error(resourceError(resourceMemory, env))
 			}
 			for i := range vs {
-				vs[i] = NewVariable()
+				vs[i] = vm.NewVariable()
 			}
 			return Unify(vm, t, n.Apply(vs...), k, env)
 		default:
@@ -384,14 +385,14 @@ func Univ(vm *VM, t, list Term, k Cont, env *Env) *Promise {
 
 // CopyTerm clones in as out.
 func CopyTerm(vm *VM, in, out Term, k Cont, env *Env) *Promise {
-	c, err := renamedCopy(in, nil, env)
+	c, err := renamedCopy(vm, in, nil, env)
 	if err != nil {
 		return Error(err)
 	}
 	return Unify(vm, c, out, k, env)
 }
 
-func renamedCopy(t Term, copied map[termID]Term, env *Env) (Term, error) {
+func renamedCopy(vm *VM, t Term, copied map[termID]Term, env *Env) (Term, error) {
 	if copied == nil {
 		copied = map[termID]Term{}
 	}
@@ -402,7 +403,7 @@ func renamedCopy(t Term, copied map[termID]Term, env *Env) (Term, error) {
 	switch t := t.(type) {
 	case Variable:
 		env.charge(MeterCopyNode, 1)
-		v := NewVariable()
+		v := vm.NewVariable()
 		copied[id(t)] = v
 		return v, nil
 	case charList, codeList:
@@ -416,7 +417,7 @@ func renamedCopy(t Term, copied map[termID]Term, env *Env) (Term, error) {
 		l := list(s)
 		copied[id(t)] = l
 		for i := range t {
-			c, err := renamedCopy(t[i], copied, env)
+			c, err := renamedCopy(vm, t[i], copied, env)
 			if err != nil {
 				return nil, err
 			}
@@ -427,12 +428,12 @@ func renamedCopy(t Term, copied map[termID]Term, env *Env) (Term, error) {
 		env.charge(MeterCopyNode, 1)
 		var p partial
 		copied[id(t)] = &p
-		cp, err := renamedCopy(t.Compound, copied, env)
+		cp, err := renamedCopy(vm, t.Compound, copied, env)
 		if err != nil {
 			return nil, err
 		}
 		p.Compound = cp.(Compound)
-		cp, err = renamedCopy(*t.tail, copied, env)
+		cp, err = renamedCopy(vm, *t.tail, copied, env)
 		if err != nil {
 			return nil, err
 		}
@@ -451,7 +452,7 @@ func renamedCopy(t Term, copied map[termID]Term, env *Env) (Term, error) {
 		}
 		copied[id(t)] = &c
 		for i := 0; i < t.Arity(); i++ {
-			cp, err := renamedCopy(t.Arg(i), copied, env)
+			cp, err := renamedCopy(vm, t.Arg(i), copied, env)
 			if err != nil {
 				return nil, err
 			}
@@ -720,7 +721,7 @@ func assertMerge(vm *VM, t Term, merge func([]clause, []clause) []clause, env *E
 		vm.setProcedure(pi, p)
 	}
 
-	added, err := compile(t, env)
+	added, err := compile(vm, t, env)
 	if err != nil {
 		return err
 	}
@@ -763,7 +764,7 @@ func collectionOf(vm *VM, agg func([]Term, *Env) Term, template, goal, instances
 	})
 	witness := tuple(w...)
 	g := iteratedGoalTerm(goal, env)
-	s := Term(NewVariable())
+	s := Term(vm.NewVariable())
 
 	iter := ListIterator{List: instances, Env: env, AllowPartial: true}
 	for iter.Next() {
@@ -870,7 +871,7 @@ func FindAll(vm *VM, template, goal, instances Term, k Cont, env *Env) *Promise 
 	return Delay(func(ctx context.Context) *Promise {
 		var answers []Term
 		if _, err := Call(vm, goal, func(env *Env) *Promise {
-			c, err := renamedCopy(template, nil, env)
+			c, err := renamedCopy(vm, template, nil, env)
 			if err != nil {
 				return Error(err)
 			}
@@ -1030,7 +1031,8 @@ func KeySort(vm *VM, pairs, sorted Term, k Cont, env *Env) *Promise {
 }
 
 // Throw throws ball as an exception.
-func Throw(_ *VM, ball Term, _ Cont, env *Env) *Promise {
+func Throw(vm *VM, ball Term, _ Cont, env *Env) *Promise {
+	env = vm.ownedEnv(env)
 	switch b := env.Resolve(ball).(type) {
 	case Variable:
 		return Error(InstantiationError(env))
@@ -1283,7 +1285,7 @@ func Open(vm *VM, sourceSink, mode, stream, options Term, k Cont, env *Env) *Pro
 		return Error(permissionError(operationOpen, permissionTypeSourceSink, sourceSink, env))
 	}
 
-	s := Stream{vm: vm, mode: streamMode}
+	s := Stream{vm: vm, id: vm.nextStreamID(), mode: streamMode}
 	s.name = name
 	f, err := openSourceSink(vm.FS, name, s.mode, sourceSink, env)
 	if err != nil {
@@ -1797,9 +1799,9 @@ func ReadTerm(vm *VM, streamOrAlias, out, options Term, k Cont, env *Env) *Promi
 	}
 
 	opts := readTermOptions{
-		singletons:    NewVariable(),
-		variables:     NewVariable(),
-		variableNames: NewVariable(),
+		singletons:    vm.NewVariable(),
+		variables:     vm.NewVariable(),
+		variableNames: vm.NewVariable(),
 	}
 	iter := ListIterator{List: options, Env: env}
 	for iter.Next() {
@@ -2089,7 +2091,7 @@ func Clause(vm *VM, head, body Term, k Cont, env *Env) *Promise {
 
 	ks := make([]func(context.Context) *Promise, len(u.clauses))
 	for i, c := range u.clauses {
-		cp, err := renamedCopy(c.raw, nil, env)
+		cp, err := renamedCopy(vm, c.raw, nil, env)
 		if err != nil {
 			return Error(err)
 		}
@@ -2842,9 +2844,10 @@ func ExpandTerm(vm *VM, term1, term2 Term, k Cont, env *Env) *Promise {
 }
 
 func expand(vm *VM, term Term, env *Env) (Term, error) {
+	env = vm.ownedEnv(env)
 	if _, ok := vm.getProcedure(procedureIndicator{name: atomTermExpansion, arity: 2}); ok {
 		var ret Term
-		v := NewVariable()
+		v := vm.NewVariable()
 		ok, err := Call(vm, atomTermExpansion.Apply(term, v), func(env *Env) *Promise {
 			ret = env.simplify(v)
 			return Bool(true)
@@ -2857,7 +2860,7 @@ func expand(vm *VM, term Term, env *Env) (Term, error) {
 		}
 	}
 
-	t, err := expandDCG(term, env)
+	t, err := expandDCG(vm, term, env)
 	if err != nil {
 		return term, nil //nolint:nilerr // Failed DCG expansion leaves the input unchanged.
 	}
@@ -2975,8 +2978,8 @@ func Length(vm *VM, list, length Term, k Cont, env *Env) *Promise {
 	}
 
 	var (
-		skipped = NewVariable()
-		suffix  = NewVariable()
+		skipped = vm.NewVariable()
+		suffix  = vm.NewVariable()
 	)
 	return SkipMaxList(vm, skipped, n, list, suffix, func(env *Env) *Promise {
 		skipped := env.Resolve(skipped).(Integer)
@@ -3022,7 +3025,7 @@ func lengthRundown(vm *VM, list Variable, n Integer, k Cont, env *Env) *Promise 
 		return Error(resourceError(resourceMemory, env))
 	}
 	for i := range elems {
-		elems[i] = NewVariable()
+		elems[i] = vm.NewVariable()
 	}
 	return Unify(vm, list, List(elems...), k, env)
 }
@@ -3031,7 +3034,7 @@ func lengthAddendum(vm *VM, suffix Term, offset Integer, list, length Variable, 
 	return Delay(func(context.Context) *Promise {
 		return Unify(vm, tuple(list, length), tuple(suffix, offset), k, env)
 	}, func(context.Context) *Promise {
-		suffix := atomDot.Apply(NewVariable(), suffix)
+		suffix := atomDot.Apply(vm.NewVariable(), suffix)
 		offset, err := addI(offset, 1)
 		if err != nil {
 			return Error(representationError(flagMaxInteger, env))
@@ -3092,8 +3095,8 @@ func appendLists(vm *VM, xs, ys, zs Term, k Cont, env *Env) *Promise {
 	return Delay(func(context.Context) *Promise {
 		return Unify(vm, tuple(xs, ys), tuple(List(), zs), k, env)
 	}, func(context.Context) *Promise {
-		x := NewVariable()
-		l1, l3 := NewVariable(), NewVariable()
+		x := vm.NewVariable()
+		l1, l3 := vm.NewVariable(), vm.NewVariable()
 		return Unify(vm, tuple(xs, zs), tuple(Cons(x, l1), Cons(x, l3)), func(env *Env) *Promise {
 			return appendLists(vm, l1, ys, l3, k, env)
 		}, env)

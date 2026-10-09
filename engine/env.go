@@ -1,8 +1,9 @@
 package engine
 
-var varContext = NewVariable()
+// The context slot is reserved and never allocated as a user variable.
+const varContext Variable = 0
 
-var rootContext = NewAtom("root")
+const rootContext Atom = "root"
 
 type envKey int64
 
@@ -30,6 +31,7 @@ type Env struct {
 	left, right *Env
 	binding
 	meter MeterFunc
+	vm    *VM
 }
 
 type binding struct {
@@ -38,16 +40,15 @@ type binding struct {
 	// attributes?
 }
 
-var rootEnv = &Env{
-	binding: binding{
-		key:   newEnvKey(varContext),
-		value: rootContext,
-	},
-}
-
-// NewEnv creates an empty environment.
-func NewEnv() *Env {
-	return nil
+// NewEnv creates an initial, unmetered environment owned by vm.
+func (vm *VM) NewEnv() *Env {
+	if vm.rootEnv == nil {
+		vm.rootEnv = &Env{
+			binding: binding{key: newEnvKey(varContext), value: rootContext},
+			vm:      vm,
+		}
+	}
+	return vm.rootEnv
 }
 
 func (e *Env) withMeter(m MeterFunc) *Env {
@@ -55,7 +56,7 @@ func (e *Env) withMeter(m MeterFunc) *Env {
 		if m == nil {
 			return nil
 		}
-		ret := *rootEnv
+		ret := Env{binding: binding{key: newEnvKey(varContext), value: rootContext}}
 		ret.meter = m
 		return &ret
 	}
@@ -90,8 +91,8 @@ func (e *Env) lookup(v Variable) (Term, bool) {
 	k := newEnvKey(v)
 
 	node := e
-	if node == nil {
-		node = rootEnv
+	if node == nil && v == varContext {
+		return rootContext, true
 	}
 	for {
 		if node == nil {
@@ -113,29 +114,30 @@ func (e *Env) bind(v Variable, t Term) *Env {
 	k := newEnvKey(v)
 
 	node := e
+	root := Env{binding: binding{key: newEnvKey(varContext), value: rootContext}}
 	if node == nil {
-		node = rootEnv
+		node = &root
 	}
-	ret := *node.insert(k, t, node.meter)
+	ret := *node.insert(k, t, node.meter, node.vm)
 	ret.color = black
 	ret.meter = node.meter
 	return &ret
 }
 
-func (e *Env) insert(k envKey, v Term, meter MeterFunc) *Env {
+func (e *Env) insert(k envKey, v Term, meter MeterFunc, vm *VM) *Env {
 	if e == nil {
-		return &Env{color: red, binding: binding{key: k, value: v}, meter: meter}
+		return &Env{color: red, binding: binding{key: k, value: v}, meter: meter, vm: vm}
 	}
 	switch {
 	case k < e.key:
 		ret := *e
-		ret.left = e.left.insert(k, v, meter)
+		ret.left = e.left.insert(k, v, meter, vm)
 		ret.balance()
 		ret.meter = meter
 		return &ret
 	case k > e.key:
 		ret := *e
-		ret.right = e.right.insert(k, v, meter)
+		ret.right = e.right.insert(k, v, meter, vm)
 		ret.balance()
 		ret.meter = meter
 		return &ret
@@ -201,10 +203,11 @@ func (e *Env) balance() {
 	}
 	*e = Env{
 		color:   red,
-		left:    &Env{color: black, left: a, right: b, binding: x, meter: m},
-		right:   &Env{color: black, left: c, right: d, binding: z, meter: m},
+		left:    &Env{color: black, left: a, right: b, binding: x, meter: m, vm: e.vm},
+		right:   &Env{color: black, left: c, right: d, binding: z, meter: m, vm: e.vm},
 		binding: y,
 		meter:   m,
+		vm:      e.vm,
 	}
 }
 

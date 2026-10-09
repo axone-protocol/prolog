@@ -46,7 +46,7 @@ func (vm *VM) Compile(ctx context.Context, s string, args ...interface{}) error 
 		}
 		if !ok {
 			var sb strings.Builder
-			s := NewOutputTextStream(&sb)
+			s := vm.NewOutputTextStream(&sb)
 			_, _ = WriteTerm(vm, s, g, List(atomQuoted.Apply(atomTrue)), Success, nil).Force(ctx)
 			return fmt.Errorf("failed initialization goal: %s", sb.String())
 		}
@@ -78,6 +78,7 @@ func Consult(vm *VM, files Term, k Cont, env *Env) *Promise {
 }
 
 func (vm *VM) compile(ctx context.Context, text *text, s string, args ...interface{}) error {
+	env := vm.NewEnv()
 	if text.clauses == nil {
 		text.clauses = orderedmap.New[procedureIndicator, *userDefined]()
 	}
@@ -95,12 +96,12 @@ func (vm *VM) compile(ctx context.Context, text *text, s string, args ...interfa
 			return err
 		}
 
-		et, err := expand(vm, t, nil)
+		et, err := expand(vm, t, env)
 		if err != nil {
 			return err
 		}
 
-		pi, arg, err := piArg(et, nil)
+		pi, arg, err := piArg(et, env)
 		if err != nil {
 			return err
 		}
@@ -111,7 +112,7 @@ func (vm *VM) compile(ctx context.Context, text *text, s string, args ...interfa
 			}
 			continue
 		case procedureIndicator{name: atomIf, arity: 2}: // Rule
-			pi, _, err = piArg(arg(0), nil)
+			pi, _, err = piArg(arg(0), env)
 			if err != nil {
 				return err
 			}
@@ -123,7 +124,7 @@ func (vm *VM) compile(ctx context.Context, text *text, s string, args ...interfa
 				}
 			}
 
-			cs, err := compile(et, nil)
+			cs, err := compile(vm, et, env)
 			if err != nil {
 				return err
 			}
@@ -135,36 +136,37 @@ func (vm *VM) compile(ctx context.Context, text *text, s string, args ...interfa
 }
 
 func (vm *VM) directive(ctx context.Context, text *text, d Term) error {
+	env := vm.NewEnv()
 	if err := text.flush(); err != nil {
 		return err
 	}
 
-	switch pi, arg, _ := piArg(d, nil); pi {
+	switch pi, arg, _ := piArg(d, env); pi {
 	case procedureIndicator{name: atomDynamic, arity: 1}:
 		return text.forEachUserDefined(arg(0), func(u *userDefined) {
 			u.dynamic = true
 			u.public = true
-		})
+		}, env)
 	case procedureIndicator{name: atomMultifile, arity: 1}:
 		return text.forEachUserDefined(arg(0), func(u *userDefined) {
 			u.multifile = true
-		})
+		}, env)
 	case procedureIndicator{name: atomDiscontiguous, arity: 1}:
 		return text.forEachUserDefined(arg(0), func(u *userDefined) {
 			u.discontiguous = true
-		})
+		}, env)
 	case procedureIndicator{name: atomInitialization, arity: 1}:
 		text.goals = append(text.goals, arg(0))
 		return nil
 	case procedureIndicator{name: atomInclude, arity: 1}:
-		_, b, err := vm.open(arg(0), nil)
+		_, b, err := vm.open(arg(0), env)
 		if err != nil {
 			return err
 		}
 
 		return vm.compile(ctx, text, string(b))
 	case procedureIndicator{name: atomEnsureLoaded, arity: 1}:
-		return vm.ensureLoaded(ctx, arg(0), nil)
+		return vm.ensureLoaded(ctx, arg(0), env)
 	default:
 		ok, err := Call(vm, d, Success, nil).Force(ctx)
 		if err != nil {
@@ -172,7 +174,7 @@ func (vm *VM) directive(ctx context.Context, text *text, d Term) error {
 		}
 		if !ok {
 			var sb strings.Builder
-			s := NewOutputTextStream(&sb)
+			s := vm.NewOutputTextStream(&sb)
 			_, _ = WriteTerm(vm, s, d, List(atomQuoted.Apply(atomTrue)), Success, nil).Force(ctx)
 			return fmt.Errorf("failed directive: %s", sb.String())
 		}
@@ -205,6 +207,7 @@ func (vm *VM) ensureLoaded(ctx context.Context, file Term, env *Env) error {
 }
 
 func (vm *VM) open(file Term, env *Env) (string, []byte, error) {
+	env = vm.ownedEnv(env)
 	switch f := env.Resolve(file).(type) {
 	case Variable:
 		return "", nil, InstantiationError(env)
@@ -233,23 +236,23 @@ type text struct {
 	goals   []Term
 }
 
-func (t *text) forEachUserDefined(pi Term, f func(u *userDefined)) error {
-	iter := anyIterator{Any: pi}
+func (t *text) forEachUserDefined(pi Term, f func(u *userDefined), env *Env) error {
+	iter := anyIterator{Any: pi, Env: env}
 	for iter.Next() {
 		switch pi := iter.Current().(type) {
 		case Variable:
-			return InstantiationError(nil)
+			return InstantiationError(env)
 		case Compound:
 			if pi.Functor() != atomSlash || pi.Arity() != 2 {
-				return typeError(validTypePredicateIndicator, pi, nil)
+				return typeError(validTypePredicateIndicator, pi, env)
 			}
 			switch n := pi.Arg(0).(type) {
 			case Variable:
-				return InstantiationError(nil)
+				return InstantiationError(env)
 			case Atom:
 				switch a := pi.Arg(1).(type) {
 				case Variable:
-					return InstantiationError(nil)
+					return InstantiationError(env)
 				case Integer:
 					pi := procedureIndicator{name: n, arity: a}
 					u, ok := t.getClause(pi)
@@ -259,13 +262,13 @@ func (t *text) forEachUserDefined(pi Term, f func(u *userDefined)) error {
 					}
 					f(u)
 				default:
-					return typeError(validTypePredicateIndicator, pi, nil)
+					return typeError(validTypePredicateIndicator, pi, env)
 				}
 			default:
-				return typeError(validTypePredicateIndicator, pi, nil)
+				return typeError(validTypePredicateIndicator, pi, env)
 			}
 		default:
-			return typeError(validTypePredicateIndicator, pi, nil)
+			return typeError(validTypePredicateIndicator, pi, env)
 		}
 	}
 	return iter.Err()

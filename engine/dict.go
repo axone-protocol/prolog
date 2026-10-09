@@ -291,9 +291,9 @@ func GetDict3(vm *VM, keyPath Term, dict Term, result Term, cont Cont, env *Env)
 			switch keyPath.Functor() {
 			case atomSlash:
 				if keyPath.Arity() == 2 {
-					tempA := NewVariable()
+					tempA := vm.NewVariable()
 					return GetDict3(vm, keyPath.Arg(0), dict, tempA, func(env *Env) *Promise {
-						tempB := NewVariable()
+						tempB := vm.NewVariable()
 						return GetDict3(vm, keyPath.Arg(1), tempA, tempB, func(env *Env) *Promise {
 							return Unify(vm, tempB, result, cont, env)
 						}, env)
@@ -350,7 +350,7 @@ func PutDict3(vm *VM, new Term, dictIn Term, dictOut Term, cont Cont, env *Env) 
 			dictIn = mergeDict(new, dictIn)
 			return Unify(vm, dictOut, dictIn, cont, env)
 		case Compound:
-			dict, err := newDictFromListOfPairs(new, env)
+			dict, err := newDictFromListOfPairs(vm, new, env)
 			if err != nil {
 				return Error(err)
 			}
@@ -453,9 +453,9 @@ func mergeDict(n Dict, d Dict) Dict {
 	return newDict(args)
 }
 
-func newDictFromListOfPairs(l Compound, env *Env) (Dict, error) {
+func newDictFromListOfPairs(vm *VM, l Compound, env *Env) (Dict, error) {
 	var args []Term
-	args = append(args, NewVariable())
+	args = append(args, vm.NewVariable())
 
 	iter := ListIterator{List: l, Env: env}
 	for iter.Next() {

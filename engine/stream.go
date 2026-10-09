@@ -16,18 +16,10 @@ var (
 	errReposition      = errors.New("reposition")
 )
 
-// streamIDCounter is a counter for generating unique stream IDs.
-var streamIDCounter uint64
-
-// nextStreamID returns a new unique stream ID.
-func nextStreamID() uint64 {
-	streamIDCounter++
-	return streamIDCounter
-}
-
-// resetStreamIDCounter resets the stream ID counter to 0.
-func resetStreamIDCounter() {
-	streamIDCounter = 0
+// nextStreamID returns a new unique stream ID for vm.
+func (vm *VM) nextStreamID() uint64 {
+	vm.streamCount++
+	return vm.streamCount
 }
 
 // Stream is a prolog stream.
@@ -52,9 +44,10 @@ type Stream struct {
 }
 
 // NewInputTextStream creates a new input text stream backed by the given io.Reader.
-func NewInputTextStream(r io.Reader) *Stream {
+func (vm *VM) NewInputTextStream(r io.Reader) *Stream {
 	return &Stream{
-		id:         nextStreamID(),
+		vm:         vm,
+		id:         vm.nextStreamID(),
 		source:     r,
 		mode:       ioModeRead,
 		eofAction:  eofActionReset,
@@ -64,9 +57,10 @@ func NewInputTextStream(r io.Reader) *Stream {
 }
 
 // NewInputBinaryStream creates a new input binary stream backed by the given io.Reader.
-func NewInputBinaryStream(r io.Reader) *Stream {
+func (vm *VM) NewInputBinaryStream(r io.Reader) *Stream {
 	return &Stream{
-		id:         nextStreamID(),
+		vm:         vm,
+		id:         vm.nextStreamID(),
 		source:     r,
 		mode:       ioModeRead,
 		eofAction:  eofActionReset,
@@ -76,9 +70,10 @@ func NewInputBinaryStream(r io.Reader) *Stream {
 }
 
 // NewOutputTextStream creates a new output text stream backed by the given io.Writer.
-func NewOutputTextStream(w io.Writer) *Stream {
+func (vm *VM) NewOutputTextStream(w io.Writer) *Stream {
 	return &Stream{
-		id:         nextStreamID(),
+		vm:         vm,
+		id:         vm.nextStreamID(),
 		sink:       w,
 		mode:       ioModeAppend,
 		eofAction:  eofActionReset,
@@ -88,9 +83,10 @@ func NewOutputTextStream(w io.Writer) *Stream {
 }
 
 // NewOutputBinaryStream creates a new output binary stream backed by the given io.Writer.
-func NewOutputBinaryStream(w io.Writer) *Stream {
+func (vm *VM) NewOutputBinaryStream(w io.Writer) *Stream {
 	return &Stream{
-		id:         nextStreamID(),
+		vm:         vm,
+		id:         vm.nextStreamID(),
 		sink:       w,
 		mode:       ioModeAppend,
 		eofAction:  eofActionReset,

@@ -288,7 +288,7 @@ type TermString string
 // Scan implements Scanner interface.
 func (t *TermString) Scan(vm *engine.VM, term engine.Term, env *engine.Env) error {
 	var sb strings.Builder
-	s := engine.NewOutputTextStream(&sb)
+	s := vm.NewOutputTextStream(&sb)
 	_, _ = engine.WriteTerm(vm, s, term, engine.List(engine.NewAtom("quoted").Apply(engine.NewAtom("true"))), engine.Success, env).Force(context.Background())
 	*t = TermString(sb.String())
 	return nil

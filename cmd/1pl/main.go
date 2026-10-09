@@ -72,7 +72,7 @@ Type Ctrl-C or 'halt.' to exit.
 	i.Register1(engine.NewAtom("halt"), halt)
 	i.Unknown = func(name engine.Atom, args []engine.Term, env *engine.Env) {
 		var sb strings.Builder
-		s := engine.NewOutputTextStream(&sb)
+		s := i.NewOutputTextStream(&sb)
 		_, _ = engine.WriteTerm(&i.VM, s, name.Apply(args...), engine.List(engine.NewAtom("quoted").Apply(engine.NewAtom("true"))), engine.Success, env).Force(context.Background())
 		log.Printf("UNKNOWN %s", &sb)
 	}

@@ -32,8 +32,8 @@ func New(in io.Reader, out io.Writer) *Interpreter {
 	var i Interpreter
 	i.ResetEnv()
 	i.FS = defaultFS{}
-	i.SetUserInput(engine.NewInputTextStream(in))
-	i.SetUserOutput(engine.NewOutputTextStream(out))
+	i.SetUserInput(i.NewInputTextStream(in))
+	i.SetUserOutput(i.NewOutputTextStream(out))
 
 	// Control constructs
 	i.Register1(engine.NewAtom("call"), engine.Call)
