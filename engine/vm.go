@@ -236,7 +236,7 @@ func (vm *VM) Arrive(name Atom, args []Term, k Cont, env *Env) (promise *Promise
 	defer ensurePromise(&promise)
 	env = vm.ownedEnv(env)
 	for _, arg := range args {
-		checkVariableScope(arg, vm.scope(), nil)
+		checkTermScope(arg, vm.scope(), nil)
 	}
 	return vm.arrive(name, args, k, env)
 }
@@ -384,16 +384,22 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 }
 
 // SetUserInput sets the given stream as user_input.
+// It panics with ErrStreamScope unless s was created by vm.
 func (vm *VM) SetUserInput(s *Stream) {
-	s.vm = vm
+	if !s.ownedBy(vm) {
+		panic(ErrStreamScope)
+	}
 	s.alias = atomUserInput
 	vm.streams.add(s)
 	vm.input = s
 }
 
 // SetUserOutput sets the given stream as user_output.
+// It panics with ErrStreamScope unless s was created by vm.
 func (vm *VM) SetUserOutput(s *Stream) {
-	s.vm = vm
+	if !s.ownedBy(vm) {
+		panic(ErrStreamScope)
+	}
 	s.alias = atomUserOutput
 	vm.streams.add(s)
 	vm.output = s

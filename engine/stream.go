@@ -9,6 +9,9 @@ import (
 	"os"
 )
 
+// ErrStreamScope reports a stream that does not belong to the executing VM.
+var ErrStreamScope = errors.New("stream belongs to a different VM")
+
 var (
 	errWrongIOMode     = errors.New("wrong i/o mode")
 	errWrongStreamType = errors.New("wrong stream type")
@@ -22,7 +25,7 @@ func (vm *VM) nextStreamID() uint64 {
 	return vm.streamCount
 }
 
-// Stream is a prolog stream.
+// Stream is a Prolog stream owned by its creating VM. A Stream must not be copied.
 type Stream struct {
 	vm *VM
 	id uint64
@@ -41,6 +44,10 @@ type Stream struct {
 	eofAction   eofAction
 	reposition  bool
 	streamType  streamType
+}
+
+func (s *Stream) ownedBy(vm *VM) bool {
+	return s != nil && vm != nil && s.vm == vm
 }
 
 // NewInputTextStream creates a new input text stream backed by the given io.Reader.
@@ -105,9 +112,16 @@ func (s *Stream) WriteTerm(w io.Writer, _ *WriteOptions, _ *Env) error {
 	return err
 }
 
-// Compare compares the Stream with a Term.
+// Compare orders streams within one VM by their local IDs.
+// It panics with ErrStreamScope for unowned or foreign streams.
 func (s *Stream) Compare(t Term, env *Env) int {
+	if s == nil || s.vm == nil || env != nil && env.scope != nil && s.vm.scope() != env.scope {
+		panic(ErrStreamScope)
+	}
 	return CompareAtomic[*Stream](s, t, func(s *Stream, t *Stream) int {
+		if !t.ownedBy(s.vm) {
+			panic(ErrStreamScope)
+		}
 		switch {
 		case s.id > t.id:
 			return 1

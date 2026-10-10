@@ -336,8 +336,8 @@ func (e *Env) checkedUnify(x, y Term, occursCheck bool) (*Env, bool) {
 	if e != nil {
 		scope = e.scope
 	}
-	scope = checkVariableScope(x, scope, nil)
-	scope = checkVariableScope(y, scope, nil)
+	scope = checkTermScope(x, scope, nil)
+	scope = checkTermScope(y, scope, nil)
 	if e != nil && e.scope == nil && scope != nil {
 		owned := *e
 		owned.scope = scope

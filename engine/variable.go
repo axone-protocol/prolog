@@ -89,15 +89,24 @@ func (v Variable) Compare(t Term, env *Env) int {
 	}
 }
 
-// checkVariableScope validates a term without resolving it. The visited set
+// checkTermScope validates a term without resolving it. The visited set
 // makes validation safe for shared and cyclic compounds.
-func checkVariableScope(t Term, scope *variableScope, seen map[termID]struct{}) *variableScope {
+func checkTermScope(t Term, scope *variableScope, seen map[termID]struct{}) *variableScope {
 	switch t := t.(type) {
 	case Variable:
 		if t.scope == nil || scope != nil && scope != t.scope {
 			panic(ErrVariableScope)
 		}
 		return t.scope
+	case *Stream:
+		if t == nil || !t.ownedBy(t.vm) {
+			panic(ErrStreamScope)
+		}
+		owner := t.vm.scope()
+		if scope != nil && scope != owner {
+			panic(ErrStreamScope)
+		}
+		return owner
 	case Compound:
 		if seen == nil {
 			seen = make(map[termID]struct{})
@@ -108,7 +117,7 @@ func checkVariableScope(t Term, scope *variableScope, seen map[termID]struct{}) 
 		}
 		seen[key] = struct{}{}
 		for i := range t.Arity() {
-			scope = checkVariableScope(t.Arg(i), scope, seen)
+			scope = checkTermScope(t.Arg(i), scope, seen)
 		}
 	}
 	return scope

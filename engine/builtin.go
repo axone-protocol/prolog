@@ -40,7 +40,7 @@ func Negate(vm *VM, goal Term, k Cont, env *Env) *Promise {
 func Call(vm *VM, goal Term, k Cont, env *Env) (promise *Promise) {
 	defer ensurePromise(&promise)
 	env = vm.ownedEnv(env)
-	checkVariableScope(goal, vm.scope(), nil)
+	checkTermScope(goal, vm.scope(), nil)
 	switch g := env.Resolve(goal).(type) {
 	case Variable:
 		return Error(InstantiationError(env))
@@ -1235,8 +1235,14 @@ func stream(vm *VM, streamOrAlias Term, env *Env) (*Stream, error) {
 		if !ok {
 			return nil, existenceError(objectTypeStream, streamOrAlias, env)
 		}
+		if !v.ownedBy(vm) {
+			return nil, ErrStreamScope
+		}
 		return v, nil
 	case *Stream:
+		if !s.ownedBy(vm) {
+			return nil, ErrStreamScope
+		}
 		return s, nil
 	default:
 		return nil, domainError(validDomainStreamOrAlias, streamOrAlias, env)
@@ -2528,6 +2534,9 @@ func StreamProperty(vm *VM, stream, property Term, k Cont, env *Env) *Promise {
 	case Variable:
 		streams = append(streams, vm.streams.elems...)
 	case *Stream:
+		if !s.ownedBy(vm) {
+			return Error(ErrStreamScope)
+		}
 		streams = append(streams, s)
 	default:
 		return Error(domainError(validDomainStream, stream, env))
