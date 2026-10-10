@@ -23,14 +23,12 @@ type Interpreter struct {
 // NewEmpty creates a new Prolog interpreter without any predicates/operators defined.
 func NewEmpty() *Interpreter {
 	var i Interpreter
-	i.ResetEnv()
 	return &i
 }
 
 // New creates a new Prolog interpreter with predefined predicates/operators.
 func New(in io.Reader, out io.Writer) *Interpreter {
 	var i Interpreter
-	i.ResetEnv()
 	i.FS = defaultFS{}
 	i.SetUserInput(i.NewInputTextStream(in))
 	i.SetUserOutput(i.NewOutputTextStream(out))

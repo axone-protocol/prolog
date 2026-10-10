@@ -40,6 +40,7 @@ func Negate(vm *VM, goal Term, k Cont, env *Env) *Promise {
 func Call(vm *VM, goal Term, k Cont, env *Env) (promise *Promise) {
 	defer ensurePromise(&promise)
 	env = vm.ownedEnv(env)
+	checkVariableScope(goal, vm.scope(), nil)
 	switch g := env.Resolve(goal).(type) {
 	case Variable:
 		return Error(InstantiationError(env))
@@ -156,7 +157,8 @@ func CallNth(vm *VM, goal, nth Term, k Cont, env *Env) *Promise {
 }
 
 // Unify unifies x and y without occurs check (i.e., X = f(X) is allowed).
-func Unify(_ *VM, x, y Term, k Cont, env *Env) *Promise {
+func Unify(vm *VM, x, y Term, k Cont, env *Env) *Promise {
+	env = vm.ownedEnv(env)
 	env, ok := env.Unify(x, y)
 	if !ok {
 		return Bool(false)
@@ -165,7 +167,8 @@ func Unify(_ *VM, x, y Term, k Cont, env *Env) *Promise {
 }
 
 // UnifyWithOccursCheck unifies x and y with occurs check (i.e., X = f(X) is not allowed).
-func UnifyWithOccursCheck(_ *VM, x, y Term, k Cont, env *Env) *Promise {
+func UnifyWithOccursCheck(vm *VM, x, y Term, k Cont, env *Env) *Promise {
+	env = vm.ownedEnv(env)
 	env, ok := env.unifyWithOccursCheck(x, y)
 	if !ok {
 		return Bool(false)
@@ -174,7 +177,8 @@ func UnifyWithOccursCheck(_ *VM, x, y Term, k Cont, env *Env) *Promise {
 }
 
 // SubsumesTerm succeeds if general and specific are unifiable without binding variables in specific.
-func SubsumesTerm(_ *VM, general, specific Term, k Cont, env *Env) *Promise {
+func SubsumesTerm(vm *VM, general, specific Term, k Cont, env *Env) *Promise {
+	env = vm.ownedEnv(env)
 	theta, ok := env.unifyWithOccursCheck(general, specific)
 	if !ok {
 		return Bool(false)
@@ -760,7 +764,7 @@ func collectionOf(vm *VM, agg func([]Term, *Env) Term, template, goal, instances
 		w = append(w, v)
 	}
 	sort.Slice(w, func(i, j int) bool {
-		return w[i].(Variable) < w[j].(Variable)
+		return w[i].(Variable).Compare(w[j], nil) < 0
 	})
 	witness := tuple(w...)
 	g := iteratedGoalTerm(goal, env)

@@ -159,6 +159,10 @@ func (p *Promise) child(ctx context.Context) (promise *Promise) {
 
 func ensurePromise(p **Promise) {
 	if r := recover(); r != nil {
+		if err, ok := r.(error); ok && err == ErrVariableScope {
+			*p = Error(err)
+			return
+		}
 		*p = Error(panicError(r))
 	}
 }

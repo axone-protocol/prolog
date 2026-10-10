@@ -9,9 +9,25 @@ import (
 
 var ErrMaxVariables = errors.New("maximum number of variables reached")
 
-// Variable is a VM-local Prolog variable. Variables from different VMs must not
-// be combined in the same term or environment.
-type Variable int64
+// ErrVariableScope reports variables or environments from a different VM.
+var ErrVariableScope = errors.New("variable belongs to a different VM")
+
+// variableScope must not be zero-sized: distinct live VMs need distinct tokens.
+type variableScope struct{ _ byte }
+
+// Variable identifies a variable within an opaque VM scope.
+// Only its local index participates in rendering and same-VM ordering.
+type Variable struct {
+	scope *variableScope
+	index int64
+}
+
+func (vm *VM) scope() *variableScope {
+	if vm.variableScope == nil {
+		vm.variableScope = &variableScope{}
+	}
+	return vm.variableScope
+}
 
 // NewVariable creates an anonymous variable owned by vm.
 // It panics with ErrMaxVariables if the VM's variable limit is reached.
@@ -20,7 +36,7 @@ func (vm *VM) NewVariable() Variable {
 		panic(ErrMaxVariables)
 	}
 	vm.variableCount++
-	return Variable(vm.variableCount)
+	return Variable{scope: vm.scope(), index: int64(vm.variableCount)}
 }
 
 func (v Variable) WriteTerm(w io.Writer, opts *WriteOptions, env *Env) error {
@@ -38,7 +54,7 @@ func (v Variable) WriteTerm(w io.Writer, opts *WriteOptions, env *Env) error {
 	if a, ok := opts.variableNames[v]; ok {
 		_ = a.WriteTerm(&ew, opts.withQuoted(false).withLeft(operator{}).withRight(operator{}), env)
 	} else {
-		_, _ = fmt.Fprintf(&ew, "_%d", v)
+		_, _ = fmt.Fprintf(&ew, "_%d", v.index)
 	}
 	if letterDigit(opts.right.name) {
 		_, _ = ew.Write([]byte(" "))
@@ -57,10 +73,13 @@ func (v Variable) Compare(t Term, env *Env) int {
 
 	switch t := env.Resolve(t).(type) {
 	case Variable:
+		if v.scope != t.scope {
+			panic(ErrVariableScope)
+		}
 		switch {
-		case v > t:
+		case v.index > t.index:
 			return 1
-		case v < t:
+		case v.index < t.index:
 			return -1
 		default:
 			return 0
@@ -68,6 +87,31 @@ func (v Variable) Compare(t Term, env *Env) int {
 	default:
 		return -1
 	}
+}
+
+// checkVariableScope validates a term without resolving it. The visited set
+// makes validation safe for shared and cyclic compounds.
+func checkVariableScope(t Term, scope *variableScope, seen map[termID]struct{}) *variableScope {
+	switch t := t.(type) {
+	case Variable:
+		if t.scope == nil || scope != nil && scope != t.scope {
+			panic(ErrVariableScope)
+		}
+		return t.scope
+	case Compound:
+		if seen == nil {
+			seen = make(map[termID]struct{})
+		}
+		key := id(t)
+		if _, ok := seen[key]; ok {
+			return scope
+		}
+		seen[key] = struct{}{}
+		for i := range t.Arity() {
+			scope = checkVariableScope(t.Arg(i), scope, seen)
+		}
+	}
+	return scope
 }
 
 // variableSet is a set of variables. The key is the variable and the value is the number of occurrences.

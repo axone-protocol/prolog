@@ -149,6 +149,7 @@ type VM struct {
 
 	// Execution-local identities and initial environment.
 	variableCount uint64
+	variableScope *variableScope
 	streamCount   uint64
 	rootEnv       *Env
 
@@ -234,6 +235,15 @@ type Cont func(*Env) *Promise
 func (vm *VM) Arrive(name Atom, args []Term, k Cont, env *Env) (promise *Promise) {
 	defer ensurePromise(&promise)
 	env = vm.ownedEnv(env)
+	for _, arg := range args {
+		checkVariableScope(arg, vm.scope(), nil)
+	}
+	return vm.arrive(name, args, k, env)
+}
+
+func (vm *VM) arrive(name Atom, args []Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
 
 	if vm.Unknown == nil {
 		vm.Unknown = func(Atom, []Term, *Env) {}
@@ -261,6 +271,7 @@ func (vm *VM) Arrive(name Atom, args []Term, k Cont, env *Env) (promise *Promise
 }
 
 func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack [][]Term, env *Env, cutParent *Promise) *Promise {
+	env = vm.ownedEnv(env)
 	var (
 		ok  = true
 		op  instruction
@@ -278,13 +289,13 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 		switch opcode, operand := op.opcode, op.operand; opcode {
 		case OpGetConst:
 			arg, args = args[0], args[1:]
-			env, ok = env.Unify(arg, operand)
+			env, ok = env.unify(arg, operand, false)
 		case OpPutConst:
 			args = append(args, operand)
 		case OpGetVar:
 			v := vars[operand.(Integer)]
 			arg, args = args[0], args[1:]
-			env, ok = env.Unify(arg, v)
+			env, ok = env.unify(arg, v, false)
 		case OpPutVar:
 			v := vars[operand.(Integer)]
 			args = append(args, v)
@@ -295,7 +306,7 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 			for i := range args {
 				args[i] = vm.NewVariable()
 			}
-			env, ok = env.Unify(arg, pi.name.Apply(args...))
+			env, ok = env.unify(arg, pi.name.Apply(args...), false)
 		case OpPutFunctor:
 			pi := operand.(procedureIndicator)
 			vs := make([]Term, int(pi.arity))
@@ -309,7 +320,7 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 			// Enter marks the start of a clause; no register changes are needed.
 		case OpCall:
 			pi := operand.(procedureIndicator)
-			return vm.Arrive(pi.name, args, func(env *Env) *Promise {
+			return vm.arrive(pi.name, args, func(env *Env) *Promise {
 				return vm.exec(pc, vars, cont, nil, nil, env, cutParent)
 			}, env)
 		case OpExit:
@@ -325,7 +336,7 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 			for i := range args {
 				args[i] = vm.NewVariable()
 			}
-			env, ok = env.Unify(arg, list(args))
+			env, ok = env.unify(arg, list(args), false)
 		case OpPutList:
 			l := operand.(Integer)
 			vs := make([]Term, int(l))
@@ -340,7 +351,7 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 			for i := range args {
 				args[i] = vm.NewVariable()
 			}
-			env, ok = env.Unify(arg, newDict(args))
+			env, ok = env.unify(arg, newDict(args), false)
 		case OpPutDict:
 			l := operand.(Integer)
 			vs := make([]Term, int(l))
@@ -355,7 +366,7 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 			for i := range args {
 				args[i] = vm.NewVariable()
 			}
-			env, ok = env.Unify(arg, PartialList(args[0], args[1:]...))
+			env, ok = env.unify(arg, PartialList(args[0], args[1:]...), false)
 		case OpPutPartial:
 			l := operand.(Integer)
 			vs := make([]Term, int(l+1))
@@ -429,15 +440,6 @@ func (vm *VM) ClearMeter() {
 	vm.meter = nil
 }
 
-// ResetEnv resets this VM's variable and stream counters and initial environment.
-// Previously created terms, environments, and streams must no longer be used.
-// Predicates, operators, limits, hooks, and the filesystem are retained.
-func (vm *VM) ResetEnv() {
-	vm.variableCount = 0
-	vm.streamCount = 0
-	vm.rootEnv = nil
-}
-
 func (vm *VM) getProcedure(p procedureIndicator) (procedure, bool) {
 	if vm.procedures == nil {
 		return nil, false
@@ -467,9 +469,13 @@ func (vm *VM) ownedEnv(env *Env) *Env {
 	if env == nil {
 		return vm.NewEnv()
 	}
+	if env.vm != nil && env.vm != vm || env.scope != nil && env.scope != vm.scope() {
+		panic(ErrVariableScope)
+	}
 	if env.vm == nil {
 		owned := *env
 		owned.vm = vm
+		owned.scope = vm.scope()
 		env = &owned
 	}
 	return env
