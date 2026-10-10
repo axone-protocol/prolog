@@ -51,9 +51,11 @@ The following customizations have been made to adapt the original `ichiban/prolo
 
 Allocate variables, environments, and streams through their owning VM: `vm.NewVariable()`, `vm.NewEnv()`, and the `vm.New*Stream()` constructors. Variables contain an opaque VM scope and a local ordinal; equality uses both, while Prolog rendering and variable ordering use only the ordinal within one VM. Unrelated VM activity never changes these observable values.
 
-Do not mix variables or environments from different VMs. Execution entry points reject foreign scopes with `engine.ErrVariableScope`; low-level environment and variable operations panic with that error when scopes conflict. Allocate variables through `vm.NewVariable()` rather than constructing a zero-value `Variable`.
+Do not mix variables, environments, or streams from different VMs. Execution entry points reject foreign variables and environments with `engine.ErrVariableScope`, and foreign streams with `engine.ErrStreamScope`. Low-level environment and comparison operations panic on scope conflicts. Allocate variables through `vm.NewVariable()` rather than constructing a zero-value `Variable`.
 
-Create a fresh VM for each execution lifecycle; variable identities and allocation accounting are never reset within an existing VM. Loaded predicates remain usable for that VM's lifetime. Independent VMs can execute concurrently; do not copy a VM after use or execute concurrently on the same VM.
+Stream ownership is fixed at creation. User input/output setters reject foreign or unowned streams before changing state; stream I/O predicates reject them before accessing resources. Streams are ordered only within their owning VM by local ID. Do not copy streams.
+
+Create a fresh VM for each execution lifecycle; variable identities and allocation accounting are never reset within an existing VM. Loaded predicates remain usable for that VM's lifetime. Independent VMs can execute concurrently; shared host I/O and filesystem resources must be safe for concurrent use. Do not copy a VM after use or execute concurrently on the same VM.
 
 ## License
 
