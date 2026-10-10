@@ -8,11 +8,12 @@ import (
 )
 
 func TestWriteCompound(t *testing.T) {
+	var vm VM
 	f := NewAtom("f")
-	v, w := NewVariable(), NewVariable()
+	v, w := vm.NewVariable(), vm.NewVariable()
 	l := PartialList(v, NewAtom("a"), NewAtom("b"))
 	r := f.Apply(w)
-	env := NewEnv().bind(v, l).bind(w, r)
+	env := vm.NewEnv().bind(v, l).bind(w, r)
 
 	ops := newOperators()
 	ops.define(1200, operatorSpecifierXFX, NewAtom(`:-`))
@@ -65,7 +66,8 @@ func TestWriteCompound(t *testing.T) {
 }
 
 func TestCompareCompound(t *testing.T) {
-	x := NewVariable()
+	var vm VM
+	x := vm.NewVariable()
 
 	tests := []struct {
 		title string
@@ -110,7 +112,8 @@ func TestList(t *testing.T) {
 }
 
 func TestPartialList(t *testing.T) {
-	x := Term(NewVariable())
+	var vm VM
+	x := Term(vm.NewVariable())
 
 	tests := []struct {
 		title string
@@ -130,7 +133,8 @@ func TestPartialList(t *testing.T) {
 }
 
 func TestEnv_Set(t *testing.T) {
-	env := NewEnv()
+	var vm VM
+	env := vm.NewEnv()
 	assert.Equal(t, List(), env.set())
 	assert.Equal(t, List(NewAtom("a")), env.set(NewAtom("a")))
 	assert.Equal(t, List(NewAtom("a")), env.set(NewAtom("a"), NewAtom("a"), NewAtom("a")))

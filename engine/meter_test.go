@@ -55,7 +55,7 @@ func TestVM_MeterUnifyStep_PreservedAcrossEnvRewrites(t *testing.T) {
 	left := make([]Term, n)
 	right := make([]Term, n)
 	for i := 0; i < n; i++ {
-		left[i] = NewVariable()
+		left[i] = vm.NewVariable()
 		right[i] = Integer(i)
 	}
 
@@ -99,10 +99,10 @@ func TestVM_MeterCopyNode(t *testing.T) {
 		return nil
 	})
 
-	x := NewVariable()
+	x := vm.NewVariable()
 	goal := NewAtom("copy_term").Apply(
 		NewAtom("f").Apply(x, List(NewAtom("a"))),
-		NewVariable(),
+		vm.NewVariable(),
 	)
 
 	ok, err := Call(&vm, goal, Success, nil).Force(context.Background())
@@ -122,7 +122,7 @@ func TestVM_MeterArithNode(t *testing.T) {
 	})
 
 	goal := NewAtom("is").Apply(
-		NewVariable(),
+		vm.NewVariable(),
 		atomPlus.Apply(Integer(1), atomAsterisk.Apply(Integer(2), Integer(3))),
 	)
 
@@ -143,7 +143,7 @@ func TestVM_MeterCompareStep(t *testing.T) {
 	})
 
 	goal := NewAtom("compare").Apply(
-		NewVariable(),
+		vm.NewVariable(),
 		NewAtom("f").Apply(NewAtom("a")),
 		NewAtom("f").Apply(NewAtom("b")),
 	)
@@ -166,7 +166,7 @@ func TestVM_MeterException(t *testing.T) {
 		return nil
 	})
 
-	ok, err := Call(&vm, atomEqual.Apply(NewVariable(), Integer(1)), Success, nil).Force(context.Background())
+	ok, err := Call(&vm, atomEqual.Apply(vm.NewVariable(), Integer(1)), Success, nil).Force(context.Background())
 	assert.False(t, ok)
 	ex, okCast := err.(Exception)
 	assert.True(t, okCast)
@@ -174,6 +174,6 @@ func TestVM_MeterException(t *testing.T) {
 		NewAtom("resource_error").Apply(NewAtom("gas")),
 		atomSlash.Apply(atomEqual, Integer(2)),
 	)
-	_, matched := NewEnv().Unify(pattern, ex.Term())
+	_, matched := vm.NewEnv().Unify(pattern, ex.Term())
 	assert.True(t, matched)
 }

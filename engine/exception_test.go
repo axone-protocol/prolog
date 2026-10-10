@@ -7,6 +7,7 @@ import (
 )
 
 func TestNewException(t *testing.T) {
+	var vm VM
 	assert.Equal(t, Exception{term: NewAtom("foo").Apply(NewAtom("bar"))}, NewException(NewAtom("foo").Apply(NewAtom("bar")), nil))
 
 	assert.Equal(t,
@@ -18,7 +19,7 @@ func TestNewException(t *testing.T) {
 		NewException(NewAtom("foo").Apply(newDict([]Term{NewAtom("point"), NewAtom("x"), Integer(0), NewAtom("y"), Integer(1)})), nil))
 
 	defer setMemFree(1)()
-	assert.Equal(t, resourceError(resourceMemory, nil), NewException(NewAtom("foo").Apply(NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable(), NewVariable()), nil))
+	assert.Equal(t, resourceError(resourceMemory, nil), NewException(NewAtom("foo").Apply(vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable()), nil))
 }
 
 func TestException_Error(t *testing.T) {

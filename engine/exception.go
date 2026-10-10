@@ -10,8 +10,15 @@ type Exception struct {
 }
 
 // NewException creates an Exception from a copy of the given Term.
+// Fresh variables use the environment's VM. Standalone errors without an
+// owned environment use a private VM; no execution state is shared.
 func NewException(term Term, env *Env) Exception {
-	c, err := renamedCopy(term, nil, env)
+	var standalone VM
+	vm := &standalone
+	if env != nil && env.vm != nil {
+		vm = env.vm
+	}
+	c, err := renamedCopy(vm, term, nil, env)
 	if err != nil {
 		return err.(Exception) // Must be error(resource_error(memory), _).
 	}

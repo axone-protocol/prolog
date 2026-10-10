@@ -119,6 +119,8 @@ func Failure(*Env) *Promise {
 }
 
 // VM is the core of a Prolog interpreter. The zero value for VM is a valid VM without any builtin predicates.
+// A VM must not be copied after use or executed concurrently. Independent VMs
+// may be used concurrently; terms and environments belong to their owning VM.
 type VM struct {
 	// Unknown is a callback that is triggered when the VM reaches to an unknown predicate while current_prolog_flag(unknown, warning).
 	Unknown func(name Atom, args []Term, env *Env)
@@ -144,6 +146,12 @@ type VM struct {
 
 	// Limits
 	maxVariables uint64
+
+	// Execution-local identities and initial environment.
+	variableCount uint64
+	variableScope *variableScope
+	streamCount   uint64
+	rootEnv       *Env
 
 	// Hook
 	hook HookFunc
@@ -226,6 +234,16 @@ type Cont func(*Env) *Promise
 // Arrive is the entry point of the VM.
 func (vm *VM) Arrive(name Atom, args []Term, k Cont, env *Env) (promise *Promise) {
 	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
+	for _, arg := range args {
+		checkTermScope(arg, vm.scope(), nil)
+	}
+	return vm.arrive(name, args, k, env)
+}
+
+func (vm *VM) arrive(name Atom, args []Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
 
 	if vm.Unknown == nil {
 		vm.Unknown = func(Atom, []Term, *Env) {}
@@ -244,7 +262,6 @@ func (vm *VM) Arrive(name Atom, args []Term, k Cont, env *Env) (promise *Promise
 			return Error(existenceError(objectTypeProcedure, pi.Term(), env))
 		}
 	}
-
 	env = vm.prepareEnv(env)
 
 	// bind the special variable to inform the predicate about the context.
@@ -254,6 +271,7 @@ func (vm *VM) Arrive(name Atom, args []Term, k Cont, env *Env) (promise *Promise
 }
 
 func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack [][]Term, env *Env, cutParent *Promise) *Promise {
+	env = vm.ownedEnv(env)
 	var (
 		ok  = true
 		op  instruction
@@ -271,13 +289,13 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 		switch opcode, operand := op.opcode, op.operand; opcode {
 		case OpGetConst:
 			arg, args = args[0], args[1:]
-			env, ok = env.Unify(arg, operand)
+			env, ok = env.unify(arg, operand, false)
 		case OpPutConst:
 			args = append(args, operand)
 		case OpGetVar:
 			v := vars[operand.(Integer)]
 			arg, args = args[0], args[1:]
-			env, ok = env.Unify(arg, v)
+			env, ok = env.unify(arg, v, false)
 		case OpPutVar:
 			v := vars[operand.(Integer)]
 			args = append(args, v)
@@ -286,9 +304,9 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 			arg, astack = env.Resolve(args[0]), append(astack, args[1:])
 			args = make([]Term, int(pi.arity))
 			for i := range args {
-				args[i] = NewVariable()
+				args[i] = vm.NewVariable()
 			}
-			env, ok = env.Unify(arg, pi.name.Apply(args...))
+			env, ok = env.unify(arg, pi.name.Apply(args...), false)
 		case OpPutFunctor:
 			pi := operand.(procedureIndicator)
 			vs := make([]Term, int(pi.arity))
@@ -302,7 +320,7 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 			// Enter marks the start of a clause; no register changes are needed.
 		case OpCall:
 			pi := operand.(procedureIndicator)
-			return vm.Arrive(pi.name, args, func(env *Env) *Promise {
+			return vm.arrive(pi.name, args, func(env *Env) *Promise {
 				return vm.exec(pc, vars, cont, nil, nil, env, cutParent)
 			}, env)
 		case OpExit:
@@ -316,9 +334,9 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 			arg, astack = args[0], append(astack, args[1:])
 			args = make([]Term, int(l))
 			for i := range args {
-				args[i] = NewVariable()
+				args[i] = vm.NewVariable()
 			}
-			env, ok = env.Unify(arg, list(args))
+			env, ok = env.unify(arg, list(args), false)
 		case OpPutList:
 			l := operand.(Integer)
 			vs := make([]Term, int(l))
@@ -331,9 +349,9 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 			arg, astack = args[0], append(astack, args[1:])
 			args = make([]Term, int(l))
 			for i := range args {
-				args[i] = NewVariable()
+				args[i] = vm.NewVariable()
 			}
-			env, ok = env.Unify(arg, newDict(args))
+			env, ok = env.unify(arg, newDict(args), false)
 		case OpPutDict:
 			l := operand.(Integer)
 			vs := make([]Term, int(l))
@@ -346,9 +364,9 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 			arg, astack = args[0], append(astack, args[1:])
 			args = make([]Term, int(l+1))
 			for i := range args {
-				args[i] = NewVariable()
+				args[i] = vm.NewVariable()
 			}
-			env, ok = env.Unify(arg, PartialList(args[0], args[1:]...))
+			env, ok = env.unify(arg, PartialList(args[0], args[1:]...), false)
 		case OpPutPartial:
 			l := operand.(Integer)
 			vs := make([]Term, int(l+1))
@@ -366,16 +384,22 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 }
 
 // SetUserInput sets the given stream as user_input.
+// It panics with ErrStreamScope unless s was created by vm.
 func (vm *VM) SetUserInput(s *Stream) {
-	s.vm = vm
+	if !s.ownedBy(vm) {
+		panic(ErrStreamScope)
+	}
 	s.alias = atomUserInput
 	vm.streams.add(s)
 	vm.input = s
 }
 
 // SetUserOutput sets the given stream as user_output.
+// It panics with ErrStreamScope unless s was created by vm.
 func (vm *VM) SetUserOutput(s *Stream) {
-	s.vm = vm
+	if !s.ownedBy(vm) {
+		panic(ErrStreamScope)
+	}
 	s.alias = atomUserOutput
 	vm.streams.add(s)
 	vm.output = s
@@ -400,7 +424,6 @@ func (vm *VM) LoadedSources() []string {
 // Zero value mean no limits
 func (vm *VM) SetMaxVariables(n uint64) {
 	vm.maxVariables = n
-	maxVariables = n
 }
 
 // InstallHook sets the given hook function in the VM.
@@ -421,21 +444,6 @@ func (vm *VM) InstallMeter(f MeterFunc) {
 // ClearMeter removes the installed meter function from the VM.
 func (vm *VM) ClearMeter() {
 	vm.meter = nil
-}
-
-// ResetEnv is used to reset all global variable
-func (vm *VM) ResetEnv() {
-	resetStreamIDCounter()
-	varCounter.count = 0
-	varContext = NewVariable()
-	rootContext = NewAtom("root")
-	rootEnv = &Env{
-		binding: binding{
-			key:   newEnvKey(varContext),
-			value: rootContext,
-		},
-	}
-	maxVariables = vm.maxVariables
 }
 
 func (vm *VM) getProcedure(p procedureIndicator) (procedure, bool) {
@@ -463,11 +471,25 @@ func (vm *VM) charge(kind MeterKind, units uint64, env *Env) {
 	chargeMeter(vm.meter, kind, units, env)
 }
 
-func (vm *VM) prepareEnv(env *Env) *Env {
-	if vm.meter == nil {
-		return env
+func (vm *VM) ownedEnv(env *Env) *Env {
+	if env == nil {
+		return vm.NewEnv()
 	}
-	if env != nil && env.meter != nil {
+	if env.vm != nil && env.vm != vm || env.scope != nil && env.scope != vm.scope() {
+		panic(ErrVariableScope)
+	}
+	if env.vm == nil {
+		owned := *env
+		owned.vm = vm
+		owned.scope = vm.scope()
+		env = &owned
+	}
+	return env
+}
+
+func (vm *VM) prepareEnv(env *Env) *Env {
+	env = vm.ownedEnv(env)
+	if env.meter != nil || vm.meter == nil {
 		return env
 	}
 	return env.withMeter(vm.meter)

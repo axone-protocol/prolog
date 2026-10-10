@@ -36,7 +36,8 @@ func TestFloat_WriteTerm(t *testing.T) {
 }
 
 func TestFloat_Compare(t *testing.T) {
-	x := NewVariable()
+	var vm VM
+	x := vm.NewVariable()
 
 	tests := []struct {
 		title string

@@ -228,7 +228,6 @@ func TestVM_Arrive(t *testing.T) {
 				Unknown: func(name Atom, args []Term, env *Env) {
 					assert.Equal(t, NewAtom("foo"), name)
 					assert.Equal(t, []Term{NewAtom("a")}, args)
-					assert.Nil(t, env)
 					warned = true
 				},
 			}
@@ -251,7 +250,7 @@ func TestVM_Arrive(t *testing.T) {
 
 func TestVM_open_nilFS(t *testing.T) {
 	var vm VM
-	env := NewEnv()
+	env := vm.NewEnv()
 	_, _, err := vm.open(NewAtom("foo"), env)
 	assert.Equal(t, permissionError(operationOpen, permissionTypeSourceSink, NewAtom("foo"), env), err)
 }
@@ -277,7 +276,7 @@ func TestVM_LoadedSources(t *testing.T) {
 func TestVM_SetUserInput(t *testing.T) {
 	t.Run("file", func(t *testing.T) {
 		var vm VM
-		vm.SetUserInput(NewInputTextStream(os.Stdin))
+		vm.SetUserInput(vm.NewInputTextStream(os.Stdin))
 
 		s, ok := vm.streams.lookup(atomUserInput)
 		assert.True(t, ok)
@@ -288,7 +287,7 @@ func TestVM_SetUserInput(t *testing.T) {
 func TestVM_SetUserOutput(t *testing.T) {
 	t.Run("file", func(t *testing.T) {
 		var vm VM
-		vm.SetUserOutput(NewOutputTextStream(os.Stdout))
+		vm.SetUserOutput(vm.NewOutputTextStream(os.Stdout))
 
 		s, ok := vm.streams.lookup(atomUserOutput)
 		assert.True(t, ok)
@@ -296,20 +295,82 @@ func TestVM_SetUserOutput(t *testing.T) {
 	})
 }
 
-func TestVM_SetMaxVariables(t *testing.T) {
-	t.Run("limits", func(t *testing.T) {
-		var vm VM
-		vm.SetMaxVariables(10)
-		assert.Equal(t, uint64(10), maxVariables)
-		assert.Equal(t, uint64(10), vm.maxVariables)
-	})
+func TestVM_SetUserStreamRejectsForeignOrUnowned(t *testing.T) {
+	tests := []struct {
+		title     string
+		alias     Atom
+		newStream func(*VM) *Stream
+		set       func(*VM, *Stream)
+		current   func(*VM) *Stream
+	}{
+		{
+			title:     "input",
+			alias:     atomUserInput,
+			newStream: func(vm *VM) *Stream { return vm.NewInputTextStream(nil) },
+			set:       func(vm *VM, s *Stream) { vm.SetUserInput(s) },
+			current:   func(vm *VM) *Stream { return vm.input },
+		},
+		{
+			title:     "output",
+			alias:     atomUserOutput,
+			newStream: func(vm *VM) *Stream { return vm.NewOutputTextStream(nil) },
+			set:       func(vm *VM, s *Stream) { vm.SetUserOutput(s) },
+			current:   func(vm *VM) *Stream { return vm.output },
+		},
+	}
 
-	t.Run("no limit", func(t *testing.T) {
-		var vm VM
-		vm.SetMaxVariables(0)
-		assert.Equal(t, uint64(0), maxVariables)
-		assert.Equal(t, uint64(0), vm.maxVariables)
-	})
+	for _, tt := range tests {
+		t.Run(tt.title, func(t *testing.T) {
+			var vm, other VM
+			current := tt.newStream(&vm)
+			tt.set(&vm, current)
+			otherCurrent := tt.newStream(&other)
+			tt.set(&other, otherCurrent)
+
+			foreignAlias := NewAtom("foreign_" + tt.title)
+			foreign := tt.newStream(&other)
+			foreign.alias = foreignAlias
+			other.streams.add(foreign)
+
+			assertUnchanged := func() {
+				assert.Same(t, current, tt.current(&vm))
+				assert.Same(t, otherCurrent, tt.current(&other))
+				assert.True(t, current.ownedBy(&vm))
+				assert.True(t, otherCurrent.ownedBy(&other))
+				assert.Len(t, vm.streams.elems, 1)
+				assert.Len(t, other.streams.elems, 2)
+
+				s, ok := vm.streams.lookup(tt.alias)
+				assert.True(t, ok)
+				assert.Same(t, current, s)
+				s, ok = other.streams.lookup(tt.alias)
+				assert.True(t, ok)
+				assert.Same(t, otherCurrent, s)
+				s, ok = other.streams.lookup(foreignAlias)
+				assert.True(t, ok)
+				assert.Same(t, foreign, s)
+			}
+
+			assert.PanicsWithValue(t, ErrStreamScope, func() {
+				tt.set(&vm, foreign)
+			})
+			assertUnchanged()
+			assert.True(t, foreign.ownedBy(&other))
+			assert.Equal(t, foreignAlias, foreign.alias)
+
+			unownedAlias := NewAtom("unowned_" + tt.title)
+			unowned := &Stream{alias: unownedAlias}
+			assert.PanicsWithValue(t, ErrStreamScope, func() {
+				tt.set(&vm, unowned)
+			})
+			assertUnchanged()
+			assert.False(t, unowned.ownedBy(&vm))
+			assert.False(t, unowned.ownedBy(&other))
+			assert.Equal(t, unownedAlias, unowned.alias)
+			_, ok := vm.streams.lookup(unownedAlias)
+			assert.False(t, ok)
+		})
+	}
 }
 
 func TestProcedureIndicator_Apply(t *testing.T) {
@@ -329,30 +390,33 @@ func TestProcedureIndicator_Apply(t *testing.T) {
 	})
 }
 
-func TestVM_ResetEnv(t *testing.T) {
+func TestVM_EnvironmentIsolation(t *testing.T) {
+	var a, b VM
+	x, y := a.NewVariable(), b.NewVariable()
+	envA := a.NewEnv().bind(x, NewAtom("a"))
+	envB := b.NewEnv().bind(y, NewAtom("b"))
+	assert.False(t, x == y)
+	assert.Equal(t, NewAtom("a"), envA.Resolve(x))
+	assert.Equal(t, NewAtom("b"), envB.Resolve(y))
+	assert.PanicsWithValue(t, ErrVariableScope, func() { envA.Resolve(y) })
+	assert.PanicsWithValue(t, ErrVariableScope, func() { envB.Resolve(x) })
+	assert.PanicsWithValue(t, ErrVariableScope, func() { a.ownedEnv(envB) })
+}
+
+func TestVM_ExceptionVariablesUseEnvironmentOwner(t *testing.T) {
 	var vm VM
-	vm.SetMaxVariables(20)
-
-	varCounter.count = 10
-	varContext = NewVariable()
-	rootContext = NewAtom("non-root")
-	rootEnv = &Env{
-		binding: binding{
-			key:   newEnvKey(varContext),
-			value: NewAtom("non-root"),
-		},
+	vm.SetMaxVariables(10)
+	env := vm.NewEnv()
+	for n := range 8 {
+		env = env.bind(vm.NewVariable(), Integer(n))
 	}
-	maxVariables = 30
-
-	t.Run("Reset environment", func(t *testing.T) {
-		vm.ResetEnv()
-
-		assert.Equal(t, uint64(1), varCounter.count) // 1 because NewVariable() is called in ResetEnv()
-		assert.Equal(t, "root", rootContext.String())
-		assert.Equal(t, newEnvKey(varContext), rootEnv.key)
-		assert.Equal(t, NewAtom("root"), rootEnv.value)
-		assert.Equal(t, uint64(20), maxVariables)
-	})
+	x := vm.NewVariable()
+	ex := NewException(NewAtom("f").Apply(x, x), env)
+	c := ex.Term().(Compound)
+	assert.NotEqual(t, x, c.Arg(0))
+	assert.Equal(t, c.Arg(0), c.Arg(1))
+	assert.Equal(t, x, env.Resolve(x))
+	assert.PanicsWithValue(t, ErrMaxVariables, func() { vm.NewVariable() })
 }
 
 func TestVM_DebugHook(t *testing.T) {
@@ -433,4 +497,52 @@ func TestInstruction_String(t *testing.T) {
 		expected := "exit()"
 		assert.Equal(t, expected, instr.String())
 	})
+}
+
+func TestVM_RejectsForeignScopeAtExecutionBoundaries(t *testing.T) {
+	var vm, other VM
+	called := false
+	vm.Register1(NewAtom("ignore"), func(_ *VM, _ Term, k Cont, env *Env) *Promise {
+		called = true
+		return k(env)
+	})
+
+	tests := []struct {
+		title string
+		arg   Term
+		err   error
+	}{
+		{
+			title: "variable",
+			arg:   NewAtom("nested").Apply(other.NewVariable()),
+			err:   ErrVariableScope,
+		},
+		{
+			title: "foreign stream",
+			arg:   NewAtom("nested").Apply(other.NewInputTextStream(nil)),
+			err:   ErrStreamScope,
+		},
+		{
+			title: "unowned stream",
+			arg:   NewAtom("nested").Apply(&Stream{}),
+			err:   ErrStreamScope,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.title, func(t *testing.T) {
+			ok, err := vm.Arrive(NewAtom("ignore"), []Term{tt.arg}, Success, nil).Force(context.Background())
+			assert.False(t, ok)
+			assert.ErrorIs(t, err, tt.err)
+			ok, err = Call(&vm, NewAtom("ignore").Apply(tt.arg), Success, nil).Force(context.Background())
+			assert.False(t, ok)
+			assert.ErrorIs(t, err, tt.err)
+			assert.False(t, called)
+		})
+	}
+
+	ok, err := vm.Arrive(NewAtom("ignore"), []Term{NewAtom("ground")}, Success, other.NewEnv()).Force(context.Background())
+	assert.False(t, ok)
+	assert.ErrorIs(t, err, ErrVariableScope)
+	assert.False(t, called)
 }

@@ -13,73 +13,46 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-func TestNewInputTextStream(t *testing.T) {
-	resetStreamIDCounter()
+func TestStream_CompareScopeIsolation(t *testing.T) {
+	var vm, other VM
+	first := vm.NewInputTextStream(nil)
+	retained := other.NewInputTextStream(nil)
+	second := vm.NewInputTextStream(nil)
 
-	assert.Equal(t, &Stream{
-		id:         1,
-		source:     os.Stdin,
-		mode:       ioModeRead,
-		eofAction:  eofActionReset,
-		streamType: streamTypeText,
-	}, NewInputTextStream(os.Stdin))
-}
+	assert.Equal(t, -1, first.Compare(second, nil))
+	assert.Equal(t, 1, second.Compare(first, nil))
 
-func TestNewInputBinaryStream(t *testing.T) {
-	resetStreamIDCounter()
+	tests := []struct {
+		title string
+		s, t  *Stream
+	}{
+		{title: "foreign stream", s: first, t: retained},
+		{title: "foreign receiver", s: retained, t: first},
+		{title: "unowned stream", s: first, t: &Stream{}},
+		{title: "unowned receiver", s: &Stream{}, t: first},
+	}
 
-	assert.Equal(t, &Stream{
-		id:         1,
-		source:     os.Stdin,
-		mode:       ioModeRead,
-		eofAction:  eofActionReset,
-		streamType: streamTypeBinary,
-	}, NewInputBinaryStream(os.Stdin))
-}
-
-func TestNewOutputTextStream(t *testing.T) {
-	resetStreamIDCounter()
-
-	assert.Equal(t, &Stream{
-		id:         1,
-		sink:       os.Stdout,
-		mode:       ioModeAppend,
-		eofAction:  eofActionReset,
-		streamType: streamTypeText,
-	}, NewOutputTextStream(os.Stdout))
-}
-
-func TestNewOutputBinaryStream(t *testing.T) {
-	resetStreamIDCounter()
-
-	assert.Equal(t, &Stream{
-		id:         1,
-		sink:       os.Stdout,
-		mode:       ioModeAppend,
-		eofAction:  eofActionReset,
-		streamType: streamTypeBinary,
-	}, NewOutputBinaryStream(os.Stdout))
+	for _, tt := range tests {
+		t.Run(tt.title, func(t *testing.T) {
+			assert.PanicsWithValue(t, ErrStreamScope, func() {
+				tt.s.Compare(tt.t, nil)
+			})
+		})
+	}
 }
 
 func TestStream_WriteTerm(t *testing.T) {
-	resetStreamIDCounter()
+	var vm VM
+	alias := vm.NewInputTextStream(nil)
+	alias.alias = NewAtom("foo")
 
 	tests := []struct {
-		title   string
-		s       *Stream
-		prepare func(*Stream)
-		output  string
+		title  string
+		s      *Stream
+		output string
 	}{
-		{title: "no alias", s: NewInputTextStream(nil), output: `<stream>\(0x1\)`},
-		{title: "registered", s: NewInputTextStream(nil), prepare: func(s *Stream) {
-			var vm VM
-			vm.streams.add(s)
-		}, output: `<stream>\(0x2\)`},
-		{title: "alias", s: &Stream{id: nextStreamID(), alias: NewAtom("foo")}, prepare: func(s *Stream) {
-			var vm VM
-			s.vm = &vm
-			vm.streams.add(s)
-		}, output: `<stream>\(foo\)`},
+		{title: "no alias", s: vm.NewInputTextStream(nil), output: `<stream>\(0x[0-9a-f]+\)`},
+		{title: "alias", s: alias, output: `<stream>\(foo\)`},
 	}
 
 	var buf bytes.Buffer
@@ -87,9 +60,6 @@ func TestStream_WriteTerm(t *testing.T) {
 		tc := testCase
 		t.Run(tc.title, func(t *testing.T) {
 			buf.Reset()
-			if tc.prepare != nil {
-				tc.prepare(tc.s)
-			}
 			assert.NoError(t, tc.s.WriteTerm(&buf, nil, nil))
 			assert.Regexp(t, tc.output, buf.String())
 		})
@@ -97,11 +67,12 @@ func TestStream_WriteTerm(t *testing.T) {
 }
 
 func TestStream_Compare(t *testing.T) {
-	x := NewVariable()
-	ss := [3]Stream{
-		{id: 1},
-		{id: 2},
-		{id: 3},
+	var vm VM
+	x := vm.NewVariable()
+	ss := [3]*Stream{
+		vm.NewInputTextStream(nil),
+		vm.NewInputTextStream(nil),
+		vm.NewInputTextStream(nil),
 	}
 
 	tests := []struct {
@@ -110,14 +81,14 @@ func TestStream_Compare(t *testing.T) {
 		t     Term
 		o     int
 	}{
-		{title: `s > X`, s: &ss[1], t: x, o: 1},
-		{title: `s > 1.0`, s: &ss[1], t: NewFloatFromInt64(1), o: 1},
-		{title: `s > 1`, s: &ss[1], t: Integer(2), o: 1},
-		{title: `s > a`, s: &ss[1], t: NewAtom("a"), o: 1},
-		{title: `s > s`, s: &ss[1], t: &ss[0], o: 1},
-		{title: `s = s`, s: &ss[1], t: &ss[1], o: 0},
-		{title: `s < s`, s: &ss[1], t: &ss[2], o: -1},
-		{title: `s < f(a)`, s: &ss[1], t: NewAtom("f").Apply(NewAtom("a")), o: -1},
+		{title: `s > X`, s: ss[1], t: x, o: 1},
+		{title: `s > 1.0`, s: ss[1], t: NewFloatFromInt64(1), o: 1},
+		{title: `s > 1`, s: ss[1], t: Integer(2), o: 1},
+		{title: `s > a`, s: ss[1], t: NewAtom("a"), o: 1},
+		{title: `s > s`, s: ss[1], t: ss[0], o: 1},
+		{title: `s = s`, s: ss[1], t: ss[1], o: 0},
+		{title: `s < s`, s: ss[1], t: ss[2], o: -1},
+		{title: `s < f(a)`, s: ss[1], t: NewAtom("f").Apply(NewAtom("a")), o: -1},
 	}
 
 	for _, tt := range tests {
@@ -303,6 +274,7 @@ func (m *mockReader) Read(p []byte) (int, error) {
 }
 
 func TestStream_ReadByte(t *testing.T) {
+	var vm VM
 	tests := []struct {
 		title string
 		s     *Stream
@@ -313,7 +285,7 @@ func TestStream_ReadByte(t *testing.T) {
 	}{
 		{
 			title: "input binary: 3 bytes left",
-			s:     &Stream{source: bytes.NewReader([]byte{1, 2, 3}), streamType: streamTypeBinary},
+			s:     vm.NewInputBinaryStream(bytes.NewReader([]byte{1, 2, 3})),
 			b:     1,
 			pos:   1,
 			eos:   endOfStreamNot,

@@ -10,7 +10,8 @@ import (
 )
 
 func TestVariable_WriteTerm(t *testing.T) {
-	x := NewVariable()
+	var vm VM
+	x := vm.NewVariable()
 
 	tests := []struct {
 		title  string
@@ -19,10 +20,10 @@ func TestVariable_WriteTerm(t *testing.T) {
 		opts   WriteOptions
 		output string
 	}{
-		{title: "unnamed", v: x, output: fmt.Sprintf("_%d", x)},
+		{title: "unnamed", v: x, output: fmt.Sprintf("_%d", x.index)},
 		{title: "variable_names", v: x, opts: WriteOptions{variableNames: map[Variable]Atom{x: NewAtom("Foo")}}, output: `Foo`},
-		{title: "following a letter-digit operator", v: x, opts: WriteOptions{left: operator{name: NewAtom("is")}}, output: fmt.Sprintf(" _%d", x)},
-		{title: "followed by a letter-digit operator", v: x, opts: WriteOptions{right: operator{name: NewAtom("is")}}, output: fmt.Sprintf("_%d ", x)},
+		{title: "following a letter-digit operator", v: x, opts: WriteOptions{left: operator{name: NewAtom("is")}}, output: fmt.Sprintf(" _%d", x.index)},
+		{title: "followed by a letter-digit operator", v: x, opts: WriteOptions{right: operator{name: NewAtom("is")}}, output: fmt.Sprintf("_%d ", x.index)},
 	}
 
 	var buf bytes.Buffer
@@ -36,7 +37,8 @@ func TestVariable_WriteTerm(t *testing.T) {
 }
 
 func TestVariable_Compare(t *testing.T) {
-	w, x, y := NewVariable(), NewVariable(), NewVariable()
+	var vm VM
+	w, x, y := vm.NewVariable(), vm.NewVariable(), vm.NewVariable()
 
 	tests := []struct {
 		title string
@@ -61,8 +63,9 @@ func TestVariable_Compare(t *testing.T) {
 }
 
 func Test_variableSet(t *testing.T) {
+	var vm VM
 	f := NewAtom("f")
-	x, y := NewVariable(), NewVariable()
+	x, y := vm.NewVariable(), vm.NewVariable()
 
 	tests := []struct {
 		term Term
@@ -92,8 +95,9 @@ func Test_variableSet(t *testing.T) {
 }
 
 func Test_existentialVariableSet(t *testing.T) {
+	var vm VM
 	f := NewAtom("f")
-	x, y, z := NewVariable(), NewVariable(), NewVariable()
+	x, y, z := vm.NewVariable(), vm.NewVariable(), vm.NewVariable()
 
 	tests := []struct {
 		term Term
@@ -119,9 +123,10 @@ func Test_existentialVariableSet(t *testing.T) {
 }
 
 func Test_freeVariablesSet(t *testing.T) {
+	var vm VM
 	f := NewAtom("f")
-	x, y, z := NewVariable(), NewVariable(), NewVariable()
-	a := NewVariable()
+	x, y, z := vm.NewVariable(), vm.NewVariable(), vm.NewVariable()
+	a := vm.NewVariable()
 
 	tests := []struct {
 		t, v Term
@@ -142,38 +147,91 @@ func Test_freeVariablesSet(t *testing.T) {
 	}
 }
 
-func Test_maxVariables(t *testing.T) {
+func TestVM_NewVariableLimits(t *testing.T) {
+	var a, b VM
+	a.SetMaxVariables(2)
+	a.NewVariable()
+	a.NewVariable()
+	assert.PanicsWithValue(t, ErrMaxVariables, func() { a.NewVariable() })
+
+	b.SetMaxVariables(0)
+	for range 4 {
+		b.NewVariable()
+	}
+	assert.PanicsWithValue(t, ErrMaxVariables, func() { a.NewVariable() })
+
+	a.SetMaxVariables(0)
+	assert.Equal(t, int64(3), a.NewVariable().index)
+	a.SetMaxVariables(3)
+	assert.PanicsWithValue(t, ErrMaxVariables, func() { a.NewVariable() })
+	assert.Equal(t, int64(5), b.NewVariable().index)
+}
+
+func TestVariable_ScopeIsolation(t *testing.T) {
+	var a, b VM
+	x, y := a.NewVariable(), b.NewVariable()
+	assert.False(t, x == y)
+	env := a.NewEnv().bind(x, NewAtom("a"))
+	assert.Equal(t, NewAtom("a"), env.Resolve(x))
+	assert.PanicsWithValue(t, ErrVariableScope, func() { env.Resolve(y) })
+	assert.PanicsWithValue(t, ErrVariableScope, func() { x.Compare(y, nil) })
+	assert.PanicsWithValue(t, ErrVariableScope, func() {
+		var empty *Env
+		empty.Unify(NewAtom("f").Apply(x), NewAtom("f").Apply(y))
+	})
+	assert.PanicsWithValue(t, ErrVariableScope, func() {
+		env.Unify(x, NewAtom("f").Apply(y))
+	})
+}
+
+func TestEnv_UnifyRejectsForeignOrUnownedStreams(t *testing.T) {
+	var vm, other VM
+	x := vm.NewVariable()
+
 	tests := []struct {
-		title         string
-		init          func()
-		max           uint64
-		expectedCount uint64
-		shouldPanic   bool
+		title  string
+		stream *Stream
 	}{
-		{title: "no limits", init: func() {
-			NewVariable()
-			NewVariable()
-		}, max: 0, expectedCount: 2},
-		{title: "limit", init: func() {
-			NewVariable()
-			NewVariable()
-		}, max: 2, expectedCount: 2},
-		{title: "limit reached", init: func() {
-			NewVariable()
-			NewVariable()
-		}, max: 1, expectedCount: 1, shouldPanic: true},
+		{title: "foreign", stream: other.NewInputTextStream(nil)},
+		{title: "unowned", stream: &Stream{}},
 	}
 
 	for _, tt := range tests {
-		varCounter.count = 0 // reset at each test
-
-		maxVariables = tt.max
-
-		if tt.shouldPanic {
-			assert.Panics(t, tt.init)
-		} else {
-			tt.init()
-		}
-		assert.Equal(t, varCounter.count, tt.expectedCount)
+		t.Run(tt.title, func(t *testing.T) {
+			assert.PanicsWithValue(t, ErrStreamScope, func() {
+				vm.NewEnv().Unify(
+					NewAtom("outer").Apply(x),
+					NewAtom("outer").Apply(NewAtom("nested").Apply(tt.stream)),
+				)
+			})
+		})
 	}
+}
+
+func TestVariable_DeterministicRenderingAndOrdering(t *testing.T) {
+	for noise := range 8 {
+		var vm, other VM
+		x := vm.NewVariable()
+		for range noise {
+			other.NewVariable()
+		}
+		y := vm.NewVariable()
+		var out bytes.Buffer
+		assert.NoError(t, NewAtom("pair").Apply(x, y).WriteTerm(&out, &defaultWriteOptions, vm.NewEnv()))
+		assert.Equal(t, "pair(_1,_2)", out.String())
+		assert.Equal(t, -1, x.Compare(y, vm.NewEnv()))
+	}
+}
+
+func TestVariable_ScopeValidationHandlesCycles(t *testing.T) {
+	var vm, other VM
+	x := vm.NewVariable()
+	c := &compound{functor: NewAtom("cycle"), args: []Term{x, nil}}
+	c.args[1] = c
+	env, ok := vm.NewEnv().Unify(x, c)
+	assert.True(t, ok)
+	assert.Equal(t, c, env.Resolve(x))
+	assert.PanicsWithValue(t, ErrVariableScope, func() {
+		other.NewEnv().Unify(other.NewVariable(), c)
+	})
 }

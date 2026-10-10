@@ -19,14 +19,15 @@ func TestSolutions_Close(t *testing.T) {
 
 func TestSolutions_Next(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
-		v := engine.NewVariable()
-		env, _ := engine.NewEnv().Unify(v, engine.NewAtom("foo"))
+		var vm engine.VM
+		v := vm.NewVariable()
+		env, _ := vm.NewEnv().Unify(v, engine.NewAtom("foo"))
 		more := make(chan bool, 1)
 		defer close(more)
 		next := make(chan *engine.Env, 1)
 		defer close(next)
 		next <- env
-		sols := Solutions{more: more, next: next}
+		sols := Solutions{vm: &vm, more: more, next: next}
 		assert.True(t, sols.Next())
 		assert.Equal(t, engine.NewAtom("foo"), sols.env.Resolve(v))
 	})
@@ -38,15 +39,17 @@ func TestSolutions_Next(t *testing.T) {
 }
 
 func TestSolutions_Scan(t *testing.T) {
+	var vm engine.VM
 	sols := func(m map[string]engine.Term) Solutions {
-		env := engine.NewEnv()
+		env := vm.NewEnv()
 		var vars []engine.ParsedVariable
 		for n, t := range m {
-			v := engine.NewVariable()
+			v := vm.NewVariable()
 			env, _ = env.Unify(v, t)
 			vars = append(vars, engine.ParsedVariable{Name: engine.NewAtom(n), Variable: v})
 		}
 		return Solutions{
+			vm:   &vm,
 			env:  env,
 			vars: vars,
 		}
@@ -62,7 +65,7 @@ func TestSolutions_Scan(t *testing.T) {
 		{title: "struct: empty", sols: Solutions{}, dest: &struct{}{}, result: &struct{}{}},
 
 		{title: "struct: interface, variable", sols: sols(map[string]engine.Term{
-			"X": engine.NewVariable(),
+			"X": vm.NewVariable(),
 		}), dest: &struct{ X interface{} }{}, result: &struct{ X interface{} }{
 			X: nil,
 		}},
@@ -95,7 +98,7 @@ func TestSolutions_Scan(t *testing.T) {
 			"X": engine.List(engine.Integer(1), nil, engine.Integer(3)),
 		}), dest: &struct{ X interface{} }{}, err: errConversion},
 		{title: "struct: interface, not list", sols: sols(map[string]engine.Term{
-			"X": engine.PartialList(engine.NewVariable(), engine.Integer(1), engine.Integer(2), engine.Integer(3)),
+			"X": engine.PartialList(vm.NewVariable(), engine.Integer(1), engine.Integer(2), engine.Integer(3)),
 		}), dest: &struct{ X interface{} }{}, err: errConversion},
 		{title: "struct: interface, unknown", sols: sols(map[string]engine.Term{
 			"X": nil,
@@ -164,7 +167,7 @@ func TestSolutions_Scan(t *testing.T) {
 			"X": engine.List(engine.Integer(1), nil, engine.Integer(3)),
 		}), dest: &struct{ X []int }{}, err: errConversion},
 		{title: "struct: slice, non-list", sols: sols(map[string]engine.Term{
-			"X": engine.PartialList(engine.NewVariable(), engine.Integer(1), engine.Integer(2), engine.Integer(3)),
+			"X": engine.PartialList(vm.NewVariable(), engine.Integer(1), engine.Integer(2), engine.Integer(3)),
 		}), dest: &struct{ X []int }{}, err: errConversion},
 
 		{title: "struct: unsupported field type", sols: sols(map[string]engine.Term{

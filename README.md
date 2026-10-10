@@ -36,7 +36,7 @@ ISO standard compliance where feasible while adapting to the unique constraints 
 
 The following customizations have been made to adapt the original `ichiban/prolog` implementation to the blockchain environment:
 
-- Capped variable allocation to limit the number of variables.
+- Capped variable allocation per VM to limit the number of variables.
 - Replaced maps with ordered maps to ensure deterministic execution.
 - Implemented secure integer arithmetic for functors.
 - Integrated [cockroachdb/apd](https://github.com/cockroachdb/apd) for floating-point arithmetic.
@@ -46,6 +46,16 @@ The following customizations have been made to adapt the original `ichiban/prolo
 - Added support for `read_write` mode for bidirectional file I/O, enabling half-duplex transactional devices in the host's VFS.
 - `halt/0` and `halt/1` stop Prolog execution by signaling a VM halt (the host decides how to handle exit codes).
 - Added VM metering capability to track and limit resource consumption across multiple dimensions (instructions, unifications, list processing, term copying, arithmetic evaluation, and structural comparisons).
+
+## VM ownership
+
+Allocate variables, environments, and streams through their owning VM: `vm.NewVariable()`, `vm.NewEnv()`, and the `vm.New*Stream()` constructors. Variables contain an opaque VM scope and a local ordinal; equality uses both, while Prolog rendering and variable ordering use only the ordinal within one VM. Unrelated VM activity never changes these observable values.
+
+Do not mix variables, environments, or streams from different VMs. Execution entry points reject foreign variables and environments with `engine.ErrVariableScope`, and foreign streams with `engine.ErrStreamScope`. Low-level environment and comparison operations panic on scope conflicts. Allocate variables through `vm.NewVariable()` rather than constructing a zero-value `Variable`.
+
+Stream ownership is fixed at creation. User input/output setters reject foreign or unowned streams before changing state; stream I/O predicates reject them before accessing resources. Streams are ordered only within their owning VM by local ID. Do not copy streams.
+
+Create a fresh VM for each execution lifecycle; variable identities and allocation accounting are never reset within an existing VM. Loaded predicates remain usable for that VM's lifetime. Independent VMs can execute concurrently; shared host I/O and filesystem resources must be safe for concurrent use. Do not copy a VM after use or execute concurrently on the same VM.
 
 ## License
 

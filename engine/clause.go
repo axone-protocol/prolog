@@ -25,7 +25,7 @@ func (cs clauses) call(vm *VM, args []Term, k Cont, env *Env) *Promise {
 		ks[i] = func(context.Context) *Promise {
 			vars := make([]Variable, len(c.vars))
 			for i := range vars {
-				vars[i] = NewVariable()
+				vars[i] = vm.NewVariable()
 			}
 			return vm.exec(c.bytecode, vars, k, args, nil, env, p)
 		}
@@ -34,14 +34,15 @@ func (cs clauses) call(vm *VM, args []Term, k Cont, env *Env) *Promise {
 	return p
 }
 
-func compile(t Term, env *Env) (clauses, error) {
+func compile(vm *VM, t Term, env *Env) (clauses, error) {
+	env = vm.ownedEnv(env)
 	t = env.Resolve(t)
 	if t, ok := t.(Compound); ok && t.Functor() == atomIf && t.Arity() == 2 {
 		var cs clauses
 		head, body := t.Arg(0), t.Arg(1)
 		iter := altIterator{Alt: body, Env: env}
 		for iter.Next() {
-			c, err := compileClause(head, iter.Current(), env)
+			c, err := compileClause(vm, head, iter.Current(), env)
 			if err != nil {
 				return nil, typeError(validTypeCallable, body, env)
 			}
@@ -51,7 +52,7 @@ func compile(t Term, env *Env) (clauses, error) {
 		return cs, nil
 	}
 
-	c, err := compileClause(t, nil, env)
+	c, err := compileClause(vm, t, nil, env)
 	c.raw = env.simplify(t)
 	return []clause{c}, err
 }
@@ -63,9 +64,9 @@ type clause struct {
 	bytecode bytecode
 }
 
-func compileClause(head Term, body Term, env *Env) (clause, error) {
-	head, preds := desugarHead(head, env)
-	body = desugarBody(body, env)
+func compileClause(vm *VM, head Term, body Term, env *Env) (clause, error) {
+	head, preds := desugarHead(vm, head, env)
+	body = desugarBody(vm, body, env)
 
 	if len(preds) > 0 {
 		predSeq := seq(atomComma, preds...)
@@ -90,14 +91,14 @@ func compileClause(head Term, body Term, env *Env) (clause, error) {
 	return c, nil
 }
 
-func desugarHead(head Term, env *Env) (Term, []Term) {
+func desugarHead(vm *VM, head Term, env *Env) (Term, []Term) {
 	if head, ok := env.Resolve(head).(Compound); ok {
-		return desugarPred(head, nil, env)
+		return desugarPred(vm, head, nil, env)
 	}
 	return head, nil
 }
 
-func desugarBody(body Term, env *Env) Term {
+func desugarBody(vm *VM, body Term, env *Env) Term {
 	if body == nil {
 		return body
 	}
@@ -105,7 +106,7 @@ func desugarBody(body Term, env *Env) Term {
 	var items []Term
 	iter := seqIterator{Seq: body, Env: env}
 	for iter.Next() {
-		t, preds := desugarPred(iter.Current(), nil, env)
+		t, preds := desugarPred(vm, iter.Current(), nil, env)
 		if len(preds) > 0 {
 			items = append(items, preds...)
 		}
@@ -115,28 +116,28 @@ func desugarBody(body Term, env *Env) Term {
 	return seq(atomComma, items...)
 }
 
-func desugarPred(term Term, acc []Term, env *Env) (Term, []Term) {
+func desugarPred(vm *VM, term Term, acc []Term, env *Env) (Term, []Term) {
 	switch t := env.Resolve(term).(type) {
 	case charList, codeList:
 		return t, acc
 	case list:
 		l := make(list, len(t))
 		for i, e := range t {
-			l[i], acc = desugarPred(e, acc, env)
+			l[i], acc = desugarPred(vm, e, acc, env)
 		}
 		return l, acc
 	case *partial:
-		c, acc := desugarPred(t.Compound, acc, env)
-		tail, acc := desugarPred(*t.tail, acc, env)
+		c, acc := desugarPred(vm, t.Compound, acc, env)
+		tail, acc := desugarPred(vm, *t.tail, acc, env)
 		return &partial{
 			Compound: c.(Compound),
 			tail:     &tail,
 		}, acc
 	case Compound:
 		if t.Functor() == atomSpecialDot && t.Arity() == 2 {
-			tempV := NewVariable()
-			lhs, acc := desugarPred(t.Arg(0), acc, env)
-			rhs, acc := desugarPred(t.Arg(1), acc, env)
+			tempV := vm.NewVariable()
+			lhs, acc := desugarPred(vm, t.Arg(0), acc, env)
+			rhs, acc := desugarPred(vm, t.Arg(1), acc, env)
 
 			return tempV, append(acc, atomDot.Apply(lhs, rhs, tempV))
 		}
@@ -146,7 +147,7 @@ func desugarPred(term Term, acc []Term, env *Env) (Term, []Term) {
 			args:    make([]Term, t.Arity()),
 		}
 		for i := 0; i < t.Arity(); i++ {
-			c.args[i], acc = desugarPred(t.Arg(i), acc, env)
+			c.args[i], acc = desugarPred(vm, t.Arg(i), acc, env)
 		}
 
 		if _, ok := t.(Dict); ok {

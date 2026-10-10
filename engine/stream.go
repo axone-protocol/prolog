@@ -9,6 +9,9 @@ import (
 	"os"
 )
 
+// ErrStreamScope reports a stream that does not belong to the executing VM.
+var ErrStreamScope = errors.New("stream belongs to a different VM")
+
 var (
 	errWrongIOMode     = errors.New("wrong i/o mode")
 	errWrongStreamType = errors.New("wrong stream type")
@@ -16,21 +19,13 @@ var (
 	errReposition      = errors.New("reposition")
 )
 
-// streamIDCounter is a counter for generating unique stream IDs.
-var streamIDCounter uint64
-
-// nextStreamID returns a new unique stream ID.
-func nextStreamID() uint64 {
-	streamIDCounter++
-	return streamIDCounter
+// nextStreamID returns a new unique stream ID for vm.
+func (vm *VM) nextStreamID() uint64 {
+	vm.streamCount++
+	return vm.streamCount
 }
 
-// resetStreamIDCounter resets the stream ID counter to 0.
-func resetStreamIDCounter() {
-	streamIDCounter = 0
-}
-
-// Stream is a prolog stream.
+// Stream is a Prolog stream owned by its creating VM. A Stream must not be copied.
 type Stream struct {
 	vm *VM
 	id uint64
@@ -51,10 +46,15 @@ type Stream struct {
 	streamType  streamType
 }
 
+func (s *Stream) ownedBy(vm *VM) bool {
+	return s != nil && vm != nil && s.vm == vm
+}
+
 // NewInputTextStream creates a new input text stream backed by the given io.Reader.
-func NewInputTextStream(r io.Reader) *Stream {
+func (vm *VM) NewInputTextStream(r io.Reader) *Stream {
 	return &Stream{
-		id:         nextStreamID(),
+		vm:         vm,
+		id:         vm.nextStreamID(),
 		source:     r,
 		mode:       ioModeRead,
 		eofAction:  eofActionReset,
@@ -64,9 +64,10 @@ func NewInputTextStream(r io.Reader) *Stream {
 }
 
 // NewInputBinaryStream creates a new input binary stream backed by the given io.Reader.
-func NewInputBinaryStream(r io.Reader) *Stream {
+func (vm *VM) NewInputBinaryStream(r io.Reader) *Stream {
 	return &Stream{
-		id:         nextStreamID(),
+		vm:         vm,
+		id:         vm.nextStreamID(),
 		source:     r,
 		mode:       ioModeRead,
 		eofAction:  eofActionReset,
@@ -76,9 +77,10 @@ func NewInputBinaryStream(r io.Reader) *Stream {
 }
 
 // NewOutputTextStream creates a new output text stream backed by the given io.Writer.
-func NewOutputTextStream(w io.Writer) *Stream {
+func (vm *VM) NewOutputTextStream(w io.Writer) *Stream {
 	return &Stream{
-		id:         nextStreamID(),
+		vm:         vm,
+		id:         vm.nextStreamID(),
 		sink:       w,
 		mode:       ioModeAppend,
 		eofAction:  eofActionReset,
@@ -88,9 +90,10 @@ func NewOutputTextStream(w io.Writer) *Stream {
 }
 
 // NewOutputBinaryStream creates a new output binary stream backed by the given io.Writer.
-func NewOutputBinaryStream(w io.Writer) *Stream {
+func (vm *VM) NewOutputBinaryStream(w io.Writer) *Stream {
 	return &Stream{
-		id:         nextStreamID(),
+		vm:         vm,
+		id:         vm.nextStreamID(),
 		sink:       w,
 		mode:       ioModeAppend,
 		eofAction:  eofActionReset,
@@ -109,9 +112,16 @@ func (s *Stream) WriteTerm(w io.Writer, _ *WriteOptions, _ *Env) error {
 	return err
 }
 
-// Compare compares the Stream with a Term.
+// Compare orders streams within one VM by their local IDs.
+// It panics with ErrStreamScope for unowned or foreign streams.
 func (s *Stream) Compare(t Term, env *Env) int {
+	if s == nil || s.vm == nil || env != nil && env.scope != nil && s.vm.scope() != env.scope {
+		panic(ErrStreamScope)
+	}
 	return CompareAtomic[*Stream](s, t, func(s *Stream, t *Stream) int {
+		if !t.ownedBy(s.vm) {
+			panic(ErrStreamScope)
+		}
 		switch {
 		case s.id > t.id:
 			return 1

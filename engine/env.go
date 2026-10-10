@@ -1,15 +1,16 @@
 package engine
 
-var varContext = NewVariable()
+// The context slot is reserved and never allocated as a user variable.
+var varContext = Variable{}
 
-var rootContext = NewAtom("root")
+const rootContext Atom = "root"
 
 type envKey int64
 
 func newEnvKey(v Variable) envKey {
 	// A new Variable is always bigger than the previous ones.
 	// So, if we used the Variable itself as the key, insertions to the Env tree would be skewed to the right.
-	k := envKey(v)
+	k := envKey(v.index)
 	if k/2 != 0 {
 		k *= -1
 	}
@@ -30,6 +31,8 @@ type Env struct {
 	left, right *Env
 	binding
 	meter MeterFunc
+	vm    *VM
+	scope *variableScope
 }
 
 type binding struct {
@@ -38,16 +41,16 @@ type binding struct {
 	// attributes?
 }
 
-var rootEnv = &Env{
-	binding: binding{
-		key:   newEnvKey(varContext),
-		value: rootContext,
-	},
-}
-
-// NewEnv creates an empty environment.
-func NewEnv() *Env {
-	return nil
+// NewEnv creates an initial, unmetered environment owned by vm.
+func (vm *VM) NewEnv() *Env {
+	if vm.rootEnv == nil {
+		vm.rootEnv = &Env{
+			binding: binding{key: newEnvKey(varContext), value: rootContext},
+			vm:      vm,
+			scope:   vm.scope(),
+		}
+	}
+	return vm.rootEnv
 }
 
 func (e *Env) withMeter(m MeterFunc) *Env {
@@ -55,7 +58,7 @@ func (e *Env) withMeter(m MeterFunc) *Env {
 		if m == nil {
 			return nil
 		}
-		ret := *rootEnv
+		ret := Env{binding: binding{key: newEnvKey(varContext), value: rootContext}}
 		ret.meter = m
 		return &ret
 	}
@@ -87,11 +90,14 @@ func (e *Env) meterFunc() MeterFunc {
 
 // lookup returns a term that the given variable is bound to.
 func (e *Env) lookup(v Variable) (Term, bool) {
+	if e != nil && e.scope != nil && v != varContext && v.scope != e.scope {
+		panic(ErrVariableScope)
+	}
 	k := newEnvKey(v)
 
 	node := e
-	if node == nil {
-		node = rootEnv
+	if node == nil && v == varContext {
+		return rootContext, true
 	}
 	for {
 		if node == nil {
@@ -113,29 +119,37 @@ func (e *Env) bind(v Variable, t Term) *Env {
 	k := newEnvKey(v)
 
 	node := e
+	root := Env{binding: binding{key: newEnvKey(varContext), value: rootContext}, scope: v.scope}
 	if node == nil {
-		node = rootEnv
+		node = &root
+	} else if node.scope == nil && v != varContext {
+		owned := *node
+		owned.scope = v.scope
+		node = &owned
 	}
-	ret := *node.insert(k, t, node.meter)
+	if v != varContext && node.scope != v.scope {
+		panic(ErrVariableScope)
+	}
+	ret := *node.insert(k, t, node.meter, node.vm, node.scope)
 	ret.color = black
 	ret.meter = node.meter
 	return &ret
 }
 
-func (e *Env) insert(k envKey, v Term, meter MeterFunc) *Env {
+func (e *Env) insert(k envKey, v Term, meter MeterFunc, vm *VM, scope *variableScope) *Env {
 	if e == nil {
-		return &Env{color: red, binding: binding{key: k, value: v}, meter: meter}
+		return &Env{color: red, binding: binding{key: k, value: v}, meter: meter, vm: vm, scope: scope}
 	}
 	switch {
 	case k < e.key:
 		ret := *e
-		ret.left = e.left.insert(k, v, meter)
+		ret.left = e.left.insert(k, v, meter, vm, scope)
 		ret.balance()
 		ret.meter = meter
 		return &ret
 	case k > e.key:
 		ret := *e
-		ret.right = e.right.insert(k, v, meter)
+		ret.right = e.right.insert(k, v, meter, vm, scope)
 		ret.balance()
 		ret.meter = meter
 		return &ret
@@ -201,10 +215,12 @@ func (e *Env) balance() {
 	}
 	*e = Env{
 		color:   red,
-		left:    &Env{color: black, left: a, right: b, binding: x, meter: m},
-		right:   &Env{color: black, left: c, right: d, binding: z, meter: m},
+		left:    &Env{color: black, left: a, right: b, binding: x, meter: m, vm: e.vm, scope: e.scope},
+		right:   &Env{color: black, left: c, right: d, binding: z, meter: m, vm: e.vm, scope: e.scope},
 		binding: y,
 		meter:   m,
+		vm:      e.vm,
+		scope:   e.scope,
 	}
 }
 
@@ -308,11 +324,26 @@ func (e *Env) appendFreeVariables(fvs variables, t Term) variables {
 
 // Unify unifies 2 terms.
 func (e *Env) Unify(x, y Term) (*Env, bool) {
-	return e.unify(x, y, false)
+	return e.checkedUnify(x, y, false)
 }
 
 func (e *Env) unifyWithOccursCheck(x, y Term) (*Env, bool) {
-	return e.unify(x, y, true)
+	return e.checkedUnify(x, y, true)
+}
+
+func (e *Env) checkedUnify(x, y Term, occursCheck bool) (*Env, bool) {
+	var scope *variableScope
+	if e != nil {
+		scope = e.scope
+	}
+	scope = checkTermScope(x, scope, nil)
+	scope = checkTermScope(y, scope, nil)
+	if e != nil && e.scope == nil && scope != nil {
+		owned := *e
+		owned.scope = scope
+		e = &owned
+	}
+	return e.unify(x, y, occursCheck)
 }
 
 func (e *Env) unify(x, y Term, occursCheck bool) (*Env, bool) {

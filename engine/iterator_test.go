@@ -7,6 +7,7 @@ import (
 )
 
 func TestListIterator_Next(t *testing.T) {
+	var vm VM
 	t.Run("proper list", func(t *testing.T) {
 		iter := ListIterator{List: List(NewAtom("a"), NewAtom("b"), NewAtom("c"))}
 		assert.True(t, iter.Next())
@@ -21,7 +22,7 @@ func TestListIterator_Next(t *testing.T) {
 
 	t.Run("improper list", func(t *testing.T) {
 		t.Run("variable", func(t *testing.T) {
-			iter := ListIterator{List: PartialList(NewVariable(), NewAtom("a"), NewAtom("b"))}
+			iter := ListIterator{List: PartialList(vm.NewVariable(), NewAtom("a"), NewAtom("b"))}
 			assert.True(t, iter.Next())
 			assert.Equal(t, NewAtom("a"), iter.Current())
 			assert.True(t, iter.Next())
@@ -61,12 +62,12 @@ func TestListIterator_Next(t *testing.T) {
 		})
 
 		t.Run("circular list", func(t *testing.T) {
-			l := NewVariable()
+			l := vm.NewVariable()
 			const max = 500
 			elems := make([]Term, 0, max)
 			for i := 0; i < max; i++ {
 				elems = append(elems, NewAtom("a"))
-				env := NewEnv().bind(l, PartialList(l, elems...))
+				env := vm.NewEnv().bind(l, PartialList(l, elems...))
 				iter := ListIterator{List: l, Env: env}
 				for iter.Next() {
 					assert.Equal(t, NewAtom("a"), iter.Current())
@@ -160,6 +161,7 @@ func TestAltIterator_Next(t *testing.T) {
 }
 
 func TestAnyIterator_Next(t *testing.T) {
+	var vm VM
 	t.Run("proper list", func(t *testing.T) {
 		iter := anyIterator{Any: List(NewAtom("a"), NewAtom("b"), NewAtom("c"))}
 		assert.True(t, iter.Next())
@@ -174,7 +176,7 @@ func TestAnyIterator_Next(t *testing.T) {
 
 	t.Run("improper list", func(t *testing.T) {
 		t.Run("variable", func(t *testing.T) {
-			iter := anyIterator{Any: PartialList(NewVariable(), NewAtom("a"), NewAtom("b"))}
+			iter := anyIterator{Any: PartialList(vm.NewVariable(), NewAtom("a"), NewAtom("b"))}
 			assert.True(t, iter.Next())
 			assert.Equal(t, NewAtom("a"), iter.Current())
 			assert.True(t, iter.Next())

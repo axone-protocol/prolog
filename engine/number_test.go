@@ -41,6 +41,7 @@ func (f Float) mulMust(other Float) Float {
 }
 
 func TestIs(t *testing.T) {
+	var vm VM
 	foo := NewAtom("foo")
 	pi := newFloatFromStringMust("3.14159265358979323846264338327950288419716939937510582097494459")
 	tests := []struct {
@@ -175,7 +176,7 @@ func TestIs(t *testing.T) {
 		{title: "arity is more than 2", expression: foo.Apply(Integer(1), Integer(2), Integer(3)), err: typeError(validTypeEvaluable, atomSlash.Apply(foo, Integer(3)), nil)},
 
 		// 8.6.1.3 Errors
-		{title: "a", result: NewVariable(), expression: NewVariable(), err: InstantiationError(nil)},
+		{title: "a", result: vm.NewVariable(), expression: vm.NewVariable(), err: InstantiationError(nil)},
 
 		{title: "1 ** 1", result: NewFloatFromInt64(1), expression: atomAsteriskAsterisk.Apply(Integer(1), Integer(1)), ok: true},
 		{title: "1 ** 1.0", result: NewFloatFromInt64(1), expression: atomAsteriskAsterisk.Apply(Integer(1), NewFloatFromInt64(1)), ok: true},
@@ -272,7 +273,6 @@ func TestIs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			var vm VM
 			ok, err := Is(&vm, tt.result, tt.expression, Success, nil).Force(context.Background())
 			assert.Equal(t, tt.ok, ok)
 			assert.Equal(t, tt.err, err)
@@ -311,12 +311,12 @@ func TestEqual(t *testing.T) {
 	})
 
 	t.Run("e1 is a variable", func(t *testing.T) {
-		_, err := Equal(&vm, Integer(1), NewVariable(), Success, nil).Force(context.Background())
+		_, err := Equal(&vm, Integer(1), vm.NewVariable(), Success, nil).Force(context.Background())
 		assert.Error(t, err)
 	})
 
 	t.Run("e2 is a variable", func(t *testing.T) {
-		_, err := Equal(&vm, NewVariable(), Integer(1), Success, nil).Force(context.Background())
+		_, err := Equal(&vm, vm.NewVariable(), Integer(1), Success, nil).Force(context.Background())
 		assert.Error(t, err)
 	})
 
@@ -328,7 +328,8 @@ func TestEqual(t *testing.T) {
 }
 
 func TestNotEqual(t *testing.T) {
-	x := NewVariable()
+	var vm VM
+	x := vm.NewVariable()
 
 	tests := []struct {
 		title  string
@@ -347,7 +348,7 @@ func TestNotEqual(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			ok, err := NotEqual(nil, tt.e1, tt.e2, Success, nil).Force(context.Background())
+			ok, err := NotEqual(&vm, tt.e1, tt.e2, Success, nil).Force(context.Background())
 			assert.Equal(t, tt.ok, ok)
 			assert.Equal(t, tt.err, err)
 		})
@@ -355,7 +356,8 @@ func TestNotEqual(t *testing.T) {
 }
 
 func TestLessThan(t *testing.T) {
-	x := NewVariable()
+	var vm VM
+	x := vm.NewVariable()
 
 	tests := []struct {
 		title  string
@@ -374,7 +376,7 @@ func TestLessThan(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			ok, err := LessThan(nil, tt.e1, tt.e2, Success, nil).Force(context.Background())
+			ok, err := LessThan(&vm, tt.e1, tt.e2, Success, nil).Force(context.Background())
 			assert.Equal(t, tt.ok, ok)
 			assert.Equal(t, tt.err, err)
 		})
@@ -382,7 +384,8 @@ func TestLessThan(t *testing.T) {
 }
 
 func TestGreaterThan(t *testing.T) {
-	x := NewVariable()
+	var vm VM
+	x := vm.NewVariable()
 
 	tests := []struct {
 		title  string
@@ -401,7 +404,7 @@ func TestGreaterThan(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			ok, err := GreaterThan(nil, tt.e1, tt.e2, Success, nil).Force(context.Background())
+			ok, err := GreaterThan(&vm, tt.e1, tt.e2, Success, nil).Force(context.Background())
 			assert.Equal(t, tt.ok, ok)
 			assert.Equal(t, tt.err, err)
 		})
@@ -409,7 +412,8 @@ func TestGreaterThan(t *testing.T) {
 }
 
 func TestLessThanOrEqual(t *testing.T) {
-	x := NewVariable()
+	var vm VM
+	x := vm.NewVariable()
 
 	tests := []struct {
 		title  string
@@ -428,7 +432,7 @@ func TestLessThanOrEqual(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			ok, err := LessThanOrEqual(nil, tt.e1, tt.e2, Success, nil).Force(context.Background())
+			ok, err := LessThanOrEqual(&vm, tt.e1, tt.e2, Success, nil).Force(context.Background())
 			assert.Equal(t, tt.ok, ok)
 			assert.Equal(t, tt.err, err)
 		})
@@ -436,7 +440,8 @@ func TestLessThanOrEqual(t *testing.T) {
 }
 
 func TestGreaterThanOrEqual(t *testing.T) {
-	x := NewVariable()
+	var vm VM
+	x := vm.NewVariable()
 
 	tests := []struct {
 		title  string
@@ -455,7 +460,7 @@ func TestGreaterThanOrEqual(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			ok, err := GreaterThanOrEqual(nil, tt.e1, tt.e2, Success, nil).Force(context.Background())
+			ok, err := GreaterThanOrEqual(&vm, tt.e1, tt.e2, Success, nil).Force(context.Background())
 			assert.Equal(t, tt.ok, ok)
 			assert.Equal(t, tt.err, err)
 		})

@@ -24,6 +24,7 @@ var atomSpecialDot = NewAtom("$dot")
 
 // Parser turns bytes into Term.
 type Parser struct {
+	vm           *VM
 	lexer        Lexer
 	_operators   *operators
 	doubleQuotes doubleQuotes
@@ -46,6 +47,7 @@ type ParsedVariable struct {
 // NewParser creates a new parser from the current VM and io.RuneReader.
 func NewParser(vm *VM, r io.RuneReader) *Parser {
 	return &Parser{
+		vm: vm,
 		lexer: Lexer{
 			input: newRuneRingBuffer(r),
 		},
@@ -612,7 +614,7 @@ func (p *Parser) term0Atom(maxPriority Integer) (Term, error) {
 
 func (p *Parser) variable(s string) Term {
 	if s == "_" {
-		return NewVariable()
+		return p.vm.NewVariable()
 	}
 	n := NewAtom(s)
 	for i, pv := range p.Vars {
@@ -621,7 +623,7 @@ func (p *Parser) variable(s string) Term {
 			return pv.Variable
 		}
 	}
-	v := NewVariable()
+	v := p.vm.NewVariable()
 	p.Vars = append(p.Vars, ParsedVariable{Name: n, Variable: v, Count: 1})
 	return v
 }
