@@ -312,6 +312,20 @@ func TestInterpreter_MeterException(t *testing.T) {
 	})
 }
 
+func TestInterpreter_QueryTermCellMeter(t *testing.T) {
+	p := NewEmpty()
+	p.InstallMeter(func(kind engine.MeterKind, _ uint64) engine.Term {
+		if kind == engine.MeterTermCell {
+			return engine.NewAtom("resource_error").Apply(engine.NewAtom("memory"))
+		}
+		return nil
+	})
+
+	sols, err := p.Query(`[a].`)
+	assert.Nil(t, sols)
+	assert.Equal(t, engine.ResourceError(engine.NewAtom("memory"), p.NewEnv()), err)
+}
+
 func TestNew_variableNames(t *testing.T) {
 	// http://www.complang.tuwien.ac.at/ulrich/iso-prolog/variable_names
 	// I wanted to put this under TestNew() as t.Run("variable_names", ...) but GoLand didn't recognize it as a table-driven test.

@@ -68,6 +68,23 @@ func TestEnv_Simplify(t *testing.T) {
 	assert.Equal(t, 2, suffix.Arity())
 }
 
+func TestEnv_Simplify_MetersPartialListTail(t *testing.T) {
+	var vm VM
+	var charged uint64
+	vm.InstallMeter(func(kind MeterKind, units uint64) Term {
+		if kind == MeterTermCell {
+			charged += units
+		}
+		return nil
+	})
+
+	tail := vm.NewVariable()
+	env := vm.NewEnv()
+	_ = env.simplify(PartialList(tail, NewAtom("a"), NewAtom("b")))
+
+	assert.Equal(t, uint64(3), charged)
+}
+
 func TestContains(t *testing.T) {
 	var vm VM
 	var env *Env

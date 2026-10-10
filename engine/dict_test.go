@@ -67,6 +67,20 @@ func TestNewDict(t *testing.T) {
 	}
 }
 
+func TestNewDictWithEnv_QuotaRefusal(t *testing.T) {
+	var vm VM
+	vm.InstallMeter(func(kind MeterKind, _ uint64) Term {
+		if kind == MeterTermCell {
+			return atomResourceError.Apply(atomMemory)
+		}
+		return nil
+	})
+
+	dict, err := newDictWithEnv([]Term{NewAtom("point"), NewAtom("x"), Integer(1)}, vm.NewEnv())
+	assert.Nil(t, dict)
+	assert.Equal(t, resourceError(resourceMemory, vm.NewEnv()), err)
+}
+
 func TestDictCompare(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -721,6 +735,102 @@ func TestDelDict4(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMergeDict(t *testing.T) {
+	merged := mergeDict(
+		makeDict(
+			NewAtom("new"),
+			NewAtom("a"), Integer(1),
+			NewAtom("b"), Integer(3),
+		),
+		makeDict(
+			NewAtom("point"),
+			NewAtom("b"), Integer(2),
+			NewAtom("c"), Integer(4),
+		),
+		nil,
+	)
+
+	assert.Equal(t, makeDict(
+		NewAtom("point"),
+		NewAtom("a"), Integer(1),
+		NewAtom("b"), Integer(3),
+		NewAtom("c"), Integer(4),
+	), merged)
+}
+
+func TestPutDict3_RequiresInstantiatedInputs(t *testing.T) {
+	tests := []struct {
+		name   string
+		inputs func(*VM) (Term, Term)
+	}{
+		{
+			name: "dict input",
+			inputs: func(vm *VM) (Term, Term) {
+				return makeDict(NewAtom("new"), NewAtom("x"), Integer(1)), vm.NewVariable()
+			},
+		},
+		{
+			name: "new entries",
+			inputs: func(vm *VM) (Term, Term) {
+				return vm.NewVariable(), makeDict(NewAtom("point"))
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var vm VM
+			new, dictIn := tt.inputs(&vm)
+			called := false
+			ok, err := PutDict3(
+				&vm,
+				new,
+				dictIn,
+				vm.NewVariable(),
+				func(*Env) *Promise {
+					called = true
+					return Bool(true)
+				},
+				nil,
+			).Force(context.Background())
+
+			assert.False(t, ok)
+			assert.Equal(t, InstantiationError(nil), err)
+			assert.False(t, called)
+		})
+	}
+}
+
+func TestPutDict3RejectsMeteredMerge(t *testing.T) {
+	var vm VM
+	var charged uint64
+	vm.InstallMeter(func(kind MeterKind, units uint64) Term {
+		if kind != MeterTermCell {
+			return nil
+		}
+		charged += units
+		return atomResourceError.Apply(resourceMemory.Term())
+	})
+
+	out := vm.NewVariable()
+	ok, err := PutDict3(
+		&vm,
+		makeDict(NewAtom("new"), NewAtom("x"), Integer(3)),
+		makeDict(
+			NewAtom("point"),
+			NewAtom("x"), Integer(1),
+			NewAtom("y"), Integer(2),
+		),
+		out,
+		Success,
+		nil,
+	).Force(context.Background())
+
+	assert.False(t, ok)
+	assert.Equal(t, resourceError(resourceMemory, nil), err)
+	assert.Equal(t, uint64(7), charged)
 }
 
 func TestWriteDict(t *testing.T) {

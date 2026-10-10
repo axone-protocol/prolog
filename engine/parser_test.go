@@ -370,3 +370,159 @@ func TestParser_More(t *testing.T) {
 	assert.Equal(t, NewAtom("bar"), term)
 	assert.False(t, p.More())
 }
+
+func TestParser_TermCellMeter(t *testing.T) {
+	t.Run("accepts exactly reserved list and functor cells", func(t *testing.T) {
+		tests := []struct {
+			input string
+			want  Term
+		}{
+			{input: `[a,b,c].`, want: List(NewAtom("a"), NewAtom("b"), NewAtom("c"))},
+			{input: `f(a,b,c).`, want: NewAtom("f").Apply(NewAtom("a"), NewAtom("b"), NewAtom("c"))},
+		}
+		for _, tt := range tests {
+			t.Run(tt.input, func(t *testing.T) {
+				var vm VM
+				remaining := uint64(3)
+				vm.InstallMeter(func(kind MeterKind, units uint64) Term {
+					if kind == MeterTermCell {
+						if units > remaining {
+							return atomResourceError.Apply(atomMemory)
+						}
+						remaining -= units
+					}
+					return nil
+				})
+				p := NewParser(&vm, strings.NewReader(tt.input))
+				term, err := p.Term()
+				assert.NoError(t, err)
+				assert.Equal(t, tt.want, term)
+				assert.Zero(t, remaining)
+			})
+		}
+	})
+
+	t.Run("charges the partial-list tail separately", func(t *testing.T) {
+		var vm VM
+		var charged uint64
+		vm.InstallMeter(func(kind MeterKind, units uint64) Term {
+			if kind == MeterTermCell {
+				charged += units
+			}
+			return nil
+		})
+
+		p := NewParser(&vm, strings.NewReader(`[a,b|Tail].`))
+		_, err := p.Term()
+
+		assert.NoError(t, err)
+		assert.Equal(t, uint64(3), charged)
+	})
+
+	t.Run("returns a meter exception", func(t *testing.T) {
+		var vm VM
+		var used uint64
+		var charges []uint64
+		vm.InstallMeter(func(kind MeterKind, units uint64) Term {
+			if kind != MeterTermCell {
+				return nil
+			}
+			charges = append(charges, units)
+			if used+units > 2 {
+				return atomResourceError.Apply(atomMemory)
+			}
+			used += units
+			return nil
+		})
+
+		p := NewParser(&vm, strings.NewReader(`[a,b,c].`))
+		term, err := p.Term()
+		assert.Nil(t, term)
+		assert.Equal(t, resourceError(resourceMemory, vm.NewEnv()), err)
+		assert.Equal(t, []uint64{1, 1, 1}, charges)
+	})
+
+	t.Run("limits Pratt operator chains", func(t *testing.T) {
+		var vm VM
+		vm.getOperators().define(500, operatorSpecifierYFX, atomPlus)
+		var used uint64
+		var charges []uint64
+		vm.InstallMeter(func(kind MeterKind, units uint64) Term {
+			if kind != MeterTermCell {
+				return nil
+			}
+			charges = append(charges, units)
+			if used+units > 2 {
+				return atomResourceError.Apply(atomMemory)
+			}
+			used += units
+			return nil
+		})
+
+		p := NewParser(&vm, strings.NewReader(`a+b+c.`))
+		term, err := p.Term()
+		assert.Nil(t, term)
+		assert.Equal(t, resourceError(resourceMemory, vm.NewEnv()), err)
+		assert.Equal(t, []uint64{2, 2}, charges)
+	})
+
+	t.Run("limits dictionary growth", func(t *testing.T) {
+		var vm VM
+		var used uint64
+		var charges []uint64
+		vm.InstallMeter(func(kind MeterKind, units uint64) Term {
+			if kind != MeterTermCell {
+				return nil
+			}
+			charges = append(charges, units)
+			if used+units > 1 {
+				return atomResourceError.Apply(atomMemory)
+			}
+			used += units
+			return nil
+		})
+
+		p := NewParser(&vm, strings.NewReader(`tag{k:v}.`))
+		term, err := p.Term()
+		assert.Nil(t, term)
+		assert.Equal(t, resourceError(resourceMemory, vm.NewEnv()), err)
+		assert.Equal(t, []uint64{1, 2}, charges)
+	})
+
+	t.Run("accepts placeholders at the exact cell quota", func(t *testing.T) {
+		var vm VM
+		remaining := uint64(3)
+		vm.InstallMeter(func(kind MeterKind, units uint64) Term {
+			if kind == MeterTermCell {
+				if units > remaining {
+					return atomResourceError.Apply(atomMemory)
+				}
+				remaining -= units
+			}
+			return nil
+		})
+		p := NewParser(&vm, strings.NewReader(`? .`))
+		assert.NoError(t, p.SetPlaceholder(NewAtom("?"), []int{1, 2}))
+		term, err := p.Term()
+		assert.NoError(t, err)
+		assert.Equal(t, List(Integer(1), Integer(2)), term)
+		assert.Zero(t, remaining)
+	})
+
+	t.Run("charges placeholders before conversion", func(t *testing.T) {
+		var vm VM
+		var charges []uint64
+		vm.InstallMeter(func(kind MeterKind, units uint64) Term {
+			if kind != MeterTermCell {
+				return nil
+			}
+			charges = append(charges, units)
+			return atomResourceError.Apply(atomMemory)
+		})
+
+		p := NewParser(&vm, strings.NewReader(`?.`))
+		err := p.SetPlaceholder(NewAtom("?"), []string{"a", "b"}, []string{"c"})
+		assert.Equal(t, resourceError(resourceMemory, vm.NewEnv()), err)
+		assert.Equal(t, []uint64{2}, charges)
+	})
+}

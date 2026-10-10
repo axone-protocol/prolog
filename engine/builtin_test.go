@@ -57,8 +57,6 @@ f(g([a, [b, c|X], Y{x:5}])).
 		goal  Term
 		ok    bool
 		err   error
-
-		mem int64
 	}{
 		// TODO: redo test cases based on 7.8.3.4 Examples
 		{title: `undefined atom`, goal: NewAtom("bar"), ok: false, err: existenceError(objectTypeProcedure, atomSlash.Apply(NewAtom("bar"), Integer(0)), nil)},
@@ -72,7 +70,6 @@ f(g([a, [b, c|X], Y{x:5}])).
 		{title: `not callable: disjunction`, goal: atomSemiColon.Apply(Integer(1), atomTrue), ok: false, err: typeError(validTypeCallable, atomSemiColon.Apply(Integer(1), atomTrue), nil)},
 
 		{title: `cover all`, goal: atomComma.Apply(atomCut, NewAtom("f").Apply(NewAtom("g").Apply(List(NewAtom("a"), PartialList(vm.NewVariable(), NewAtom("b"), NewAtom("c")), makeDict(NewAtom("foo"), NewAtom("x"), Integer(5)))))), ok: true},
-		{title: `out of memory`, goal: NewAtom("foo").Apply(vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable()), err: resourceError(resourceMemory, nil), mem: 1},
 		{title: `panic`, goal: NewAtom("do_not_call"), err: Exception{NewAtom("error").Apply(NewAtom("panic_error").Apply(NewAtom("told you")))}},
 		{title: `panic (lazy)`, goal: NewAtom("lazy_do_not_call"), err: Exception{NewAtom("error").Apply(NewAtom("panic_error").Apply(NewAtom("told you")))}},
 		{title: `panic (wrapped)`, goal: NewAtom("do_not_call_wrapped"), err: Exception{NewAtom("error").Apply(NewAtom("panic_error").Apply(NewAtom("told you")))}},
@@ -82,8 +79,6 @@ f(g([a, [b, c|X], Y{x:5}])).
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			defer setMemFree(tt.mem)()
-
 			ok, err := Call(&vm, tt.goal, Success, nil).Force(context.Background())
 			assert.Equal(t, tt.ok, ok)
 			assert.Equal(t, tt.err, err)
@@ -99,18 +94,14 @@ func TestCall1(t *testing.T) {
 		additional [1]Term
 		ok         bool
 		err        error
-		mem        int64
 	}{
 		{title: "ok", closure: NewAtom("p").Apply(NewAtom("a")), additional: [1]Term{NewAtom("b")}, ok: true},
 		{title: "closure is a variable", closure: vm.NewVariable(), additional: [1]Term{NewAtom("b")}, err: InstantiationError(nil)},
 		{title: "closure is neither a variable nor a callable term", closure: Integer(3), additional: [1]Term{NewAtom("b")}, err: typeError(validTypeCallable, Integer(3), nil)},
-		{title: "out of memory", closure: NewAtom("p").Apply(NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a")), additional: [1]Term{NewAtom("b")}, err: resourceError(resourceMemory, nil), mem: 1},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			defer setMemFree(tt.mem)()
-
 			vm.procedures = buildOrderedMap(procedurePair{
 				Key: procedureIndicator{name: NewAtom("p"), arity: 2},
 				Value: Predicate2(func(_ *VM, _, _ Term, k Cont, env *Env) *Promise {
@@ -132,18 +123,14 @@ func TestCall2(t *testing.T) {
 		additional [2]Term
 		ok         bool
 		err        error
-		mem        int64
 	}{
 		{title: "ok", closure: NewAtom("p").Apply(NewAtom("a")), additional: [2]Term{NewAtom("b"), NewAtom("c")}, ok: true},
 		{title: "closure is a variable", closure: vm.NewVariable(), additional: [2]Term{NewAtom("b"), NewAtom("c")}, err: InstantiationError(nil)},
 		{title: "closure is neither a variable nor a callable term", closure: Integer(3), additional: [2]Term{NewAtom("b"), NewAtom("c")}, err: typeError(validTypeCallable, Integer(3), nil)},
-		{title: "out of memory", closure: NewAtom("p").Apply(NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a")), additional: [2]Term{NewAtom("b"), NewAtom("c")}, err: resourceError(resourceMemory, nil), mem: 1},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			defer setMemFree(tt.mem)()
-
 			vm.procedures = buildOrderedMap(procedurePair{
 				Key: procedureIndicator{name: NewAtom("p"), arity: 3},
 				Value: Predicate3(func(_ *VM, _, _, _ Term, k Cont, env *Env) *Promise {
@@ -165,18 +152,14 @@ func TestCall3(t *testing.T) {
 		additional [3]Term
 		ok         bool
 		err        error
-		mem        int64
 	}{
 		{title: "ok", closure: NewAtom("p").Apply(NewAtom("a")), additional: [3]Term{NewAtom("b"), NewAtom("c"), NewAtom("d")}, ok: true},
 		{title: "closure is a variable", closure: vm.NewVariable(), additional: [3]Term{NewAtom("b"), NewAtom("c"), NewAtom("d")}, err: InstantiationError(nil)},
 		{title: "closure is neither a variable nor a callable term", closure: Integer(3), additional: [3]Term{NewAtom("b"), NewAtom("c"), NewAtom("d")}, err: typeError(validTypeCallable, Integer(3), nil)},
-		{title: "out of memory", closure: NewAtom("p").Apply(NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a")), additional: [3]Term{NewAtom("b"), NewAtom("c"), NewAtom("d")}, err: resourceError(resourceMemory, nil), mem: 1},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			defer setMemFree(tt.mem)()
-
 			vm.procedures = buildOrderedMap(procedurePair{
 				Key: procedureIndicator{name: NewAtom("p"), arity: 4},
 				Value: Predicate4(func(_ *VM, _, _, _, _ Term, k Cont, env *Env) *Promise {
@@ -198,18 +181,14 @@ func TestCall4(t *testing.T) {
 		additional [4]Term
 		ok         bool
 		err        error
-		mem        int64
 	}{
 		{title: "ok", closure: NewAtom("p").Apply(NewAtom("a")), additional: [4]Term{NewAtom("b"), NewAtom("c"), NewAtom("d"), NewAtom("e")}, ok: true},
 		{title: "closure is a variable", closure: vm.NewVariable(), additional: [4]Term{NewAtom("b"), NewAtom("c"), NewAtom("d"), NewAtom("e")}, err: InstantiationError(nil)},
 		{title: "closure is neither a variable nor a callable term", closure: Integer(3), additional: [4]Term{NewAtom("b"), NewAtom("c"), NewAtom("d"), NewAtom("e")}, err: typeError(validTypeCallable, Integer(3), nil)},
-		{title: "out of memory", closure: NewAtom("p").Apply(NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a")), additional: [4]Term{NewAtom("b"), NewAtom("c"), NewAtom("d"), NewAtom("e")}, err: resourceError(resourceMemory, nil), mem: 1},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			defer setMemFree(tt.mem)()
-
 			vm.procedures = buildOrderedMap(procedurePair{
 				Key: procedureIndicator{name: NewAtom("p"), arity: 5},
 				Value: Predicate5(func(_ *VM, _, _, _, _, _ Term, k Cont, env *Env) *Promise {
@@ -231,18 +210,14 @@ func TestCall5(t *testing.T) {
 		additional [5]Term
 		ok         bool
 		err        error
-		mem        int64
 	}{
 		{title: "ok", closure: NewAtom("p").Apply(NewAtom("a")), additional: [5]Term{NewAtom("b"), NewAtom("c"), NewAtom("d"), NewAtom("e"), NewAtom("f")}, ok: true},
 		{title: "closure is a variable", closure: vm.NewVariable(), additional: [5]Term{NewAtom("b"), NewAtom("c"), NewAtom("d"), NewAtom("e"), NewAtom("f")}, err: InstantiationError(nil)},
 		{title: "closure is neither a variable nor a callable term", closure: Integer(3), additional: [5]Term{NewAtom("b"), NewAtom("c"), NewAtom("d"), NewAtom("e"), NewAtom("f")}, err: typeError(validTypeCallable, Integer(3), nil)},
-		{title: "out of memory", closure: NewAtom("p").Apply(NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a")), additional: [5]Term{NewAtom("b"), NewAtom("c"), NewAtom("d"), NewAtom("e"), NewAtom("f")}, err: resourceError(resourceMemory, nil), mem: 1},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			defer setMemFree(tt.mem)()
-
 			vm.procedures = buildOrderedMap(procedurePair{
 				Key: procedureIndicator{name: NewAtom("p"), arity: 6},
 				Value: Predicate6(func(_ *VM, _, _, _, _, _, _ Term, k Cont, env *Env) *Promise {
@@ -264,18 +239,14 @@ func TestCall6(t *testing.T) {
 		additional [6]Term
 		ok         bool
 		err        error
-		mem        int64
 	}{
 		{title: "ok", closure: NewAtom("p").Apply(NewAtom("a")), additional: [6]Term{NewAtom("b"), NewAtom("c"), NewAtom("d"), NewAtom("e"), NewAtom("f"), NewAtom("g")}, ok: true},
 		{title: "closure is a variable", closure: vm.NewVariable(), additional: [6]Term{NewAtom("b"), NewAtom("c"), NewAtom("d"), NewAtom("e"), NewAtom("f"), NewAtom("g")}, err: InstantiationError(nil)},
 		{title: "closure is neither a variable nor a callable term", closure: Integer(3), additional: [6]Term{NewAtom("b"), NewAtom("c"), NewAtom("d"), NewAtom("e"), NewAtom("f"), NewAtom("g")}, err: typeError(validTypeCallable, Integer(3), nil)},
-		{title: "out of memory", closure: NewAtom("p").Apply(NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a")), additional: [6]Term{NewAtom("b"), NewAtom("c"), NewAtom("d"), NewAtom("e"), NewAtom("f"), NewAtom("g")}, err: resourceError(resourceMemory, nil), mem: 1},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			defer setMemFree(tt.mem)()
-
 			vm.procedures = buildOrderedMap(procedurePair{
 				Key: procedureIndicator{name: NewAtom("p"), arity: 7},
 				Value: Predicate7(func(_ *VM, _, _, _, _, _, _, _ Term, k Cont, env *Env) *Promise {
@@ -297,18 +268,14 @@ func TestCall7(t *testing.T) {
 		additional [7]Term
 		ok         bool
 		err        error
-		mem        int64
 	}{
 		{title: "ok", closure: NewAtom("p").Apply(NewAtom("a")), additional: [7]Term{NewAtom("b"), NewAtom("c"), NewAtom("d"), NewAtom("e"), NewAtom("f"), NewAtom("g"), NewAtom("h")}, ok: true},
 		{title: "closure is a variable", closure: vm.NewVariable(), additional: [7]Term{NewAtom("b"), NewAtom("c"), NewAtom("d"), NewAtom("e"), NewAtom("f"), NewAtom("g"), NewAtom("h")}, err: InstantiationError(nil)},
 		{title: "closure is neither a variable nor a callable term", closure: Integer(3), additional: [7]Term{NewAtom("b"), NewAtom("c"), NewAtom("d"), NewAtom("e"), NewAtom("f"), NewAtom("g"), NewAtom("h")}, err: typeError(validTypeCallable, Integer(3), nil)},
-		{title: "out of memory", closure: NewAtom("p").Apply(NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a"), NewAtom("a")), additional: [7]Term{NewAtom("b"), NewAtom("c"), NewAtom("d"), NewAtom("e"), NewAtom("f"), NewAtom("g"), NewAtom("h")}, err: resourceError(resourceMemory, nil), mem: 1},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			defer setMemFree(tt.mem)()
-
 			vm.procedures = buildOrderedMap(procedurePair{
 				Key: procedureIndicator{name: NewAtom("p"), arity: 8},
 				Value: Predicate8(func(_ *VM, _, _, _, _, _, _, _, _ Term, k Cont, env *Env) *Promise {
@@ -722,6 +689,26 @@ func TestFunctor(t *testing.T) {
 	}
 }
 
+func TestFunctor_MeterTermCellsBeforeVariables(t *testing.T) {
+	var vm VM
+	term := vm.NewVariable()
+	before := vm.variableCount
+	var units []uint64
+	vm.InstallMeter(func(kind MeterKind, n uint64) Term {
+		if kind != MeterTermCell {
+			return nil
+		}
+		units = append(units, n)
+		return atomResourceError.Apply(resourceMemory.Term())
+	})
+
+	ok, err := Functor(&vm, term, NewAtom("f"), Integer(2), Success, nil).Force(context.Background())
+	assert.False(t, ok)
+	assert.Equal(t, resourceError(resourceMemory, nil), err)
+	assert.Equal(t, []uint64{2}, units)
+	assert.Equal(t, before, vm.variableCount)
+}
+
 func TestArg(t *testing.T) {
 	var vm VM
 	t.Run("term is a variable", func(t *testing.T) {
@@ -890,7 +877,6 @@ func TestCopyTerm(t *testing.T) {
 		ok      bool
 		err     error
 		env     map[Variable]Term
-		mem     int64
 	}{
 		// 8.5.4.4 Examples
 		{title: "copy_term(X, Y).", in: x, out: y, ok: true},
@@ -910,16 +896,10 @@ func TestCopyTerm(t *testing.T) {
 		{title: "codeList", in: CodeList("foo"), out: CodeList("foo"), ok: true},
 		{title: "list", in: List(NewAtom("a"), NewAtom("b"), NewAtom("c")), out: List(NewAtom("a"), NewAtom("b"), NewAtom("c")), ok: true},
 		{title: "partial", in: PartialList(x, NewAtom("a"), NewAtom("b")), out: PartialList(x, NewAtom("a"), NewAtom("b")), ok: true},
-
-		{title: "out of memory: list", in: List(List(vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable())), out: vm.NewVariable(), mem: 1, err: resourceError(resourceMemory, nil)},
-		{title: "out of memory: partial", in: PartialList(PartialList(vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable()), vm.NewVariable()), out: vm.NewVariable(), mem: 1, err: resourceError(resourceMemory, nil)},
-		{title: "out of memory: compound", in: NewAtom("f").Apply(NewAtom("f").Apply(vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable())), out: vm.NewVariable(), mem: 1, err: resourceError(resourceMemory, nil)},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			defer setMemFree(tt.mem)()
-
 			ok, err := CopyTerm(&vm, tt.in, tt.out, func(env *Env) *Promise {
 				for k, v := range tt.env {
 					assert.Equal(t, v, env.Resolve(k))
@@ -930,6 +910,60 @@ func TestCopyTerm(t *testing.T) {
 			assert.Equal(t, tt.err, err)
 		})
 	}
+}
+
+func TestCopyTerm_PreservesDictCycle(t *testing.T) {
+	var vm VM
+	d := &dict{compound: compound{
+		functor: atomDict,
+		args:    []Term{NewAtom("tag"), NewAtom("key"), atomEmptyList},
+	}}
+	d.args[2] = d
+	out := vm.NewVariable()
+
+	ok, err := CopyTerm(&vm, d, out, func(env *Env) *Promise {
+		copied := env.Resolve(out).(*dict)
+		assert.NotSame(t, d, copied)
+		assert.Same(t, copied, copied.args[2])
+		return Bool(true)
+	}, nil).Force(context.Background())
+	assert.True(t, ok)
+	assert.NoError(t, err)
+}
+
+func TestCopyTerm_MeterTermCells(t *testing.T) {
+	var vm VM
+	var calls int
+	vm.InstallMeter(func(kind MeterKind, _ uint64) Term {
+		if kind != MeterTermCell {
+			return nil
+		}
+		calls++
+		return atomResourceError.Apply(resourceMemory.Term())
+	})
+
+	ok, err := CopyTerm(&vm, NewAtom("f").Apply(NewAtom("a")), vm.NewVariable(), Success, nil).Force(context.Background())
+	assert.False(t, ok)
+	assert.Equal(t, resourceError(resourceMemory, nil), err)
+	assert.Equal(t, 1, calls)
+}
+
+func TestCopyTerm_MetersPartialListTail(t *testing.T) {
+	var vm VM
+	var charged uint64
+	vm.InstallMeter(func(kind MeterKind, units uint64) Term {
+		if kind == MeterTermCell {
+			charged += units
+		}
+		return nil
+	})
+
+	tail := vm.NewVariable()
+	ok, err := CopyTerm(&vm, PartialList(tail, NewAtom("a"), NewAtom("b")), vm.NewVariable(), Success, nil).Force(context.Background())
+
+	assert.True(t, ok)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(3), charged)
 }
 
 func TestTermVariables(t *testing.T) {
@@ -944,7 +978,6 @@ func TestTermVariables(t *testing.T) {
 		ok         bool
 		err        error
 		env        map[Variable]Term
-		mem        int64
 	}{
 		// 8.5.5.4 Examples
 		{title: "1", term: NewAtom("t"), vars: vars, ok: true, env: map[Variable]Term{
@@ -972,8 +1005,6 @@ func TestTermVariables(t *testing.T) {
 			b:    a,
 			vars: List(b),
 		}},
-
-		{title: "out of memory", term: NewAtom("f").Apply(vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable()), vars: vars, ok: false, err: resourceError(resourceMemory, nil), mem: 1},
 	}
 
 	env := vm.NewEnv().
@@ -981,8 +1012,6 @@ func TestTermVariables(t *testing.T) {
 		bind(vt, NewAtom("*").Apply(a, b))
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			defer setMemFree(tt.mem)()
-
 			ok, err := TermVariables(&vm, tt.term, tt.vars, func(env *Env) *Promise {
 				for k, v := range tt.env {
 					assert.Equal(t, v, env.Resolve(k))
@@ -1434,7 +1463,6 @@ func TestBagOf(t *testing.T) {
 		err                       error
 		env                       []map[Variable]Term
 		warning                   bool
-		mem                       int64
 	}{
 		// 8.10.2.4 Examples
 		{
@@ -1591,44 +1619,6 @@ func TestBagOf(t *testing.T) {
 			instances: PartialList(Integer(1), NewAtom("t")),
 			err:       typeError(validTypeList, PartialList(Integer(1), NewAtom("t")), nil),
 		},
-
-		{
-			title:    "out of memory: goal",
-			template: x,
-			goal: seq(
-				atomSemiColon,
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-			),
-			instances: s,
-			err:       resourceError(resourceMemory, nil),
-			mem:       1,
-		},
-		{
-			title:    "out of memory: free variables",
-			template: x,
-			goal: seq(
-				atomSemiColon,
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-			),
-			instances: s,
-			err:       resourceError(resourceMemory, nil),
-			mem:       1,
-		},
 	}
 
 	vm.unknown = unknownWarning
@@ -1678,8 +1668,6 @@ func TestBagOf(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			defer setMemFree(tt.mem)()
-
 			vm.Unknown = func(Atom, []Term, *Env) {
 				assert.True(t, tt.warning)
 			}
@@ -1710,7 +1698,6 @@ func TestSetOf(t *testing.T) {
 		err                       error
 		env                       []map[Variable]Term
 		warning                   bool
-		mem                       int64
 	}{
 		// 8.10.3.4 Examples
 		{
@@ -1991,44 +1978,6 @@ func TestSetOf(t *testing.T) {
 			instances: PartialList(Integer(1), NewAtom("t")),
 			err:       typeError(validTypeList, PartialList(Integer(1), NewAtom("t")), nil),
 		},
-
-		{
-			title:    "out of memory: goal",
-			template: x,
-			goal: seq(
-				atomSemiColon,
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-			),
-			instances: s,
-			err:       resourceError(resourceMemory, nil),
-			mem:       1,
-		},
-		{
-			title:    "out of memory: free variables",
-			template: x,
-			goal: seq(
-				atomSemiColon,
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-				atomEqual.Apply(x, vm.NewVariable()),
-			),
-			instances: s,
-			err:       resourceError(resourceMemory, nil),
-			mem:       1,
-		},
 	}
 
 	vm.unknown = unknownWarning
@@ -2110,8 +2059,6 @@ func TestSetOf(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			defer setMemFree(tt.mem)()
-
 			vm.Unknown = func(Atom, []Term, *Env) {
 				assert.True(t, tt.warning)
 			}
@@ -2142,7 +2089,6 @@ func TestFindAll(t *testing.T) {
 		ok                        bool
 		err                       error
 		env                       map[Variable]Term
-		mem                       int64
 	}{
 		// 8.10.1.4 Examples
 		{title: "1", template: x, goal: atomSemiColon.Apply(atomEqual.Apply(x, Integer(1)), atomEqual.Apply(x, Integer(2))), instances: s, ok: true, env: map[Variable]Term{
@@ -2163,15 +2109,6 @@ func TestFindAll(t *testing.T) {
 
 		// 8.10.1.3 Errors
 		{title: "c", template: x, goal: atomSemiColon.Apply(atomEqual.Apply(x, Integer(1)), atomEqual.Apply(x, Integer(2))), instances: NewAtom("foo"), err: typeError(validTypeList, NewAtom("foo"), nil)},
-
-		{
-			title:     "out of memory",
-			template:  tuple(vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable()),
-			goal:      atomEqual.Apply(x, Integer(1)),
-			instances: s,
-			err:       Exception{term: atomError.Apply(atomResourceError.Apply(resourceMemory.Term()), atomSlash.Apply(atomEqual, Integer(2)))},
-			mem:       1,
-		},
 	}
 
 	vm.Register2(atomEqual, Unify)
@@ -2188,8 +2125,6 @@ func TestFindAll(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			defer setMemFree(tt.mem)()
-
 			ok, err := FindAll(&vm, tt.template, tt.goal, tt.instances, func(env *Env) *Promise {
 				for k, v := range tt.env {
 					_, ok := env.Unify(v, k)
@@ -2201,6 +2136,29 @@ func TestFindAll(t *testing.T) {
 			assert.Equal(t, tt.err, err)
 		})
 	}
+}
+
+func TestFindAll_MeterTermCellsForAtomicTemplate(t *testing.T) {
+	var vm VM
+	reachedGoal := false
+	vm.Register0(NewAtom("answer"), func(_ *VM, k Cont, env *Env) *Promise {
+		reachedGoal = true
+		return k(env)
+	})
+
+	var units []uint64
+	vm.InstallMeter(func(kind MeterKind, n uint64) Term {
+		if kind != MeterTermCell || !reachedGoal {
+			return nil
+		}
+		units = append(units, n)
+		return atomResourceError.Apply(resourceMemory.Term())
+	})
+
+	ok, err := FindAll(&vm, NewAtom("value"), NewAtom("answer"), vm.NewVariable(), Success, nil).Force(context.Background())
+	assert.False(t, ok)
+	assert.Equal(t, Exception{term: atomError.Apply(atomResourceError.Apply(atomMemory), atomSlash.Apply(NewAtom("answer"), Integer(0)))}, err)
+	assert.Equal(t, []uint64{1}, units)
 }
 
 func TestCompare(t *testing.T) {
@@ -5963,23 +5921,6 @@ func TestClause(t *testing.T) {
 		assert.Equal(t, typeError(validTypeCallable, Integer(0), nil), err)
 		assert.False(t, ok)
 	})
-
-	t.Run("out of memory", func(t *testing.T) {
-		defer setMemFree(1)()
-
-		var vm VM
-		vm.procedures = buildOrderedMap(
-			procedurePair{
-				Key: procedureIndicator{name: NewAtom("green"), arity: 1},
-				Value: &userDefined{public: true, clauses: []clause{
-					{raw: NewAtom("green").Apply(vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable())},
-				}},
-			},
-		)
-		ok, err := Clause(&vm, NewAtom("green").Apply(vm.NewVariable()), vm.NewVariable(), Success, nil).Force(context.Background())
-		assert.Equal(t, resourceError(resourceMemory, nil), err)
-		assert.False(t, ok)
-	})
 }
 
 func TestAtomLength(t *testing.T) {
@@ -7934,20 +7875,6 @@ func TestLength(t *testing.T) {
 				_, err := Length(&vm, PartialList(l, NewAtom("a"), NewAtom("b")), Integer(math.MaxInt64), Success, nil).Force(context.Background())
 				assert.Equal(t, resourceError(resourceMemory, nil), err)
 			})
-
-			t.Run("out of memory", func(t *testing.T) {
-				orig := memFree
-				memFree = func() int64 {
-					return 0
-				}
-				defer func() {
-					memFree = orig
-				}()
-
-				l := vm.NewVariable()
-				_, err := Length(&vm, PartialList(l, NewAtom("a"), NewAtom("b")), Integer(100*1024*1024), Success, nil).Force(context.Background())
-				assert.Equal(t, resourceError(resourceMemory, nil), err)
-			})
 		})
 	})
 
@@ -7997,6 +7924,35 @@ func TestLength(t *testing.T) {
 			assert.Equal(t, representationError(flagMaxInteger, nil), err)
 		})
 	})
+}
+
+func TestLength_MeterTermCellsIncrementally(t *testing.T) {
+	var vm VM
+	remaining := uint64(2)
+	var units []uint64
+	vm.InstallMeter(func(kind MeterKind, n uint64) Term {
+		if kind != MeterTermCell {
+			return nil
+		}
+		units = append(units, n)
+		if n > remaining {
+			return atomResourceError.Apply(resourceMemory.Term())
+		}
+		remaining -= n
+		return nil
+	})
+
+	list, length := vm.NewVariable(), vm.NewVariable()
+	solutions := 0
+	ok, err := Length(&vm, list, length, func(env *Env) *Promise {
+		assert.Equal(t, Integer(solutions), env.Resolve(length))
+		solutions++
+		return Bool(false)
+	}, nil).Force(context.Background())
+	assert.False(t, ok)
+	assert.Equal(t, resourceError(resourceMemory, nil), err)
+	assert.Equal(t, 2, solutions)
+	assert.Equal(t, []uint64{2, 2}, units)
 }
 
 func TestSkipMaxList(t *testing.T) {
@@ -8298,20 +8254,6 @@ func (f *stubFile) Close() error {
 	f.closes++
 	f.closed = true
 	return nil
-}
-
-func setMemFree(n int64) func() {
-	if n <= 0 {
-		return func() {}
-	}
-
-	orig := memFree
-	memFree = func() int64 {
-		return n
-	}
-	return func() {
-		memFree = orig
-	}
 }
 
 func buildOrderedMap(pairs ...procedurePair) *orderedmap.OrderedMap[procedureIndicator, procedure] {
