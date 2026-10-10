@@ -87,13 +87,13 @@ func TestParser_Term(t *testing.T) {
 		{input: `'-'1.0.`, term: NewFloatFromInt64(-1)},
 
 		{input: `_.`, termLazy: func(vm *VM) Term {
-			return Variable(vm.variableCount)
+			return Variable{scope: vm.scope(), index: int64(vm.variableCount)}
 		}},
 		{input: `X.`, termLazy: func(vm *VM) Term {
-			return Variable(vm.variableCount)
+			return Variable{scope: vm.scope(), index: int64(vm.variableCount)}
 		}, vars: func(vm *VM) []ParsedVariable {
 			return []ParsedVariable{
-				{Name: NewAtom("X"), Variable: Variable(vm.variableCount), Count: 1},
+				{Name: NewAtom("X"), Variable: Variable{scope: vm.scope(), index: int64(vm.variableCount)}, Count: 1},
 			}
 		}},
 
@@ -111,17 +111,17 @@ func TestParser_Term(t *testing.T) {
 		{input: `[a, ()].`, err: unexpectedTokenError{actual: Token{kind: tokenClose, val: ")"}}},
 		{input: `[a b].`, err: unexpectedTokenError{actual: Token{kind: tokenLetterDigit, val: "b"}}},
 		{input: `[a|X].`, termLazy: func(vm *VM) Term {
-			return Cons(NewAtom("a"), Variable(vm.variableCount))
+			return Cons(NewAtom("a"), Variable{scope: vm.scope(), index: int64(vm.variableCount)})
 		}, vars: func(vm *VM) []ParsedVariable {
 			return []ParsedVariable{
-				{Name: NewAtom("X"), Variable: Variable(vm.variableCount), Count: 1},
+				{Name: NewAtom("X"), Variable: Variable{scope: vm.scope(), index: int64(vm.variableCount)}, Count: 1},
 			}
 		}},
 		{input: `[a, b|X].`, termLazy: func(vm *VM) Term {
-			return PartialList(Variable(vm.variableCount), NewAtom("a"), NewAtom("b"))
+			return PartialList(Variable{scope: vm.scope(), index: int64(vm.variableCount)}, NewAtom("a"), NewAtom("b"))
 		}, vars: func(vm *VM) []ParsedVariable {
 			return []ParsedVariable{
-				{Name: NewAtom("X"), Variable: Variable(vm.variableCount), Count: 1},
+				{Name: NewAtom("X"), Variable: Variable{scope: vm.scope(), index: int64(vm.variableCount)}, Count: 1},
 			}
 		}},
 		{input: `[a, b|()].`, err: unexpectedTokenError{actual: Token{kind: tokenClose, val: ")"}}},
@@ -177,22 +177,22 @@ func TestParser_Term(t *testing.T) {
 		{
 			input: `X{}.`,
 			termLazy: func(vm *VM) Term {
-				return &dict{compound{functor: "dict", args: []Term{Variable(vm.variableCount)}}}
+				return &dict{compound{functor: "dict", args: []Term{Variable{scope: vm.scope(), index: int64(vm.variableCount)}}}}
 			},
 			vars: func(vm *VM) []ParsedVariable {
 				return []ParsedVariable{
-					{Name: NewAtom("X"), Variable: Variable(vm.variableCount), Count: 1},
+					{Name: NewAtom("X"), Variable: Variable{scope: vm.scope(), index: int64(vm.variableCount)}, Count: 1},
 				}
 			},
 		},
 		{
 			input: `t{k:V}.`,
 			termLazy: func(vm *VM) Term {
-				return &dict{compound{functor: "dict", args: []Term{NewAtom("t"), NewAtom("k"), Variable(vm.variableCount)}}}
+				return &dict{compound{functor: "dict", args: []Term{NewAtom("t"), NewAtom("k"), Variable{scope: vm.scope(), index: int64(vm.variableCount)}}}}
 			},
 			vars: func(vm *VM) []ParsedVariable {
 				return []ParsedVariable{
-					{Name: NewAtom("V"), Variable: Variable(vm.variableCount), Count: 1},
+					{Name: NewAtom("V"), Variable: Variable{scope: vm.scope(), index: int64(vm.variableCount)}, Count: 1},
 				}
 			},
 		},

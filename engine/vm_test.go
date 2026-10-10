@@ -312,24 +312,17 @@ func TestProcedureIndicator_Apply(t *testing.T) {
 	})
 }
 
-func TestVM_ResetEnvIsolation(t *testing.T) {
+func TestVM_EnvironmentIsolation(t *testing.T) {
 	var a, b VM
-	a.SetMaxVariables(2)
-	a.NewVariable()
-	env := a.prepareEnv(nil).bind(varContext, NewAtom("active").Apply(Integer(1)))
-
-	b.NewVariable()
-	b.SetMaxVariables(1)
-	b.ResetEnv()
-	assert.Equal(t, Variable(2), a.NewVariable())
-	assert.PanicsWithValue(t, ErrMaxVariables, func() { a.NewVariable() })
-	assert.Equal(t, NewAtom("active").Apply(Integer(1)), env.Resolve(varContext))
-
-	a.ResetEnv()
-	assert.Equal(t, Variable(1), a.NewVariable())
-	assert.Equal(t, rootContext, a.prepareEnv(nil).Resolve(varContext))
-	assert.Equal(t, Variable(1), b.NewVariable())
-	assert.PanicsWithValue(t, ErrMaxVariables, func() { b.NewVariable() })
+	x, y := a.NewVariable(), b.NewVariable()
+	envA := a.NewEnv().bind(x, NewAtom("a"))
+	envB := b.NewEnv().bind(y, NewAtom("b"))
+	assert.False(t, x == y)
+	assert.Equal(t, NewAtom("a"), envA.Resolve(x))
+	assert.Equal(t, NewAtom("b"), envB.Resolve(y))
+	assert.PanicsWithValue(t, ErrVariableScope, func() { envA.Resolve(y) })
+	assert.PanicsWithValue(t, ErrVariableScope, func() { envB.Resolve(x) })
+	assert.PanicsWithValue(t, ErrVariableScope, func() { a.ownedEnv(envB) })
 }
 
 func TestVM_ExceptionVariablesUseEnvironmentOwner(t *testing.T) {
@@ -426,4 +419,24 @@ func TestInstruction_String(t *testing.T) {
 		expected := "exit()"
 		assert.Equal(t, expected, instr.String())
 	})
+}
+
+func TestVM_RejectsForeignScopeAtExecutionBoundaries(t *testing.T) {
+	var vm, other VM
+	called := false
+	vm.Register1(NewAtom("ignore"), func(_ *VM, _ Term, k Cont, env *Env) *Promise {
+		called = true
+		return k(env)
+	})
+	arg := NewAtom("nested").Apply(other.NewVariable())
+	ok, err := vm.Arrive(NewAtom("ignore"), []Term{arg}, Success, nil).Force(context.Background())
+	assert.False(t, ok)
+	assert.ErrorIs(t, err, ErrVariableScope)
+	ok, err = Call(&vm, NewAtom("ignore").Apply(arg), Success, nil).Force(context.Background())
+	assert.False(t, ok)
+	assert.ErrorIs(t, err, ErrVariableScope)
+	ok, err = vm.Arrive(NewAtom("ignore"), []Term{NewAtom("ground")}, Success, other.NewEnv()).Force(context.Background())
+	assert.False(t, ok)
+	assert.ErrorIs(t, err, ErrVariableScope)
+	assert.False(t, called)
 }

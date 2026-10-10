@@ -4351,9 +4351,12 @@ func TestClose(t *testing.T) {
 
 			t.Run("force but the argument is a variable", func(t *testing.T) {
 				var vm VM
-				_, err := Close(&vm, &Stream{}, List(atomForce.Apply(vm.NewVariable())), Success, nil).Force(context.Background())
-				_, ok := vm.NewEnv().Unify(domainError(validDomainStreamOption, atomForce.Apply(vm.NewVariable()), nil).term, err.(Exception).term)
-				assert.True(t, ok)
+				env := vm.NewEnv()
+				force := vm.NewVariable()
+				_, err := Close(&vm, &Stream{}, List(atomForce.Apply(force)), Success, env).Force(context.Background())
+				want := domainError(validDomainStreamOption, atomForce.Apply(force), env)
+				_, matched := env.Unify(want.term, err.(Exception).term)
+				assert.True(t, matched)
 			})
 
 			t.Run("force but the argument is neither true nor false", func(t *testing.T) {
@@ -4471,6 +4474,7 @@ func TestWriteTerm(t *testing.T) {
 		env                 *Env
 		ok                  bool
 		err                 error
+		errForEnv           func(*Env) error
 		output              string
 		outputPattern       *regexp.Regexp
 	}{
@@ -4502,7 +4506,15 @@ func TestWriteTerm(t *testing.T) {
 		{title: `e: variable_names, not a list, atomic`, sOrA: w, term: NewAtom("foo"), options: List(atomVariableNames.Apply(Integer(0))), err: domainError(validDomainWriteOption, atomVariableNames.Apply(Integer(0)), nil)},
 		{title: `e: variable_names, element is not a pair, atomic`, sOrA: w, term: NewAtom("foo"), options: List(atomVariableNames.Apply(List(NewAtom("a")))), err: domainError(validDomainWriteOption, atomVariableNames.Apply(List(NewAtom("a"))), nil)},
 		{title: `e: variable_names, element is not a pair, compound`, sOrA: w, term: NewAtom("foo"), options: List(atomVariableNames.Apply(List(NewAtom("f").Apply(NewAtom("a"))))), err: domainError(validDomainWriteOption, atomVariableNames.Apply(List(NewAtom("f").Apply(NewAtom("a")))), nil)},
-		{title: `e: variable_names, name is not an atom`, sOrA: w, term: v, options: List(atomVariableNames.Apply(List(atomEqual.Apply(Integer(0), v)))), err: domainError(validDomainWriteOption, atomVariableNames.Apply(List(atomEqual.Apply(Integer(0), vm.NewVariable()))), nil)},
+		{
+			title:   `e: variable_names, name is not an atom`,
+			sOrA:    w,
+			term:    v,
+			options: List(atomVariableNames.Apply(List(atomEqual.Apply(Integer(0), v)))),
+			errForEnv: func(env *Env) error {
+				return domainError(validDomainWriteOption, atomVariableNames.Apply(List(atomEqual.Apply(Integer(0), v))), env)
+			},
+		},
 		{title: `e: boolean option, not an atom`, sOrA: w, term: NewAtom("foo"), options: List(atomQuoted.Apply(Integer(0))), err: domainError(validDomainWriteOption, atomQuoted.Apply(Integer(0)), nil)},
 		{title: `e: unknown functor`, sOrA: w, term: NewAtom("foo"), options: List(NewAtom("bar").Apply(atomTrue)), err: domainError(validDomainWriteOption, NewAtom("bar").Apply(atomTrue), nil)},
 		{title: `f`, sOrA: NewAtom("stream"), term: NewAtom("foo"), options: List(), err: existenceError(objectTypeStream, NewAtom("stream"), nil)},
@@ -4536,13 +4548,21 @@ func TestWriteTerm(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
 			buf.Reset()
-			ok, err := WriteTerm(&vm, tt.sOrA, tt.term, tt.options, Success, tt.env).Force(context.Background())
+			env := tt.env
+			if env == nil {
+				env = vm.NewEnv()
+			}
+			ok, err := WriteTerm(&vm, tt.sOrA, tt.term, tt.options, Success, env).Force(context.Background())
 			assert.Equal(t, tt.ok, ok)
-			if tt.err == nil {
+			wantErr := tt.err
+			if tt.errForEnv != nil {
+				wantErr = tt.errForEnv(env)
+			}
+			if wantErr == nil {
 				assert.NoError(t, err)
-			} else if te, ok := tt.err.(Exception); ok {
-				_, ok := vm.NewEnv().Unify(te.term, err.(Exception).term)
-				assert.True(t, ok)
+			} else if te, ok := wantErr.(Exception); ok {
+				_, matched := env.Unify(te.term, err.(Exception).term)
+				assert.True(t, matched)
 			}
 			if tt.outputPattern == nil {
 				assert.Equal(t, tt.output, buf.String())
@@ -6442,9 +6462,12 @@ func TestNumberChars(t *testing.T) {
 		})
 
 		t.Run("list-ish", func(t *testing.T) {
-			_, err := NumberChars(&vm, Integer(0), PartialList(NewAtom("b"), vm.NewVariable()), Success, nil).Force(context.Background())
-			_, ok := vm.NewEnv().Unify(err.(Exception).Term(), typeError(validTypeList, PartialList(NewAtom("b"), vm.NewVariable()), nil).Term())
-			assert.True(t, ok)
+			env := vm.NewEnv()
+			chars := PartialList(NewAtom("b"), vm.NewVariable())
+			_, err := NumberChars(&vm, Integer(0), chars, Success, env).Force(context.Background())
+			want := typeError(validTypeList, chars, env)
+			_, matched := env.Unify(err.(Exception).Term(), want.Term())
+			assert.True(t, matched)
 		})
 	})
 
@@ -6502,12 +6525,14 @@ func TestNumberChars(t *testing.T) {
 func TestNumberCodes(t *testing.T) {
 	var vm VM
 	a, l := vm.NewVariable(), vm.NewVariable()
+	badList := PartialList(NewAtom("foo"), vm.NewVariable())
 
 	tests := []struct {
 		title        string
 		number, list Term
 		ok           bool
 		err          error
+		errForEnv    func(*Env) error
 		env          map[Variable]Term
 	}{
 		// 8.16.8.4 Examples
@@ -6543,7 +6568,14 @@ func TestNumberCodes(t *testing.T) {
 		{title: "b: no variables in the list", number: NewAtom("foo"), list: List(Integer('0')), err: typeError(validTypeNumber, NewAtom("foo"), nil)},
 		{title: "b: variables in the list", number: NewAtom("foo"), list: List(vm.NewVariable(), Integer('0')), err: typeError(validTypeNumber, NewAtom("foo"), nil)},
 		{title: "c: without a variable element", number: Integer(0), list: NewAtom("foo"), err: typeError(validTypeList, NewAtom("foo"), nil)},
-		{title: "c: with a variable element", number: Integer(0), list: PartialList(NewAtom("foo"), vm.NewVariable()), err: typeError(validTypeList, PartialList(NewAtom("foo"), vm.NewVariable()), nil)},
+		{
+			title:  "c: with a variable element",
+			number: Integer(0),
+			list:   badList,
+			errForEnv: func(env *Env) error {
+				return typeError(validTypeList, badList, env)
+			},
+		},
 		{title: "d", number: a, list: List(vm.NewVariable()), err: InstantiationError(nil)},
 		{title: "e", number: a, list: List(Integer('f'), Integer('o'), Integer('o')), err: syntaxError(errNotANumber, nil)},
 		{title: "f: without a variable element", number: Integer(0), list: List(NewAtom("foo")), err: typeError(validTypeInteger, NewAtom("foo"), nil)},
@@ -6554,18 +6586,23 @@ func TestNumberCodes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
+			env := vm.NewEnv()
 			ok, err := NumberCodes(&vm, tt.number, tt.list, func(env *Env) *Promise {
 				for k, v := range tt.env {
 					_, ok := env.Unify(k, v)
 					assert.True(t, ok)
 				}
 				return Bool(true)
-			}, nil).Force(context.Background())
-			if tt.err == nil {
+			}, env).Force(context.Background())
+			wantErr := tt.err
+			if tt.errForEnv != nil {
+				wantErr = tt.errForEnv(env)
+			}
+			if wantErr == nil {
 				assert.NoError(t, err)
-			} else if te, ok := tt.err.(Exception); ok {
-				_, ok := vm.NewEnv().Unify(te.term, err.(Exception).term)
-				assert.True(t, ok)
+			} else if te, ok := wantErr.(Exception); ok {
+				_, matched := env.Unify(te.term, err.(Exception).term)
+				assert.True(t, matched)
 			}
 			assert.Equal(t, tt.ok, ok)
 		})
@@ -7250,6 +7287,9 @@ func TestExpandTerm(t *testing.T) {
 	s := NewAtom("s")
 
 	x := vm.NewVariable()
+	expectedVariable := func(offset int64) Variable {
+		return Variable{scope: vm.scope(), index: int64(vm.variableCount) + offset}
+	}
 
 	assert.NoError(t, vm.Compile(context.Background(), `
 term_expansion(f(X), g(X)).
@@ -7271,8 +7311,8 @@ term_expansion(f(X), g(X)).
 			in:    atomArrow.Apply(s.Apply(a), List()),
 			out: func() Term {
 				return atomIf.Apply(
-					s.Apply(a, Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
-					atomEqual.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
+					s.Apply(a, expectedVariable(1), expectedVariable(3)),
+					atomEqual.Apply(expectedVariable(1), expectedVariable(3)),
 				)
 			},
 			ok: true,
@@ -7282,8 +7322,8 @@ term_expansion(f(X), g(X)).
 			in:    atomArrow.Apply(s.Apply(a), List(b)),
 			out: func() Term {
 				return atomIf.Apply(
-					s.Apply(a, Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
-					atomEqual.Apply(Variable(vm.variableCount)+1, PartialList(Variable(vm.variableCount)+3, b)),
+					s.Apply(a, expectedVariable(1), expectedVariable(3)),
+					atomEqual.Apply(expectedVariable(1), PartialList(expectedVariable(3), b)),
 				)
 			},
 			ok: true,
@@ -7299,8 +7339,8 @@ term_expansion(f(X), g(X)).
 			in:    atomArrow.Apply(s.Apply(a), x),
 			out: func() Term {
 				return atomIf.Apply(
-					s.Apply(a, Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
-					atomPhrase.Apply(x, Variable(vm.variableCount)+1, PartialList(Variable(vm.variableCount)+3, b)),
+					s.Apply(a, expectedVariable(1), expectedVariable(3)),
+					atomPhrase.Apply(x, expectedVariable(1), PartialList(expectedVariable(3), b)),
 				)
 			},
 			ok: true,
@@ -7310,11 +7350,11 @@ term_expansion(f(X), g(X)).
 			in:    atomArrow.Apply(s, seq(atomComma, a, b)),
 			out: func() Term {
 				return atomIf.Apply(
-					s.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
+					s.Apply(expectedVariable(1), expectedVariable(3)),
 					seq(
 						atomComma,
-						a.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+4),
-						b.Apply(Variable(vm.variableCount)+4, Variable(vm.variableCount)+3),
+						a.Apply(expectedVariable(1), expectedVariable(4)),
+						b.Apply(expectedVariable(4), expectedVariable(3)),
 					),
 				)
 			},
@@ -7337,11 +7377,11 @@ term_expansion(f(X), g(X)).
 			in:    atomArrow.Apply(s, seq(atomSemiColon, a, b)),
 			out: func() Term {
 				return atomIf.Apply(
-					s.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
+					s.Apply(expectedVariable(1), expectedVariable(3)),
 					seq(
 						atomSemiColon,
-						a.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
-						b.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
+						a.Apply(expectedVariable(1), expectedVariable(3)),
+						b.Apply(expectedVariable(1), expectedVariable(3)),
 					),
 				)
 			},
@@ -7352,14 +7392,14 @@ term_expansion(f(X), g(X)).
 			in:    atomArrow.Apply(s, seq(atomSemiColon, atomThen.Apply(a, b), c)),
 			out: func() Term {
 				return atomIf.Apply(
-					s.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
+					s.Apply(expectedVariable(1), expectedVariable(3)),
 					seq(
 						atomSemiColon,
 						atomThen.Apply(
-							a.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+4),
-							b.Apply(Variable(vm.variableCount)+4, Variable(vm.variableCount)+3),
+							a.Apply(expectedVariable(1), expectedVariable(4)),
+							b.Apply(expectedVariable(4), expectedVariable(3)),
 						),
-						c.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
+						c.Apply(expectedVariable(1), expectedVariable(3)),
 					),
 				)
 			},
@@ -7382,11 +7422,11 @@ term_expansion(f(X), g(X)).
 			in:    atomArrow.Apply(s, seq(atomBar, a, b)),
 			out: func() Term {
 				return atomIf.Apply(
-					s.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
+					s.Apply(expectedVariable(1), expectedVariable(3)),
 					seq(
 						atomSemiColon,
-						a.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
-						b.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
+						a.Apply(expectedVariable(1), expectedVariable(3)),
+						b.Apply(expectedVariable(1), expectedVariable(3)),
 					),
 				)
 			},
@@ -7409,11 +7449,11 @@ term_expansion(f(X), g(X)).
 			in:    atomArrow.Apply(s, atomEmptyBlock.Apply(a)),
 			out: func() Term {
 				return atomIf.Apply(
-					s.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
+					s.Apply(expectedVariable(1), expectedVariable(3)),
 					seq(
 						atomComma,
 						a,
-						atomEqual.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
+						atomEqual.Apply(expectedVariable(1), expectedVariable(3)),
 					),
 				)
 			},
@@ -7424,8 +7464,8 @@ term_expansion(f(X), g(X)).
 			in:    atomArrow.Apply(s, atomCall.Apply(a)),
 			out: func() Term {
 				return atomIf.Apply(
-					s.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
-					atomCall.Apply(a, Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
+					s.Apply(expectedVariable(1), expectedVariable(3)),
+					atomCall.Apply(a, expectedVariable(1), expectedVariable(3)),
 				)
 			},
 			ok: true,
@@ -7435,8 +7475,8 @@ term_expansion(f(X), g(X)).
 			in:    atomArrow.Apply(s, atomPhrase.Apply(a)),
 			out: func() Term {
 				return atomIf.Apply(
-					s.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
-					atomPhrase.Apply(a, Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
+					s.Apply(expectedVariable(1), expectedVariable(3)),
+					atomPhrase.Apply(a, expectedVariable(1), expectedVariable(3)),
 				)
 			},
 			ok: true,
@@ -7446,11 +7486,11 @@ term_expansion(f(X), g(X)).
 			in:    atomArrow.Apply(s, atomCut),
 			out: func() Term {
 				return atomIf.Apply(
-					s.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
+					s.Apply(expectedVariable(1), expectedVariable(3)),
 					seq(
 						atomComma,
 						atomCut,
-						atomEqual.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
+						atomEqual.Apply(expectedVariable(1), expectedVariable(3)),
 					),
 				)
 			},
@@ -7461,11 +7501,11 @@ term_expansion(f(X), g(X)).
 			in:    atomArrow.Apply(s, atomNegation.Apply(a)),
 			out: func() Term {
 				return atomIf.Apply(
-					s.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
+					s.Apply(expectedVariable(1), expectedVariable(3)),
 					seq(
 						atomComma,
-						atomNegation.Apply(a.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+4)),
-						atomEqual.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
+						atomNegation.Apply(a.Apply(expectedVariable(1), expectedVariable(4))),
+						atomEqual.Apply(expectedVariable(1), expectedVariable(3)),
 					),
 				)
 			},
@@ -7482,10 +7522,10 @@ term_expansion(f(X), g(X)).
 			in:    atomArrow.Apply(s, atomThen.Apply(a, b)),
 			out: func() Term {
 				return atomIf.Apply(
-					s.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
+					s.Apply(expectedVariable(1), expectedVariable(3)),
 					atomThen.Apply(
-						a.Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+4),
-						b.Apply(Variable(vm.variableCount)+4, Variable(vm.variableCount)+3),
+						a.Apply(expectedVariable(1), expectedVariable(4)),
+						b.Apply(expectedVariable(4), expectedVariable(3)),
 					),
 				)
 			},
@@ -7508,13 +7548,13 @@ term_expansion(f(X), g(X)).
 			in:    atomArrow.Apply(atomComma.Apply(NewAtom("phrase1"), List(NewAtom("word"))), atomComma.Apply(NewAtom("phrase2"), NewAtom("phrase3"))),
 			out: func() Term {
 				return atomIf.Apply(
-					NewAtom("phrase1").Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+3),
+					NewAtom("phrase1").Apply(expectedVariable(1), expectedVariable(3)),
 					atomComma.Apply(
 						atomComma.Apply(
-							NewAtom("phrase2").Apply(Variable(vm.variableCount)+1, Variable(vm.variableCount)+4),
-							NewAtom("phrase3").Apply(Variable(vm.variableCount)+4, Variable(vm.variableCount)+2),
+							NewAtom("phrase2").Apply(expectedVariable(1), expectedVariable(4)),
+							NewAtom("phrase3").Apply(expectedVariable(4), expectedVariable(2)),
 						),
-						atomEqual.Apply(Variable(vm.variableCount)+3, PartialList(Variable(vm.variableCount)+2, NewAtom("word"))),
+						atomEqual.Apply(expectedVariable(3), PartialList(expectedVariable(2), NewAtom("word"))),
 					),
 				)
 			},

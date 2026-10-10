@@ -20,10 +20,10 @@ func TestVariable_WriteTerm(t *testing.T) {
 		opts   WriteOptions
 		output string
 	}{
-		{title: "unnamed", v: x, output: fmt.Sprintf("_%d", x)},
+		{title: "unnamed", v: x, output: fmt.Sprintf("_%d", x.index)},
 		{title: "variable_names", v: x, opts: WriteOptions{variableNames: map[Variable]Atom{x: NewAtom("Foo")}}, output: `Foo`},
-		{title: "following a letter-digit operator", v: x, opts: WriteOptions{left: operator{name: NewAtom("is")}}, output: fmt.Sprintf(" _%d", x)},
-		{title: "followed by a letter-digit operator", v: x, opts: WriteOptions{right: operator{name: NewAtom("is")}}, output: fmt.Sprintf("_%d ", x)},
+		{title: "following a letter-digit operator", v: x, opts: WriteOptions{left: operator{name: NewAtom("is")}}, output: fmt.Sprintf(" _%d", x.index)},
+		{title: "followed by a letter-digit operator", v: x, opts: WriteOptions{right: operator{name: NewAtom("is")}}, output: fmt.Sprintf("_%d ", x.index)},
 	}
 
 	var buf bytes.Buffer
@@ -161,13 +161,53 @@ func TestVM_NewVariableLimits(t *testing.T) {
 	assert.PanicsWithValue(t, ErrMaxVariables, func() { a.NewVariable() })
 
 	a.SetMaxVariables(0)
-	assert.Equal(t, Variable(3), a.NewVariable())
+	assert.Equal(t, int64(3), a.NewVariable().index)
 	a.SetMaxVariables(3)
 	assert.PanicsWithValue(t, ErrMaxVariables, func() { a.NewVariable() })
-	a.ResetEnv()
-	assert.Equal(t, Variable(1), a.NewVariable())
-	a.NewVariable()
-	a.NewVariable()
-	assert.PanicsWithValue(t, ErrMaxVariables, func() { a.NewVariable() })
-	assert.Equal(t, Variable(5), b.NewVariable())
+	assert.Equal(t, int64(5), b.NewVariable().index)
+}
+
+func TestVariable_ScopeIsolation(t *testing.T) {
+	var a, b VM
+	x, y := a.NewVariable(), b.NewVariable()
+	assert.False(t, x == y)
+	env := a.NewEnv().bind(x, NewAtom("a"))
+	assert.Equal(t, NewAtom("a"), env.Resolve(x))
+	assert.PanicsWithValue(t, ErrVariableScope, func() { env.Resolve(y) })
+	assert.PanicsWithValue(t, ErrVariableScope, func() { x.Compare(y, nil) })
+	assert.PanicsWithValue(t, ErrVariableScope, func() {
+		var empty *Env
+		empty.Unify(NewAtom("f").Apply(x), NewAtom("f").Apply(y))
+	})
+	assert.PanicsWithValue(t, ErrVariableScope, func() {
+		env.Unify(x, NewAtom("f").Apply(y))
+	})
+}
+
+func TestVariable_DeterministicRenderingAndOrdering(t *testing.T) {
+	for noise := range 8 {
+		var vm, other VM
+		x := vm.NewVariable()
+		for range noise {
+			other.NewVariable()
+		}
+		y := vm.NewVariable()
+		var out bytes.Buffer
+		assert.NoError(t, NewAtom("pair").Apply(x, y).WriteTerm(&out, &defaultWriteOptions, vm.NewEnv()))
+		assert.Equal(t, "pair(_1,_2)", out.String())
+		assert.Equal(t, -1, x.Compare(y, vm.NewEnv()))
+	}
+}
+
+func TestVariable_ScopeValidationHandlesCycles(t *testing.T) {
+	var vm, other VM
+	x := vm.NewVariable()
+	c := &compound{functor: NewAtom("cycle"), args: []Term{x, nil}}
+	c.args[1] = c
+	env, ok := vm.NewEnv().Unify(x, c)
+	assert.True(t, ok)
+	assert.Equal(t, c, env.Resolve(x))
+	assert.PanicsWithValue(t, ErrVariableScope, func() {
+		other.NewEnv().Unify(other.NewVariable(), c)
+	})
 }

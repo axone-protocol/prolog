@@ -14,17 +14,15 @@ import (
 )
 
 func TestVM_StreamIDSequencesAreIndependent(t *testing.T) {
-	var first, second VM
+	var first, second, third VM
 
 	assert.Equal(t, uint64(1), first.NewInputTextStream(nil).id)
 	assert.Equal(t, uint64(2), first.NewOutputTextStream(nil).id)
 	assert.Equal(t, uint64(1), second.NewInputBinaryStream(nil).id)
 	assert.Equal(t, uint64(2), second.NewOutputBinaryStream(nil).id)
 
-	second.ResetEnv()
-
 	assert.Equal(t, uint64(3), first.NewOutputBinaryStream(nil).id)
-	assert.Equal(t, uint64(1), second.NewInputTextStream(nil).id)
+	assert.Equal(t, uint64(1), third.NewInputTextStream(nil).id)
 }
 
 func TestStream_WriteTerm(t *testing.T) {

@@ -24,14 +24,13 @@ func mustOpen(fs fs.FS, name string) fs.File {
 }
 
 func TestVM_Compile(t *testing.T) {
-	var expectedVM VM
-
 	tests := []struct {
-		title  string
-		text   string
-		args   []interface{}
-		err    error
-		result *orderedmap.OrderedMap[procedureIndicator, procedure]
+		title      string
+		text       string
+		args       []interface{}
+		err        error
+		result     *orderedmap.OrderedMap[procedureIndicator, procedure]
+		resultLazy func(*VM) *orderedmap.OrderedMap[procedureIndicator, procedure]
 	}{
 		{title: "shebang", text: `#!/foo/bar
 foo(a).
@@ -98,99 +97,103 @@ foo(b).
 				},
 			},
 		)},
-		{title: "rules", text: `
+		{
+			title: "rules", text: `
 bar :- true.
 bar(X, "abc", [a, b], [a, b|Y], f(a)) :- X, !, foo(X, "abc", [a, b], [a, b|Y], f(a)).
-`, result: buildOrderedMap(
-			procedurePair{
-				Key: procedureIndicator{name: NewAtom("foo"), arity: 1},
-				Value: &userDefined{
-					multifile: true,
-					clauses: clauses{
-						{
-							pi:  procedureIndicator{name: NewAtom("foo"), arity: 1},
-							raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}},
-							bytecode: bytecode{
-								{opcode: OpGetConst, operand: NewAtom("c")},
-								{opcode: OpExit},
+`, resultLazy: func(vm *VM) *orderedmap.OrderedMap[procedureIndicator, procedure] {
+				return buildOrderedMap(
+					procedurePair{
+						Key: procedureIndicator{name: NewAtom("foo"), arity: 1},
+						Value: &userDefined{
+							multifile: true,
+							clauses: clauses{
+								{
+									pi:  procedureIndicator{name: NewAtom("foo"), arity: 1},
+									raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}},
+									bytecode: bytecode{
+										{opcode: OpGetConst, operand: NewAtom("c")},
+										{opcode: OpExit},
+									},
+								},
 							},
 						},
 					},
-				},
-			},
-			procedurePair{
-				Key: procedureIndicator{name: NewAtom("bar"), arity: 0},
-				Value: &userDefined{
-					clauses: clauses{
-						{
-							pi:  procedureIndicator{name: NewAtom("bar"), arity: 0},
-							raw: atomIf.Apply(NewAtom("bar"), atomTrue),
-							bytecode: bytecode{
-								{opcode: OpEnter},
-								{opcode: OpCall, operand: procedureIndicator{name: atomTrue, arity: 0}},
-								{opcode: OpExit},
+					procedurePair{
+						Key: procedureIndicator{name: NewAtom("bar"), arity: 0},
+						Value: &userDefined{
+							clauses: clauses{
+								{
+									pi:  procedureIndicator{name: NewAtom("bar"), arity: 0},
+									raw: atomIf.Apply(NewAtom("bar"), atomTrue),
+									bytecode: bytecode{
+										{opcode: OpEnter},
+										{opcode: OpCall, operand: procedureIndicator{name: atomTrue, arity: 0}},
+										{opcode: OpExit},
+									},
+								},
 							},
 						},
 					},
-				},
-			},
-			procedurePair{
-				Key: procedureIndicator{name: NewAtom("bar"), arity: 5},
-				Value: &userDefined{
-					clauses: clauses{
-						{
-							pi: procedureIndicator{name: NewAtom("bar"), arity: 5},
-							raw: atomIf.Apply(
-								NewAtom("bar").Apply(Variable(expectedVM.variableCount+1), charList("abc"), List(NewAtom("a"), NewAtom("b")), PartialList(Variable(expectedVM.variableCount+2), NewAtom("a"), NewAtom("b")), NewAtom("f").Apply(NewAtom("a"))),
-								seq(
-									atomComma,
-									Variable(expectedVM.variableCount+1),
-									atomCut,
-									NewAtom("foo").Apply(Variable(expectedVM.variableCount+1), charList("abc"), List(NewAtom("a"), NewAtom("b")), PartialList(Variable(expectedVM.variableCount+2), NewAtom("a"), NewAtom("b")), NewAtom("f").Apply(NewAtom("a"))),
-								),
-							),
-							vars: []Variable{Variable(expectedVM.variableCount + 1), Variable(expectedVM.variableCount + 2)},
-							bytecode: bytecode{
-								{opcode: OpGetVar, operand: Integer(0)},
-								{opcode: OpGetConst, operand: charList("abc")},
-								{opcode: OpGetList, operand: Integer(2)},
-								{opcode: OpGetConst, operand: NewAtom("a")},
-								{opcode: OpGetConst, operand: NewAtom("b")},
-								{opcode: OpPop},
-								{opcode: OpGetPartial, operand: Integer(2)},
-								{opcode: OpGetVar, operand: Integer(1)},
-								{opcode: OpGetConst, operand: NewAtom("a")},
-								{opcode: OpGetConst, operand: NewAtom("b")},
-								{opcode: OpPop},
-								{opcode: OpGetFunctor, operand: procedureIndicator{name: NewAtom("f"), arity: 1}},
-								{opcode: OpGetConst, operand: NewAtom("a")},
-								{opcode: OpPop},
-								{opcode: OpEnter},
-								{opcode: OpPutVar, operand: Integer(0)},
-								{opcode: OpCall, operand: procedureIndicator{name: atomCall, arity: 1}},
-								{opcode: OpCut},
-								{opcode: OpPutVar, operand: Integer(0)},
-								{opcode: OpPutConst, operand: charList("abc")},
-								{opcode: OpPutList, operand: Integer(2)},
-								{opcode: OpPutConst, operand: NewAtom("a")},
-								{opcode: OpPutConst, operand: NewAtom("b")},
-								{opcode: OpPop},
-								{opcode: OpPutPartial, operand: Integer(2)},
-								{opcode: OpPutVar, operand: Integer(1)},
-								{opcode: OpPutConst, operand: NewAtom("a")},
-								{opcode: OpPutConst, operand: NewAtom("b")},
-								{opcode: OpPop},
-								{opcode: OpPutFunctor, operand: procedureIndicator{name: NewAtom("f"), arity: 1}},
-								{opcode: OpPutConst, operand: NewAtom("a")},
-								{opcode: OpPop},
-								{opcode: OpCall, operand: procedureIndicator{name: NewAtom("foo"), arity: 5}},
-								{opcode: OpExit},
+					procedurePair{
+						Key: procedureIndicator{name: NewAtom("bar"), arity: 5},
+						Value: &userDefined{
+							clauses: clauses{
+								{
+									pi: procedureIndicator{name: NewAtom("bar"), arity: 5},
+									raw: atomIf.Apply(
+										NewAtom("bar").Apply(Variable{scope: vm.scope(), index: int64(vm.variableCount + 1)}, charList("abc"), List(NewAtom("a"), NewAtom("b")), PartialList(Variable{scope: vm.scope(), index: int64(vm.variableCount + 2)}, NewAtom("a"), NewAtom("b")), NewAtom("f").Apply(NewAtom("a"))),
+										seq(
+											atomComma,
+											Variable{scope: vm.scope(), index: int64(vm.variableCount + 1)},
+											atomCut,
+											NewAtom("foo").Apply(Variable{scope: vm.scope(), index: int64(vm.variableCount + 1)}, charList("abc"), List(NewAtom("a"), NewAtom("b")), PartialList(Variable{scope: vm.scope(), index: int64(vm.variableCount + 2)}, NewAtom("a"), NewAtom("b")), NewAtom("f").Apply(NewAtom("a"))),
+										),
+									),
+									vars: []Variable{{scope: vm.scope(), index: int64(vm.variableCount + 1)}, {scope: vm.scope(), index: int64(vm.variableCount + 2)}},
+									bytecode: bytecode{
+										{opcode: OpGetVar, operand: Integer(0)},
+										{opcode: OpGetConst, operand: charList("abc")},
+										{opcode: OpGetList, operand: Integer(2)},
+										{opcode: OpGetConst, operand: NewAtom("a")},
+										{opcode: OpGetConst, operand: NewAtom("b")},
+										{opcode: OpPop},
+										{opcode: OpGetPartial, operand: Integer(2)},
+										{opcode: OpGetVar, operand: Integer(1)},
+										{opcode: OpGetConst, operand: NewAtom("a")},
+										{opcode: OpGetConst, operand: NewAtom("b")},
+										{opcode: OpPop},
+										{opcode: OpGetFunctor, operand: procedureIndicator{name: NewAtom("f"), arity: 1}},
+										{opcode: OpGetConst, operand: NewAtom("a")},
+										{opcode: OpPop},
+										{opcode: OpEnter},
+										{opcode: OpPutVar, operand: Integer(0)},
+										{opcode: OpCall, operand: procedureIndicator{name: atomCall, arity: 1}},
+										{opcode: OpCut},
+										{opcode: OpPutVar, operand: Integer(0)},
+										{opcode: OpPutConst, operand: charList("abc")},
+										{opcode: OpPutList, operand: Integer(2)},
+										{opcode: OpPutConst, operand: NewAtom("a")},
+										{opcode: OpPutConst, operand: NewAtom("b")},
+										{opcode: OpPop},
+										{opcode: OpPutPartial, operand: Integer(2)},
+										{opcode: OpPutVar, operand: Integer(1)},
+										{opcode: OpPutConst, operand: NewAtom("a")},
+										{opcode: OpPutConst, operand: NewAtom("b")},
+										{opcode: OpPop},
+										{opcode: OpPutFunctor, operand: procedureIndicator{name: NewAtom("f"), arity: 1}},
+										{opcode: OpPutConst, operand: NewAtom("a")},
+										{opcode: OpPop},
+										{opcode: OpCall, operand: procedureIndicator{name: NewAtom("foo"), arity: 5}},
+										{opcode: OpExit},
+									},
+								},
 							},
 						},
 					},
-				},
+				)
 			},
-		)},
+		},
 		{title: "dict head", text: `
 point(point{x: 5}).
 `, result: buildOrderedMap(
@@ -234,110 +237,118 @@ point(point{x: 5}).
 				},
 			},
 		)},
-		{title: "dict head (2)", text: `
+		{
+			title: "dict head (2)", text: `
 point(point{x: 5}.x).
-`, result: buildOrderedMap(
-			procedurePair{
-				Key: procedureIndicator{name: NewAtom("foo"), arity: 1},
-				Value: &userDefined{
-					multifile: true,
-					clauses: clauses{
-						{
-							pi:  procedureIndicator{name: NewAtom("foo"), arity: 1},
-							raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}},
-							bytecode: bytecode{
-								{opcode: OpGetConst, operand: NewAtom("c")},
-								{opcode: OpExit},
+`, resultLazy: func(vm *VM) *orderedmap.OrderedMap[procedureIndicator, procedure] {
+				return buildOrderedMap(
+					procedurePair{
+						Key: procedureIndicator{name: NewAtom("foo"), arity: 1},
+						Value: &userDefined{
+							multifile: true,
+							clauses: clauses{
+								{
+									pi:  procedureIndicator{name: NewAtom("foo"), arity: 1},
+									raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}},
+									bytecode: bytecode{
+										{opcode: OpGetConst, operand: NewAtom("c")},
+										{opcode: OpExit},
+									},
+								},
 							},
 						},
 					},
-				},
-			},
-			procedurePair{
-				Key: procedureIndicator{name: NewAtom("point"), arity: 1},
-				Value: &userDefined{
-					clauses: clauses{
-						{
-							pi: procedureIndicator{name: NewAtom("point"), arity: 1},
-							raw: &compound{functor: "point", args: []Term{
-								&compound{functor: "$dot", args: []Term{
-									&dict{compound: compound{functor: "dict", args: []Term{NewAtom("point"), NewAtom("x"), Integer(5)}}},
-									NewAtom("x"),
-								}},
-							}},
-							vars: []Variable{Variable(expectedVM.variableCount + 1)},
-							bytecode: bytecode{
-								{opcode: OpGetVar, operand: Integer(0)},
-								{opcode: OpEnter},
-								{opcode: OpPutDict, operand: Integer(3)},
-								{opcode: OpPutConst, operand: NewAtom("point")},
-								{opcode: OpPutConst, operand: NewAtom("x")},
-								{opcode: OpPutConst, operand: Integer(5)},
-								{opcode: OpPop},
-								{opcode: OpPutConst, operand: NewAtom("x")},
-								{opcode: OpPutVar, operand: Integer(0)},
-								{opcode: OpCall, operand: procedureIndicator{name: atomDot, arity: Integer(3)}},
-								{opcode: OpExit},
-							},
-						},
-					},
-				},
-			},
-		)},
-		{title: "dict head (3)", text: `
-point(point{x: 5}.x) :- true.
-`, result: buildOrderedMap(
-			procedurePair{
-				Key: procedureIndicator{name: NewAtom("foo"), arity: 1},
-				Value: &userDefined{
-					multifile: true,
-					clauses: clauses{
-						{
-							pi:  procedureIndicator{name: NewAtom("foo"), arity: 1},
-							raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}},
-							bytecode: bytecode{
-								{opcode: OpGetConst, operand: NewAtom("c")},
-								{opcode: OpExit},
-							},
-						},
-					},
-				},
-			},
-			procedurePair{
-				Key: procedureIndicator{name: NewAtom("point"), arity: 1},
-				Value: &userDefined{
-					clauses: clauses{
-						{
-							pi: procedureIndicator{name: NewAtom("point"), arity: 1},
-							raw: atomIf.Apply(
-								&compound{functor: "point", args: []Term{
-									&compound{functor: "$dot", args: []Term{
-										&dict{compound: compound{functor: "dict", args: []Term{NewAtom("point"), NewAtom("x"), Integer(5)}}},
-										NewAtom("x"),
+					procedurePair{
+						Key: procedureIndicator{name: NewAtom("point"), arity: 1},
+						Value: &userDefined{
+							clauses: clauses{
+								{
+									pi: procedureIndicator{name: NewAtom("point"), arity: 1},
+									raw: &compound{functor: "point", args: []Term{
+										&compound{functor: "$dot", args: []Term{
+											&dict{compound: compound{functor: "dict", args: []Term{NewAtom("point"), NewAtom("x"), Integer(5)}}},
+											NewAtom("x"),
+										}},
 									}},
-								}},
-								NewAtom("true"),
-							),
-							vars: []Variable{Variable(expectedVM.variableCount + 1)},
-							bytecode: bytecode{
-								{opcode: OpGetVar, operand: Integer(0)},
-								{opcode: OpEnter},
-								{opcode: OpCall, operand: procedureIndicator{name: atomTrue, arity: 0}},
-								{opcode: OpPutDict, operand: Integer(3)},
-								{opcode: OpPutConst, operand: NewAtom("point")},
-								{opcode: OpPutConst, operand: NewAtom("x")},
-								{opcode: OpPutConst, operand: Integer(5)},
-								{opcode: OpPop},
-								{opcode: OpPutConst, operand: NewAtom("x")},
-								{opcode: OpPutVar, operand: Integer(0)},
-								{opcode: OpCall, operand: procedureIndicator{name: atomDot, arity: Integer(3)}},
-								{opcode: OpExit},
+									vars: []Variable{{scope: vm.scope(), index: int64(vm.variableCount + 1)}},
+									bytecode: bytecode{
+										{opcode: OpGetVar, operand: Integer(0)},
+										{opcode: OpEnter},
+										{opcode: OpPutDict, operand: Integer(3)},
+										{opcode: OpPutConst, operand: NewAtom("point")},
+										{opcode: OpPutConst, operand: NewAtom("x")},
+										{opcode: OpPutConst, operand: Integer(5)},
+										{opcode: OpPop},
+										{opcode: OpPutConst, operand: NewAtom("x")},
+										{opcode: OpPutVar, operand: Integer(0)},
+										{opcode: OpCall, operand: procedureIndicator{name: atomDot, arity: Integer(3)}},
+										{opcode: OpExit},
+									},
+								},
 							},
 						},
 					},
-				},
+				)
 			},
-		)},
+		},
+		{
+			title: "dict head (3)", text: `
+point(point{x: 5}.x) :- true.
+`, resultLazy: func(vm *VM) *orderedmap.OrderedMap[procedureIndicator, procedure] {
+				return buildOrderedMap(
+					procedurePair{
+						Key: procedureIndicator{name: NewAtom("foo"), arity: 1},
+						Value: &userDefined{
+							multifile: true,
+							clauses: clauses{
+								{
+									pi:  procedureIndicator{name: NewAtom("foo"), arity: 1},
+									raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}},
+									bytecode: bytecode{
+										{opcode: OpGetConst, operand: NewAtom("c")},
+										{opcode: OpExit},
+									},
+								},
+							},
+						},
+					},
+					procedurePair{
+						Key: procedureIndicator{name: NewAtom("point"), arity: 1},
+						Value: &userDefined{
+							clauses: clauses{
+								{
+									pi: procedureIndicator{name: NewAtom("point"), arity: 1},
+									raw: atomIf.Apply(
+										&compound{functor: "point", args: []Term{
+											&compound{functor: "$dot", args: []Term{
+												&dict{compound: compound{functor: "dict", args: []Term{NewAtom("point"), NewAtom("x"), Integer(5)}}},
+												NewAtom("x"),
+											}},
+										}},
+										NewAtom("true"),
+									),
+									vars: []Variable{{scope: vm.scope(), index: int64(vm.variableCount + 1)}},
+									bytecode: bytecode{
+										{opcode: OpGetVar, operand: Integer(0)},
+										{opcode: OpEnter},
+										{opcode: OpCall, operand: procedureIndicator{name: atomTrue, arity: 0}},
+										{opcode: OpPutDict, operand: Integer(3)},
+										{opcode: OpPutConst, operand: NewAtom("point")},
+										{opcode: OpPutConst, operand: NewAtom("x")},
+										{opcode: OpPutConst, operand: Integer(5)},
+										{opcode: OpPop},
+										{opcode: OpPutConst, operand: NewAtom("x")},
+										{opcode: OpPutVar, operand: Integer(0)},
+										{opcode: OpCall, operand: procedureIndicator{name: atomDot, arity: Integer(3)}},
+										{opcode: OpExit},
+									},
+								},
+							},
+						},
+					},
+				)
+			},
+		},
 		{title: "dict body", text: `
 p :- foo(point{x: 5}).
 `, result: buildOrderedMap(
@@ -388,59 +399,63 @@ p :- foo(point{x: 5}).
 				},
 			},
 		)},
-		{title: "dict body (2)", text: `
+		{
+			title: "dict body (2)", text: `
 x(X) :- p(P), =(X, P.x).
-`, result: buildOrderedMap(
-			procedurePair{
-				Key: procedureIndicator{name: NewAtom("foo"), arity: 1},
-				Value: &userDefined{
-					multifile: true,
-					clauses: clauses{
-						{
-							pi:  procedureIndicator{name: NewAtom("foo"), arity: 1},
-							raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}},
-							bytecode: bytecode{
-								{opcode: OpGetConst, operand: NewAtom("c")},
-								{opcode: OpExit},
+`, resultLazy: func(vm *VM) *orderedmap.OrderedMap[procedureIndicator, procedure] {
+				return buildOrderedMap(
+					procedurePair{
+						Key: procedureIndicator{name: NewAtom("foo"), arity: 1},
+						Value: &userDefined{
+							multifile: true,
+							clauses: clauses{
+								{
+									pi:  procedureIndicator{name: NewAtom("foo"), arity: 1},
+									raw: &compound{functor: NewAtom("foo"), args: []Term{NewAtom("c")}},
+									bytecode: bytecode{
+										{opcode: OpGetConst, operand: NewAtom("c")},
+										{opcode: OpExit},
+									},
+								},
 							},
 						},
 					},
-				},
-			},
-			procedurePair{
-				Key: procedureIndicator{name: NewAtom("x"), arity: 1},
-				Value: &userDefined{
-					clauses: clauses{
-						{
-							pi: procedureIndicator{name: NewAtom("x"), arity: 1},
-							raw: atomIf.Apply(
-								NewAtom("x").Apply(Variable(expectedVM.variableCount+1)),
-								seq(
-									atomComma,
-									NewAtom("p").Apply(Variable(expectedVM.variableCount+2)),
-									atomEqual.Apply(Variable(expectedVM.variableCount+1), NewAtom("$dot").Apply(Variable(expectedVM.variableCount+2), NewAtom("x"))),
-								),
-							),
-							vars: []Variable{Variable(expectedVM.variableCount + 1), Variable(expectedVM.variableCount + 2), Variable(expectedVM.variableCount + 3)},
-							bytecode: bytecode{
-								{opcode: OpGetVar, operand: Integer(0)},
-								{opcode: OpEnter},
-								{opcode: OpPutVar, operand: Integer(1)},
-								{opcode: OpCall, operand: procedureIndicator{name: NewAtom("p"), arity: 1}},
-								{opcode: OpPutVar, operand: Integer(1)},
-								{opcode: OpPutConst, operand: NewAtom("x")},
-								{opcode: OpPutVar, operand: Integer(2)},
-								{opcode: OpCall, operand: procedureIndicator{name: NewAtom("."), arity: 3}},
-								{opcode: OpPutVar, operand: Integer(0)},
-								{opcode: OpPutVar, operand: Integer(2)},
-								{opcode: OpCall, operand: procedureIndicator{name: NewAtom("="), arity: 2}},
-								{opcode: OpExit},
+					procedurePair{
+						Key: procedureIndicator{name: NewAtom("x"), arity: 1},
+						Value: &userDefined{
+							clauses: clauses{
+								{
+									pi: procedureIndicator{name: NewAtom("x"), arity: 1},
+									raw: atomIf.Apply(
+										NewAtom("x").Apply(Variable{scope: vm.scope(), index: int64(vm.variableCount + 1)}),
+										seq(
+											atomComma,
+											NewAtom("p").Apply(Variable{scope: vm.scope(), index: int64(vm.variableCount + 2)}),
+											atomEqual.Apply(Variable{scope: vm.scope(), index: int64(vm.variableCount + 1)}, NewAtom("$dot").Apply(Variable{scope: vm.scope(), index: int64(vm.variableCount + 2)}, NewAtom("x"))),
+										),
+									),
+									vars: []Variable{{scope: vm.scope(), index: int64(vm.variableCount + 1)}, {scope: vm.scope(), index: int64(vm.variableCount + 2)}, {scope: vm.scope(), index: int64(vm.variableCount + 3)}},
+									bytecode: bytecode{
+										{opcode: OpGetVar, operand: Integer(0)},
+										{opcode: OpEnter},
+										{opcode: OpPutVar, operand: Integer(1)},
+										{opcode: OpCall, operand: procedureIndicator{name: NewAtom("p"), arity: 1}},
+										{opcode: OpPutVar, operand: Integer(1)},
+										{opcode: OpPutConst, operand: NewAtom("x")},
+										{opcode: OpPutVar, operand: Integer(2)},
+										{opcode: OpCall, operand: procedureIndicator{name: NewAtom("."), arity: 3}},
+										{opcode: OpPutVar, operand: Integer(0)},
+										{opcode: OpPutVar, operand: Integer(2)},
+										{opcode: OpCall, operand: procedureIndicator{name: NewAtom("="), arity: 2}},
+										{opcode: OpExit},
+									},
+								},
 							},
 						},
 					},
-				},
+				)
 			},
-		)},
+		},
 		{title: "dynamic", text: `
 :- dynamic(foo/1).
 foo(a).
@@ -760,10 +775,14 @@ bar(b).
 			)
 			vm.FS = testdata
 			vm.Register1(NewAtom("throw"), Throw)
+			result := tt.result
+			if tt.resultLazy != nil {
+				result = tt.resultLazy(&vm)
+			}
 			assert.Equal(t, tt.err, vm.Compile(context.Background(), tt.text, tt.args...))
 			if tt.err == nil {
 				vm.procedures.Delete(procedureIndicator{name: NewAtom("throw"), arity: 1})
-				assert.EqualValues(t, tt.result, vm.procedures)
+				assert.EqualValues(t, result, vm.procedures)
 			}
 		})
 	}
@@ -790,7 +809,7 @@ func TestVM_Consult(t *testing.T) {
 		{title: `:- consult(X).`, files: x, err: InstantiationError(nil)},
 		{title: `:- consult(foo(bar)).`, files: NewAtom("foo").Apply(NewAtom("bar")), err: typeError(validTypeAtom, NewAtom("foo").Apply(NewAtom("bar")), nil)},
 		{title: `:- consult(1).`, files: Integer(1), err: typeError(validTypeAtom, Integer(1), nil)},
-		{title: `:- consult(['testdata/empty.txt'|_]).`, files: PartialList(vm.NewVariable(), NewAtom("testdata/empty.txt")), err: typeError(validTypeAtom, PartialList(vm.NewVariable(), NewAtom("testdata/empty.txt")), nil)},
+		{title: `:- consult(['testdata/empty.txt'|_]).`, files: PartialList(vm.NewVariable(), NewAtom("testdata/empty.txt")), err: typeError(validTypeAtom, PartialList(vm.NewVariable(), NewAtom("testdata/empty.txt")), vm.NewEnv())},
 		{title: `:- consult([X]).`, files: List(x), err: InstantiationError(nil)},
 		{title: `:- consult([1]).`, files: List(Integer(1)), err: typeError(validTypeAtom, Integer(1), nil)},
 

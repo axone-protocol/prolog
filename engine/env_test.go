@@ -30,7 +30,7 @@ func TestEnv_Lookup(t *testing.T) {
 		vars[i], vars[j] = vars[j], vars[i]
 	})
 
-	var env *Env
+	env := vm.NewEnv()
 	for _, v := range vars {
 		env = env.bind(v, v)
 	}
@@ -40,7 +40,7 @@ func TestEnv_Lookup(t *testing.T) {
 	})
 
 	for _, v := range vars {
-		t.Run(fmt.Sprintf("_%d", v), func(t *testing.T) {
+		t.Run(fmt.Sprintf("_%d", v.index), func(t *testing.T) {
 			w, ok := env.lookup(v)
 			assert.True(t, ok)
 			assert.Equal(t, v, w)
@@ -140,7 +140,7 @@ func TestContains(t *testing.T) {
 	assert.True(t, contains(NewAtom("a"), NewAtom("a"), env))
 	assert.False(t, contains(vm.NewVariable(), NewAtom("a"), env))
 	v := vm.NewVariable()
-	env = env.bind(v, NewAtom("a"))
+	env = vm.NewEnv().bind(v, NewAtom("a"))
 	assert.True(t, contains(v, NewAtom("a"), env))
 	assert.True(t, contains(&compound{functor: NewAtom("a")}, NewAtom("a"), env))
 	assert.True(t, contains(&compound{functor: NewAtom("f"), args: []Term{NewAtom("a")}}, NewAtom("a"), env))

@@ -26,9 +26,8 @@ func TestInterpreter_VMIsolation(t *testing.T) {
 	}()
 
 	for _, want := range []string{"a", "b"} {
-		b := New(nil, nil)
+		b := NewEmpty()
 		b.SetMaxVariables(1)
-		b.ResetEnv()
 		b.NewVariable()
 		assert.PanicsWithValue(t, engine.ErrMaxVariables, func() { b.NewVariable() })
 
