@@ -13,16 +13,32 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-func TestVM_StreamIDSequencesAreIndependent(t *testing.T) {
-	var first, second, third VM
+func TestStream_CompareScopeIsolation(t *testing.T) {
+	var vm, other VM
+	first := vm.NewInputTextStream(nil)
+	retained := other.NewInputTextStream(nil)
+	second := vm.NewInputTextStream(nil)
 
-	assert.Equal(t, uint64(1), first.NewInputTextStream(nil).id)
-	assert.Equal(t, uint64(2), first.NewOutputTextStream(nil).id)
-	assert.Equal(t, uint64(1), second.NewInputBinaryStream(nil).id)
-	assert.Equal(t, uint64(2), second.NewOutputBinaryStream(nil).id)
+	assert.Equal(t, -1, first.Compare(second, nil))
+	assert.Equal(t, 1, second.Compare(first, nil))
 
-	assert.Equal(t, uint64(3), first.NewOutputBinaryStream(nil).id)
-	assert.Equal(t, uint64(1), third.NewInputTextStream(nil).id)
+	tests := []struct {
+		title string
+		s, t  *Stream
+	}{
+		{title: "foreign stream", s: first, t: retained},
+		{title: "foreign receiver", s: retained, t: first},
+		{title: "unowned stream", s: first, t: &Stream{}},
+		{title: "unowned receiver", s: &Stream{}, t: first},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.title, func(t *testing.T) {
+			assert.PanicsWithValue(t, ErrStreamScope, func() {
+				tt.s.Compare(tt.t, nil)
+			})
+		})
+	}
 }
 
 func TestStream_WriteTerm(t *testing.T) {

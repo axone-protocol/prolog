@@ -184,6 +184,30 @@ func TestVariable_ScopeIsolation(t *testing.T) {
 	})
 }
 
+func TestEnv_UnifyRejectsForeignOrUnownedStreams(t *testing.T) {
+	var vm, other VM
+	x := vm.NewVariable()
+
+	tests := []struct {
+		title  string
+		stream *Stream
+	}{
+		{title: "foreign", stream: other.NewInputTextStream(nil)},
+		{title: "unowned", stream: &Stream{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.title, func(t *testing.T) {
+			assert.PanicsWithValue(t, ErrStreamScope, func() {
+				vm.NewEnv().Unify(
+					NewAtom("outer").Apply(x),
+					NewAtom("outer").Apply(NewAtom("nested").Apply(tt.stream)),
+				)
+			})
+		})
+	}
+}
+
 func TestVariable_DeterministicRenderingAndOrdering(t *testing.T) {
 	for noise := range 8 {
 		var vm, other VM

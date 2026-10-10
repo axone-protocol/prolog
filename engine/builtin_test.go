@@ -3390,12 +3390,11 @@ func TestAbolish(t *testing.T) {
 
 func TestCurrentInput(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
-		var s Stream
-		vm := VM{
-			input: &s,
-		}
+		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID()}
+		vm.input = s
 
-		ok, err := CurrentInput(&vm, &s, Success, nil).Force(context.Background())
+		ok, err := CurrentInput(&vm, s, Success, nil).Force(context.Background())
 		assert.NoError(t, err)
 		assert.True(t, ok)
 	})
@@ -3410,12 +3409,11 @@ func TestCurrentInput(t *testing.T) {
 
 func TestCurrentOutput(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
-		var s Stream
-		vm := VM{
-			output: &s,
-		}
+		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID()}
+		vm.output = s
 
-		ok, err := CurrentOutput(&vm, &s, Success, nil).Force(context.Background())
+		ok, err := CurrentOutput(&vm, s, Success, nil).Force(context.Background())
 		assert.NoError(t, err)
 		assert.True(t, ok)
 	})
@@ -3431,9 +3429,9 @@ func TestCurrentOutput(t *testing.T) {
 func TestSetInput(t *testing.T) {
 	var vm VM
 	foo, bar := NewAtom("foo"), NewAtom("bar")
-	input := Stream{mode: ioModeRead, alias: foo}
-	output := Stream{mode: ioModeAppend}
-	readWrite := Stream{mode: ioModeReadWrite, source: os.Stdin, sink: os.Stdout}
+	input := Stream{vm: &vm, id: vm.nextStreamID(), mode: ioModeRead, alias: foo}
+	output := Stream{vm: &vm, id: vm.nextStreamID(), mode: ioModeAppend}
+	readWrite := Stream{vm: &vm, id: vm.nextStreamID(), mode: ioModeReadWrite, source: os.Stdin, sink: os.Stdout}
 	stream := vm.NewVariable()
 
 	vm.streams.add(&input)
@@ -3469,9 +3467,9 @@ func TestSetInput(t *testing.T) {
 func TestSetOutput(t *testing.T) {
 	var vm VM
 	foo, bar := NewAtom("foo"), NewAtom("bar")
-	input := Stream{mode: ioModeRead}
-	output := Stream{mode: ioModeAppend, alias: foo}
-	readWrite := Stream{mode: ioModeReadWrite, source: os.Stdin, sink: os.Stdout}
+	input := Stream{vm: &vm, id: vm.nextStreamID(), mode: ioModeRead}
+	output := Stream{vm: &vm, id: vm.nextStreamID(), mode: ioModeAppend, alias: foo}
+	readWrite := Stream{vm: &vm, id: vm.nextStreamID(), mode: ioModeReadWrite, source: os.Stdin, sink: os.Stdout}
 	stream := vm.NewVariable()
 
 	vm.streams.add(&output)
@@ -4104,7 +4102,7 @@ func TestOpen(t *testing.T) {
 		}()
 
 		vm := newVM()
-		vm.streams.add(&Stream{alias: NewAtom("foo")})
+		vm.streams.add(&Stream{vm: &vm, id: vm.nextStreamID(), alias: NewAtom("foo")})
 		ok, err := Open(&vm, NewAtom(f.Name()), atomRead, vm.NewVariable(), List(&compound{
 			functor: atomAlias,
 			args:    []Term{NewAtom("foo")},
@@ -4189,7 +4187,7 @@ func TestClose(t *testing.T) {
 				defer m.mockCloser.AssertExpectations(t)
 
 				var vm VM
-				ok, err := Close(&vm, &Stream{source: &m}, List(), Success, nil).Force(context.Background())
+				ok, err := Close(&vm, &Stream{vm: &vm, id: vm.nextStreamID(), source: &m}, List(), Success, nil).Force(context.Background())
 				assert.NoError(t, err)
 				assert.True(t, ok)
 			})
@@ -4205,7 +4203,7 @@ func TestClose(t *testing.T) {
 				foo := NewAtom("foo")
 
 				var vm VM
-				vm.streams.add(&Stream{sink: &m, alias: foo})
+				vm.streams.add(&Stream{vm: &vm, id: vm.nextStreamID(), sink: &m, alias: foo})
 				ok, err := Close(&vm, foo, List(), Success, nil).Force(context.Background())
 				assert.NoError(t, err)
 				assert.True(t, ok)
@@ -4221,7 +4219,7 @@ func TestClose(t *testing.T) {
 			defer m.mockCloser.AssertExpectations(t)
 
 			var vm VM
-			_, err := Close(&vm, &Stream{source: &m}, List(), Success, nil).Force(context.Background())
+			_, err := Close(&vm, &Stream{vm: &vm, id: vm.nextStreamID(), source: &m}, List(), Success, nil).Force(context.Background())
 			assert.Equal(t, errors.New("failed"), err)
 		})
 	})
@@ -4235,7 +4233,7 @@ func TestClose(t *testing.T) {
 		defer m.mockCloser.AssertExpectations(t)
 
 		var vm VM
-		_, err := Close(&vm, &Stream{sink: &m}, List(atomForce.Apply(atomFalse)), Success, nil).Force(context.Background())
+		_, err := Close(&vm, &Stream{vm: &vm, id: vm.nextStreamID(), sink: &m}, List(atomForce.Apply(atomFalse)), Success, nil).Force(context.Background())
 		assert.Equal(t, errors.New("failed"), err)
 	})
 
@@ -4248,7 +4246,7 @@ func TestClose(t *testing.T) {
 		defer m.mockCloser.AssertExpectations(t)
 
 		var vm VM
-		ok, err := Close(&vm, &Stream{source: &m}, List(atomForce.Apply(atomTrue)), Success, nil).Force(context.Background())
+		ok, err := Close(&vm, &Stream{vm: &vm, id: vm.nextStreamID(), source: &m}, List(atomForce.Apply(atomTrue)), Success, nil).Force(context.Background())
 		assert.NoError(t, err)
 		assert.True(t, ok)
 	})
@@ -4263,7 +4261,7 @@ func TestClose(t *testing.T) {
 
 		var vm VM
 		alias := NewAtom("failing")
-		s := &Stream{vm: &vm, source: &m, alias: alias}
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: &m, alias: alias}
 		vm.streams.add(s)
 
 		ok, err := Close(&vm, alias, List(atomForce.Apply(atomTrue)), Success, nil).Force(context.Background())
@@ -4284,7 +4282,7 @@ func TestClose(t *testing.T) {
 		foo := NewAtom("foo")
 
 		var vm VM
-		s := &Stream{vm: &vm, source: &m, alias: foo}
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: &m, alias: foo}
 		vm.streams.add(s)
 		ok, err := Close(&vm, NewAtom("foo"), List(), Success, nil).Force(context.Background())
 		assert.NoError(t, err)
@@ -4303,7 +4301,7 @@ func TestClose(t *testing.T) {
 	t.Run("options is a partial list or a list with an element E which is a variable", func(t *testing.T) {
 		t.Run("partial list", func(t *testing.T) {
 			var vm VM
-			ok, err := Close(&vm, &Stream{}, PartialList(
+			ok, err := Close(&vm, &Stream{vm: &vm, id: vm.nextStreamID()}, PartialList(
 				vm.NewVariable(),
 				atomForce.Apply(atomTrue),
 			), Success, nil).Force(context.Background())
@@ -4313,7 +4311,7 @@ func TestClose(t *testing.T) {
 
 		t.Run("variable element", func(t *testing.T) {
 			var vm VM
-			ok, err := Close(&vm, &Stream{}, List(vm.NewVariable(), atomForce.Apply(atomTrue)), Success, nil).Force(context.Background())
+			ok, err := Close(&vm, &Stream{vm: &vm, id: vm.nextStreamID()}, List(vm.NewVariable(), atomForce.Apply(atomTrue)), Success, nil).Force(context.Background())
 			assert.Equal(t, InstantiationError(nil), err)
 			assert.False(t, ok)
 		})
@@ -4321,7 +4319,7 @@ func TestClose(t *testing.T) {
 
 	t.Run("options is neither a partial list nor a list", func(t *testing.T) {
 		var vm VM
-		ok, err := Close(&vm, &Stream{}, NewAtom("foo"), Success, nil).Force(context.Background())
+		ok, err := Close(&vm, &Stream{vm: &vm, id: vm.nextStreamID()}, NewAtom("foo"), Success, nil).Force(context.Background())
 		assert.Equal(t, typeError(validTypeList, NewAtom("foo"), nil), err)
 		assert.False(t, ok)
 	})
@@ -4336,7 +4334,7 @@ func TestClose(t *testing.T) {
 	t.Run("an element E of the Options list is neither a variable nor a stream-option", func(t *testing.T) {
 		t.Run("not a compound", func(t *testing.T) {
 			var vm VM
-			ok, err := Close(&vm, &Stream{}, List(NewAtom("foo")), Success, nil).Force(context.Background())
+			ok, err := Close(&vm, &Stream{vm: &vm, id: vm.nextStreamID()}, List(NewAtom("foo")), Success, nil).Force(context.Background())
 			assert.Equal(t, domainError(validDomainStreamOption, NewAtom("foo"), nil), err)
 			assert.False(t, ok)
 		})
@@ -4344,7 +4342,7 @@ func TestClose(t *testing.T) {
 		t.Run("compound", func(t *testing.T) {
 			t.Run("force but arity is not 1", func(t *testing.T) {
 				var vm VM
-				ok, err := Close(&vm, &Stream{}, List(atomForce.Apply(NewAtom("a"), NewAtom("b"))), Success, nil).Force(context.Background())
+				ok, err := Close(&vm, &Stream{vm: &vm, id: vm.nextStreamID()}, List(atomForce.Apply(NewAtom("a"), NewAtom("b"))), Success, nil).Force(context.Background())
 				assert.Equal(t, domainError(validDomainStreamOption, atomForce.Apply(NewAtom("a"), NewAtom("b")), nil), err)
 				assert.False(t, ok)
 			})
@@ -4353,7 +4351,7 @@ func TestClose(t *testing.T) {
 				var vm VM
 				env := vm.NewEnv()
 				force := vm.NewVariable()
-				_, err := Close(&vm, &Stream{}, List(atomForce.Apply(force)), Success, env).Force(context.Background())
+				_, err := Close(&vm, &Stream{vm: &vm, id: vm.nextStreamID()}, List(atomForce.Apply(force)), Success, env).Force(context.Background())
 				want := domainError(validDomainStreamOption, atomForce.Apply(force), env)
 				_, matched := env.Unify(want.term, err.(Exception).term)
 				assert.True(t, matched)
@@ -4361,7 +4359,7 @@ func TestClose(t *testing.T) {
 
 			t.Run("force but the argument is neither true nor false", func(t *testing.T) {
 				var vm VM
-				ok, err := Close(&vm, &Stream{}, List(atomForce.Apply(NewAtom("meh"))), Success, nil).Force(context.Background())
+				ok, err := Close(&vm, &Stream{vm: &vm, id: vm.nextStreamID()}, List(atomForce.Apply(NewAtom("meh"))), Success, nil).Force(context.Background())
 				assert.Equal(t, domainError(validDomainStreamOption, atomForce.Apply(NewAtom("meh")), nil), err)
 				assert.False(t, ok)
 			})
@@ -4384,10 +4382,10 @@ func TestFlushOutput(t *testing.T) {
 	}()
 
 	foo := NewAtom("foo")
-	s := &Stream{sink: f, mode: ioModeWrite, alias: foo}
 
 	t.Run("ok", func(t *testing.T) {
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), sink: f, mode: ioModeWrite}
 		ok, err := FlushOutput(&vm, s, Success, nil).Force(context.Background())
 		assert.NoError(t, err)
 		assert.True(t, ok)
@@ -4401,15 +4399,15 @@ func TestFlushOutput(t *testing.T) {
 		m.mockSyncer.On("Sync").Return(errors.New("ng")).Once()
 		defer m.mockSyncer.AssertExpectations(t)
 
-		s := &Stream{sink: &m, mode: ioModeWrite}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), sink: &m, mode: ioModeWrite}
 		_, err := FlushOutput(&vm, s, Success, nil).Force(context.Background())
 		assert.Error(t, err)
 	})
 
 	t.Run("valid stream alias", func(t *testing.T) {
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), sink: f, mode: ioModeWrite, alias: foo}
 		vm.streams.add(s)
 		ok, err := FlushOutput(&vm, foo, Success, nil).Force(context.Background())
 		assert.NoError(t, err)
@@ -4438,9 +4436,8 @@ func TestFlushOutput(t *testing.T) {
 	})
 
 	t.Run("SorA is an input stream", func(t *testing.T) {
-		s := &Stream{source: os.Stdin}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: os.Stdin}
 		ok, err := FlushOutput(&vm, s, Success, nil).Force(context.Background())
 		assert.Equal(t, permissionError(operationOutput, permissionTypeStream, s, nil), err)
 		assert.False(t, ok)
@@ -4450,9 +4447,9 @@ func TestFlushOutput(t *testing.T) {
 func TestWriteTerm(t *testing.T) {
 	var vm VM
 	var buf bytes.Buffer
-	w := &Stream{sink: &buf, mode: ioModeWrite}
-	r := &Stream{sink: &buf, mode: ioModeRead}
-	b := &Stream{sink: &buf, mode: ioModeWrite, streamType: streamTypeBinary}
+	w := &Stream{vm: &vm, id: vm.nextStreamID(), sink: &buf, mode: ioModeWrite}
+	r := &Stream{vm: &vm, id: vm.nextStreamID(), sink: &buf, mode: ioModeRead}
+	b := &Stream{vm: &vm, id: vm.nextStreamID(), sink: &buf, mode: ioModeWrite, streamType: streamTypeBinary}
 
 	B := vm.NewVariable()
 	s := vm.NewVariable()
@@ -4466,7 +4463,7 @@ func TestWriteTerm(t *testing.T) {
 	var m mockWriter
 	m.On("Write", mock.Anything).Return(0, err)
 
-	mw := &Stream{sink: &m, mode: ioModeWrite}
+	mw := &Stream{vm: &vm, id: vm.nextStreamID(), sink: &m, mode: ioModeWrite}
 
 	tests := []struct {
 		title               string
@@ -4677,9 +4674,8 @@ func TestPutByte(t *testing.T) {
 		m.On("Write", []byte{97}).Return(1, nil).Once()
 		defer m.AssertExpectations(t)
 
-		s := &Stream{sink: &m, mode: ioModeWrite, streamType: streamTypeBinary}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), sink: &m, mode: ioModeWrite, streamType: streamTypeBinary}
 		ok, err := PutByte(&vm, s, Integer(97), Success, nil).Force(context.Background())
 		assert.NoError(t, err)
 		assert.True(t, ok)
@@ -4690,9 +4686,8 @@ func TestPutByte(t *testing.T) {
 		m.On("Write", []byte{97}).Return(0, errors.New("")).Once()
 		defer m.AssertExpectations(t)
 
-		s := &Stream{sink: &m, mode: ioModeWrite, streamType: streamTypeBinary}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), sink: &m, mode: ioModeWrite, streamType: streamTypeBinary}
 		_, err := PutByte(&vm, s, Integer(97), Success, nil).Force(context.Background())
 		assert.Error(t, err)
 	})
@@ -4703,9 +4698,8 @@ func TestPutByte(t *testing.T) {
 		defer m.AssertExpectations(t)
 
 		foo := NewAtom("foo")
-		s := &Stream{sink: &m, mode: ioModeWrite, streamType: streamTypeBinary, alias: foo}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), sink: &m, mode: ioModeWrite, streamType: streamTypeBinary, alias: foo}
 		vm.streams.add(s)
 		ok, err := PutByte(&vm, NewAtom("foo"), Integer(97), Success, nil).Force(context.Background())
 		assert.NoError(t, err)
@@ -4720,21 +4714,17 @@ func TestPutByte(t *testing.T) {
 	})
 
 	t.Run("byt is a variable", func(t *testing.T) {
-		s := &Stream{sink: os.Stdout, mode: ioModeAppend}
-		s.streamType = streamTypeBinary
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), sink: os.Stdout, mode: ioModeAppend, streamType: streamTypeBinary}
 		ok, err := PutByte(&vm, s, vm.NewVariable(), Success, nil).Force(context.Background())
 		assert.Equal(t, InstantiationError(nil), err)
 		assert.False(t, ok)
 	})
 
 	t.Run("byt is neither a variable nor an byte", func(t *testing.T) {
-		s := &Stream{sink: os.Stdout, mode: ioModeAppend}
-		s.streamType = streamTypeBinary
-
 		t.Run("not even an integer", func(t *testing.T) {
 			var vm VM
+			s := &Stream{vm: &vm, id: vm.nextStreamID(), sink: os.Stdout, mode: ioModeAppend, streamType: streamTypeBinary}
 			ok, err := PutByte(&vm, s, NewAtom("byte"), Success, nil).Force(context.Background())
 			assert.Equal(t, typeError(validTypeByte, NewAtom("byte"), nil), err)
 			assert.False(t, ok)
@@ -4742,6 +4732,7 @@ func TestPutByte(t *testing.T) {
 
 		t.Run("integer", func(t *testing.T) {
 			var vm VM
+			s := &Stream{vm: &vm, id: vm.nextStreamID(), sink: os.Stdout, mode: ioModeAppend, streamType: streamTypeBinary}
 			ok, err := PutByte(&vm, s, Integer(256), Success, nil).Force(context.Background())
 			assert.Equal(t, typeError(validTypeByte, Integer(256), nil), err)
 			assert.False(t, ok)
@@ -4759,7 +4750,7 @@ func TestPutByte(t *testing.T) {
 		var vm VM
 		s := vm.NewVariable()
 		env := vm.NewEnv().
-			bind(s, &Stream{source: os.Stdin, mode: ioModeRead, streamType: streamTypeBinary})
+			bind(s, &Stream{vm: &vm, id: vm.nextStreamID(), source: os.Stdin, mode: ioModeRead, streamType: streamTypeBinary})
 
 		ok, err := PutByte(&vm, s, Integer(97), Success, env).Force(context.Background())
 		assert.Equal(t, permissionError(operationOutput, permissionTypeStream, s, env), err)
@@ -4770,7 +4761,7 @@ func TestPutByte(t *testing.T) {
 		var vm VM
 		s := vm.NewVariable()
 		env := vm.NewEnv().
-			bind(s, &Stream{sink: os.Stdout, mode: ioModeAppend})
+			bind(s, &Stream{vm: &vm, id: vm.nextStreamID(), sink: os.Stdout, mode: ioModeAppend})
 
 		ok, err := PutByte(&vm, s, Integer(97), Success, env).Force(context.Background())
 		assert.Equal(t, permissionError(operationOutput, permissionTypeTextStream, s, env), err)
@@ -4863,9 +4854,8 @@ func TestReadTerm(t *testing.T) {
 			assert.NoError(t, f.Close())
 		}()
 
-		s := &Stream{source: f, mode: ioModeRead}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead}
 		v := vm.NewVariable()
 
 		ok, err := ReadTerm(&vm, s, v, List(), func(env *Env) *Promise {
@@ -4884,9 +4874,8 @@ func TestReadTerm(t *testing.T) {
 		}()
 
 		foo := NewAtom("foo")
-		s := &Stream{source: f, mode: ioModeRead, alias: foo}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead, alias: foo}
 		v := vm.NewVariable()
 
 		vm.streams.add(s)
@@ -4905,9 +4894,8 @@ func TestReadTerm(t *testing.T) {
 			assert.NoError(t, f.Close())
 		}()
 
-		s := &Stream{source: f, mode: ioModeRead}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead}
 		v, singletons := vm.NewVariable(), vm.NewVariable()
 
 		ok, err := ReadTerm(&vm, s, v, List(&compound{
@@ -4941,9 +4929,8 @@ func TestReadTerm(t *testing.T) {
 			assert.NoError(t, f.Close())
 		}()
 
-		s := &Stream{source: f, mode: ioModeRead}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead}
 		v, variables := vm.NewVariable(), vm.NewVariable()
 
 		ok, err := ReadTerm(&vm, s, v, List(&compound{
@@ -4977,9 +4964,8 @@ func TestReadTerm(t *testing.T) {
 			assert.NoError(t, f.Close())
 		}()
 
-		s := &Stream{source: f, mode: ioModeRead}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead}
 		v, variableNames := vm.NewVariable(), vm.NewVariable()
 
 		ok, err := ReadTerm(&vm, s, v, List(&compound{
@@ -5022,9 +5008,8 @@ func TestReadTerm(t *testing.T) {
 			assert.NoError(t, f.Close())
 		}()
 
-		s := &Stream{source: f, mode: ioModeRead}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead}
 		v := vm.NewVariable()
 
 		ok, err := ReadTerm(&vm, s, v, List(), func(env *Env) *Promise {
@@ -5059,7 +5044,7 @@ func TestReadTerm(t *testing.T) {
 	t.Run("options is a partial list or a list with an element which is a variable", func(t *testing.T) {
 		t.Run("partial list", func(t *testing.T) {
 			var vm VM
-			ok, err := ReadTerm(&vm, &Stream{source: os.Stdin}, vm.NewVariable(), PartialList(
+			ok, err := ReadTerm(&vm, &Stream{vm: &vm, id: vm.nextStreamID(), source: os.Stdin}, vm.NewVariable(), PartialList(
 				vm.NewVariable(),
 				atomVariables.Apply(vm.NewVariable()),
 			), Success, nil).Force(context.Background())
@@ -5069,7 +5054,7 @@ func TestReadTerm(t *testing.T) {
 
 		t.Run("variable element", func(t *testing.T) {
 			var vm VM
-			ok, err := ReadTerm(&vm, &Stream{source: os.Stdin}, vm.NewVariable(), List(vm.NewVariable(), atomVariables.Apply(vm.NewVariable())), Success, nil).Force(context.Background())
+			ok, err := ReadTerm(&vm, &Stream{vm: &vm, id: vm.nextStreamID(), source: os.Stdin}, vm.NewVariable(), List(vm.NewVariable(), atomVariables.Apply(vm.NewVariable())), Success, nil).Force(context.Background())
 			assert.Equal(t, InstantiationError(nil), err)
 			assert.False(t, ok)
 		})
@@ -5084,7 +5069,7 @@ func TestReadTerm(t *testing.T) {
 
 	t.Run("options is neither a partial list nor a list", func(t *testing.T) {
 		var vm VM
-		ok, err := ReadTerm(&vm, &Stream{source: os.Stdin}, vm.NewVariable(), NewAtom("options"), Success, nil).Force(context.Background())
+		ok, err := ReadTerm(&vm, &Stream{vm: &vm, id: vm.nextStreamID(), source: os.Stdin}, vm.NewVariable(), NewAtom("options"), Success, nil).Force(context.Background())
 		assert.Equal(t, typeError(validTypeList, NewAtom("options"), nil), err)
 		assert.False(t, ok)
 	})
@@ -5092,7 +5077,7 @@ func TestReadTerm(t *testing.T) {
 	t.Run("an element E of the Options list is neither a variable nor a valid read-option", func(t *testing.T) {
 		for _, term := range []Term{atomUnknown, atomUnknown.Apply(NewAtom("option")), atomUnknown.Apply(NewAtom("option"), Integer(0))} {
 			var vm VM
-			ok, err := ReadTerm(&vm, &Stream{source: os.Stdin}, vm.NewVariable(), List(term), Success, nil).Force(context.Background())
+			ok, err := ReadTerm(&vm, &Stream{vm: &vm, id: vm.nextStreamID(), source: os.Stdin}, vm.NewVariable(), List(term), Success, nil).Force(context.Background())
 			assert.Equal(t, domainError(validDomainReadOption, term, nil), err)
 			assert.False(t, ok)
 		}
@@ -5109,7 +5094,7 @@ func TestReadTerm(t *testing.T) {
 		var vm VM
 		s := vm.NewVariable()
 		env := vm.NewEnv().
-			bind(s, &Stream{sink: os.Stdout, mode: ioModeAppend})
+			bind(s, &Stream{vm: &vm, id: vm.nextStreamID(), sink: os.Stdout, mode: ioModeAppend})
 
 		ok, err := ReadTerm(&vm, s, vm.NewVariable(), List(), Success, env).Force(context.Background())
 		assert.Equal(t, permissionError(operationInput, permissionTypeStream, s, env), err)
@@ -5117,10 +5102,8 @@ func TestReadTerm(t *testing.T) {
 	})
 
 	t.Run("streamOrAlias is associated with a binary stream", func(t *testing.T) {
-		stream := &Stream{source: os.Stdin}
-		stream.streamType = streamTypeBinary
-
 		var vm VM
+		stream := &Stream{vm: &vm, id: vm.nextStreamID(), source: os.Stdin, streamType: streamTypeBinary}
 		s := vm.NewVariable()
 		env := vm.NewEnv().
 			bind(s, stream)
@@ -5138,6 +5121,8 @@ func TestReadTerm(t *testing.T) {
 		s := vm.NewVariable()
 		env := vm.NewEnv().
 			bind(s, &Stream{
+				vm:          &vm,
+				id:          vm.nextStreamID(),
 				source:      &m,
 				mode:        ioModeRead,
 				eofAction:   eofActionError,
@@ -5157,9 +5142,8 @@ func TestReadTerm(t *testing.T) {
 				assert.NoError(t, f.Close())
 			}()
 
-			s := &Stream{source: f, mode: ioModeRead}
-
 			var vm VM
+			s := &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead}
 			ok, err := ReadTerm(&vm, s, vm.NewVariable(), List(), Success, nil).Force(context.Background())
 			assert.Equal(t, syntaxError(unexpectedTokenError{actual: Token{kind: tokenLetterDigit, val: "bar"}}, nil), err)
 			assert.False(t, ok)
@@ -5172,9 +5156,8 @@ func TestReadTerm(t *testing.T) {
 				assert.NoError(t, f.Close())
 			}()
 
-			s := &Stream{source: f, mode: ioModeRead}
-
 			var vm VM
+			s := &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead}
 			out := vm.NewVariable()
 			ok, err := ReadTerm(&vm, s, out, List(), func(env *Env) *Promise {
 				assert.Equal(t, atomEndOfFile, env.Resolve(out))
@@ -5192,9 +5175,8 @@ func TestReadTerm(t *testing.T) {
 			assert.NoError(t, f.Close())
 		}()
 
-		s := &Stream{source: f, mode: ioModeRead}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead}
 		ok, err := ReadTerm(&vm, s, vm.NewVariable(), List(), Success, nil).Force(context.Background())
 		assert.Equal(t, syntaxError(unexpectedTokenError{actual: Token{kind: tokenGraphic, val: "="}}, nil), err)
 		assert.False(t, ok)
@@ -5209,9 +5191,8 @@ func TestGetByte(t *testing.T) {
 			assert.NoError(t, f.Close())
 		}()
 
-		s := &Stream{source: f, mode: ioModeRead, streamType: streamTypeBinary}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead, streamType: streamTypeBinary}
 		v := vm.NewVariable()
 
 		ok, err := GetByte(&vm, s, v, func(env *Env) *Promise {
@@ -5230,9 +5211,8 @@ func TestGetByte(t *testing.T) {
 		}()
 
 		foo := NewAtom("foo")
-		s := &Stream{source: f, mode: ioModeRead, streamType: streamTypeBinary, alias: foo}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead, streamType: streamTypeBinary, alias: foo}
 		v := vm.NewVariable()
 
 		vm.streams.add(s)
@@ -5251,9 +5231,8 @@ func TestGetByte(t *testing.T) {
 			assert.NoError(t, f.Close())
 		}()
 
-		s := &Stream{source: f, mode: ioModeRead, streamType: streamTypeBinary}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead, streamType: streamTypeBinary}
 		v := vm.NewVariable()
 
 		ok, err := GetByte(&vm, s, v, func(env *Env) *Promise {
@@ -5269,10 +5248,8 @@ func TestGetByte(t *testing.T) {
 		m.On("Read", mock.Anything).Return(0, errors.New("failed")).Once()
 		defer m.AssertExpectations(t)
 
-		s := &Stream{source: &m, mode: ioModeRead, streamType: streamTypeBinary}
-
 		var vm VM
-
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: &m, mode: ioModeRead, streamType: streamTypeBinary}
 		v := vm.NewVariable()
 		_, err := GetByte(&vm, s, v, Success, nil).Force(context.Background())
 		assert.Error(t, err)
@@ -5286,11 +5263,9 @@ func TestGetByte(t *testing.T) {
 	})
 
 	t.Run("inByte is neither a variable nor an in-byte", func(t *testing.T) {
-		s := &Stream{source: os.Stdin}
-		s.streamType = streamTypeBinary
-
 		t.Run("not even an integer", func(t *testing.T) {
 			var vm VM
+			s := &Stream{vm: &vm, id: vm.nextStreamID(), source: os.Stdin, streamType: streamTypeBinary}
 			ok, err := GetByte(&vm, s, NewAtom("inByte"), Success, nil).Force(context.Background())
 			assert.Equal(t, typeError(validTypeInByte, NewAtom("inByte"), nil), err)
 			assert.False(t, ok)
@@ -5298,6 +5273,7 @@ func TestGetByte(t *testing.T) {
 
 		t.Run("integer", func(t *testing.T) {
 			var vm VM
+			s := &Stream{vm: &vm, id: vm.nextStreamID(), source: os.Stdin, streamType: streamTypeBinary}
 			ok, err := GetByte(&vm, s, Integer(256), Success, nil).Force(context.Background())
 			assert.Equal(t, typeError(validTypeInByte, Integer(256), nil), err)
 			assert.False(t, ok)
@@ -5322,7 +5298,7 @@ func TestGetByte(t *testing.T) {
 		var vm VM
 		streamOrAlias := vm.NewVariable()
 		env := vm.NewEnv().
-			bind(streamOrAlias, &Stream{sink: os.Stdout, mode: ioModeAppend})
+			bind(streamOrAlias, &Stream{vm: &vm, id: vm.nextStreamID(), sink: os.Stdout, mode: ioModeAppend})
 
 		ok, err := GetByte(&vm, streamOrAlias, vm.NewVariable(), Success, env).Force(context.Background())
 		assert.Equal(t, permissionError(operationInput, permissionTypeStream, streamOrAlias, env), err)
@@ -5333,7 +5309,7 @@ func TestGetByte(t *testing.T) {
 		var vm VM
 		streamOrAlias := vm.NewVariable()
 		env := vm.NewEnv().
-			bind(streamOrAlias, &Stream{source: os.Stdin})
+			bind(streamOrAlias, &Stream{vm: &vm, id: vm.nextStreamID(), source: os.Stdin})
 
 		ok, err := GetByte(&vm, streamOrAlias, vm.NewVariable(), Success, env).Force(context.Background())
 		assert.Equal(t, permissionError(operationInput, permissionTypeTextStream, streamOrAlias, env), err)
@@ -5348,6 +5324,8 @@ func TestGetByte(t *testing.T) {
 		streamOrAlias := vm.NewVariable()
 		env := vm.NewEnv().
 			bind(streamOrAlias, &Stream{
+				vm:          &vm,
+				id:          vm.nextStreamID(),
 				source:      &m,
 				mode:        ioModeRead,
 				streamType:  streamTypeBinary,
@@ -5369,9 +5347,8 @@ func TestGetChar(t *testing.T) {
 			assert.NoError(t, f.Close())
 		}()
 
-		s := &Stream{source: f, mode: ioModeRead}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead}
 		v := vm.NewVariable()
 
 		ok, err := GetChar(&vm, s, v, func(env *Env) *Promise {
@@ -5393,7 +5370,7 @@ func TestGetChar(t *testing.T) {
 		v := vm.NewVariable()
 
 		foo := NewAtom("foo")
-		vm.streams.add(&Stream{source: f, mode: ioModeRead, alias: foo})
+		vm.streams.add(&Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead, alias: foo})
 		ok, err := GetChar(&vm, foo, v, func(env *Env) *Promise {
 			assert.Equal(t, NewAtom("😀"), env.Resolve(v))
 			return Bool(true)
@@ -5409,9 +5386,8 @@ func TestGetChar(t *testing.T) {
 			assert.NoError(t, f.Close())
 		}()
 
-		s := &Stream{source: f, mode: ioModeRead}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead}
 		v := vm.NewVariable()
 
 		ok, err := GetChar(&vm, s, v, func(env *Env) *Promise {
@@ -5430,7 +5406,7 @@ func TestGetChar(t *testing.T) {
 		var vm VM
 		v := vm.NewVariable()
 
-		ok, err := GetChar(&vm, &Stream{source: &m, mode: ioModeRead}, v, Success, nil).Force(context.Background())
+		ok, err := GetChar(&vm, &Stream{vm: &vm, id: vm.nextStreamID(), source: &m, mode: ioModeRead}, v, Success, nil).Force(context.Background())
 		assert.Equal(t, errors.New("failed"), err)
 		assert.False(t, ok)
 	})
@@ -5445,14 +5421,14 @@ func TestGetChar(t *testing.T) {
 	t.Run("char is neither a variable nor an in-character", func(t *testing.T) {
 		t.Run("not even an atom", func(t *testing.T) {
 			var vm VM
-			ok, err := GetChar(&vm, &Stream{source: os.Stdin}, Integer(0), Success, nil).Force(context.Background())
+			ok, err := GetChar(&vm, &Stream{vm: &vm, id: vm.nextStreamID(), source: os.Stdin}, Integer(0), Success, nil).Force(context.Background())
 			assert.Equal(t, typeError(validTypeInCharacter, Integer(0), nil), err)
 			assert.False(t, ok)
 		})
 
 		t.Run("atom", func(t *testing.T) {
 			var vm VM
-			ok, err := GetChar(&vm, &Stream{source: os.Stdin}, NewAtom("ab"), Success, nil).Force(context.Background())
+			ok, err := GetChar(&vm, &Stream{vm: &vm, id: vm.nextStreamID(), source: os.Stdin}, NewAtom("ab"), Success, nil).Force(context.Background())
 			assert.Equal(t, typeError(validTypeInCharacter, NewAtom("ab"), nil), err)
 			assert.False(t, ok)
 		})
@@ -5469,7 +5445,7 @@ func TestGetChar(t *testing.T) {
 		var vm VM
 		streamOrAlias := vm.NewVariable()
 		env := vm.NewEnv().
-			bind(streamOrAlias, &Stream{sink: os.Stdout, mode: ioModeAppend})
+			bind(streamOrAlias, &Stream{vm: &vm, id: vm.nextStreamID(), sink: os.Stdout, mode: ioModeAppend})
 
 		ok, err := GetChar(&vm, streamOrAlias, vm.NewVariable(), Success, env).Force(context.Background())
 		assert.Equal(t, permissionError(operationInput, permissionTypeStream, streamOrAlias, env), err)
@@ -5477,10 +5453,8 @@ func TestGetChar(t *testing.T) {
 	})
 
 	t.Run("streamOrAlias is associated with a binary stream", func(t *testing.T) {
-		s := &Stream{source: os.Stdin}
-		s.streamType = streamTypeBinary
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: os.Stdin, streamType: streamTypeBinary}
 		streamOrAlias := vm.NewVariable()
 		env := vm.NewEnv().
 			bind(streamOrAlias, s)
@@ -5498,6 +5472,8 @@ func TestGetChar(t *testing.T) {
 		streamOrAlias := vm.NewVariable()
 		env := vm.NewEnv().
 			bind(streamOrAlias, &Stream{
+				vm:          &vm,
+				id:          vm.nextStreamID(),
 				source:      &m,
 				mode:        ioModeRead,
 				eofAction:   eofActionError,
@@ -5519,7 +5495,7 @@ func TestGetChar(t *testing.T) {
 		var vm VM
 		streamOrAlias := vm.NewVariable()
 		env := vm.NewEnv().
-			bind(streamOrAlias, &Stream{source: f, mode: ioModeRead})
+			bind(streamOrAlias, &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead})
 
 		ok, err := GetChar(&vm, streamOrAlias, vm.NewVariable(), Success, env).Force(context.Background())
 		assert.Equal(t, representationError(flagCharacter, nil), err)
@@ -5535,9 +5511,8 @@ func TestPeekByte(t *testing.T) {
 			assert.NoError(t, f.Close())
 		}()
 
-		s := &Stream{source: f, mode: ioModeRead, streamType: streamTypeBinary}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead, streamType: streamTypeBinary}
 		v := vm.NewVariable()
 
 		ok, err := PeekByte(&vm, s, v, func(env *Env) *Promise {
@@ -5563,7 +5538,7 @@ func TestPeekByte(t *testing.T) {
 		v := vm.NewVariable()
 
 		foo := NewAtom("foo")
-		vm.streams.add(&Stream{source: f, mode: ioModeRead, streamType: streamTypeBinary, alias: foo})
+		vm.streams.add(&Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead, streamType: streamTypeBinary, alias: foo})
 		ok, err := PeekByte(&vm, NewAtom("foo"), v, func(env *Env) *Promise {
 			assert.Equal(t, Integer(97), env.Resolve(v))
 			return Bool(true)
@@ -5579,9 +5554,8 @@ func TestPeekByte(t *testing.T) {
 			assert.NoError(t, f.Close())
 		}()
 
-		s := &Stream{source: f, mode: ioModeRead, streamType: streamTypeBinary}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead, streamType: streamTypeBinary}
 		v := vm.NewVariable()
 
 		ok, err := PeekByte(&vm, s, v, func(env *Env) *Promise {
@@ -5597,10 +5571,8 @@ func TestPeekByte(t *testing.T) {
 		m.On("Read", mock.Anything).Return(0, errors.New("failed")).Once()
 		defer m.AssertExpectations(t)
 
-		s := &Stream{source: &m, mode: ioModeRead}
-		s.streamType = streamTypeBinary
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: &m, mode: ioModeRead, streamType: streamTypeBinary}
 		v := vm.NewVariable()
 
 		ok, err := PeekByte(&vm, s, v, Success, nil).Force(context.Background())
@@ -5616,11 +5588,9 @@ func TestPeekByte(t *testing.T) {
 	})
 
 	t.Run("inByte is neither a variable nor an in-byte", func(t *testing.T) {
-		s := &Stream{source: os.Stdin}
-		s.streamType = streamTypeBinary
-
 		t.Run("not even an integer", func(t *testing.T) {
 			var vm VM
+			s := &Stream{vm: &vm, id: vm.nextStreamID(), source: os.Stdin, streamType: streamTypeBinary}
 			ok, err := PeekByte(&vm, s, NewAtom("byte"), Success, nil).Force(context.Background())
 			assert.Equal(t, typeError(validTypeInByte, NewAtom("byte"), nil), err)
 			assert.False(t, ok)
@@ -5628,6 +5598,7 @@ func TestPeekByte(t *testing.T) {
 
 		t.Run("integer", func(t *testing.T) {
 			var vm VM
+			s := &Stream{vm: &vm, id: vm.nextStreamID(), source: os.Stdin, streamType: streamTypeBinary}
 			ok, err := PeekByte(&vm, s, Integer(256), Success, nil).Force(context.Background())
 			assert.Equal(t, typeError(validTypeInByte, Integer(256), nil), err)
 			assert.False(t, ok)
@@ -5645,7 +5616,7 @@ func TestPeekByte(t *testing.T) {
 		var vm VM
 		streamOrAlias := vm.NewVariable()
 		env := vm.NewEnv().
-			bind(streamOrAlias, &Stream{sink: os.Stdout, mode: ioModeAppend})
+			bind(streamOrAlias, &Stream{vm: &vm, id: vm.nextStreamID(), sink: os.Stdout, mode: ioModeAppend})
 
 		ok, err := PeekByte(&vm, streamOrAlias, vm.NewVariable(), Success, env).Force(context.Background())
 		assert.Equal(t, permissionError(operationInput, permissionTypeStream, streamOrAlias, env), err)
@@ -5656,7 +5627,7 @@ func TestPeekByte(t *testing.T) {
 		var vm VM
 		streamOrAlias := vm.NewVariable()
 		env := vm.NewEnv().
-			bind(streamOrAlias, &Stream{source: os.Stdin})
+			bind(streamOrAlias, &Stream{vm: &vm, id: vm.nextStreamID(), source: os.Stdin})
 
 		ok, err := PeekByte(&vm, streamOrAlias, vm.NewVariable(), Success, env).Force(context.Background())
 		assert.Equal(t, permissionError(operationInput, permissionTypeTextStream, streamOrAlias, env), err)
@@ -5671,6 +5642,8 @@ func TestPeekByte(t *testing.T) {
 		streamOrAlias := vm.NewVariable()
 		env := vm.NewEnv().
 			bind(streamOrAlias, &Stream{
+				vm:          &vm,
+				id:          vm.nextStreamID(),
 				source:      &m,
 				mode:        ioModeRead,
 				streamType:  streamTypeBinary,
@@ -5692,9 +5665,8 @@ func TestPeekChar(t *testing.T) {
 			assert.NoError(t, f.Close())
 		}()
 
-		s := &Stream{source: f, mode: ioModeRead}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead}
 		v := vm.NewVariable()
 
 		ok, err := PeekChar(&vm, s, v, func(env *Env) *Promise {
@@ -5723,7 +5695,7 @@ func TestPeekChar(t *testing.T) {
 		v := vm.NewVariable()
 
 		foo := NewAtom("foo")
-		vm.streams.add(&Stream{source: f, mode: ioModeRead, alias: foo})
+		vm.streams.add(&Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead, alias: foo})
 		ok, err := PeekChar(&vm, foo, v, func(env *Env) *Promise {
 			assert.Equal(t, NewAtom("😀"), env.Resolve(v))
 			return Bool(true)
@@ -5739,9 +5711,8 @@ func TestPeekChar(t *testing.T) {
 			assert.NoError(t, f.Close())
 		}()
 
-		s := &Stream{source: f, mode: ioModeRead}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead}
 		v := vm.NewVariable()
 
 		ok, err := PeekChar(&vm, s, v, func(env *Env) *Promise {
@@ -5760,7 +5731,7 @@ func TestPeekChar(t *testing.T) {
 		var vm VM
 		v := vm.NewVariable()
 
-		ok, err := PeekChar(&vm, &Stream{source: &m, mode: ioModeRead}, v, Success, nil).Force(context.Background())
+		ok, err := PeekChar(&vm, &Stream{vm: &vm, id: vm.nextStreamID(), source: &m, mode: ioModeRead}, v, Success, nil).Force(context.Background())
 		assert.Equal(t, errors.New("failed"), err)
 		assert.False(t, ok)
 	})
@@ -5775,14 +5746,14 @@ func TestPeekChar(t *testing.T) {
 	t.Run("char is neither a variable nor an in-character", func(t *testing.T) {
 		t.Run("not even an atom", func(t *testing.T) {
 			var vm VM
-			ok, err := PeekChar(&vm, &Stream{source: os.Stdin}, Integer(0), Success, nil).Force(context.Background())
+			ok, err := PeekChar(&vm, &Stream{vm: &vm, id: vm.nextStreamID(), source: os.Stdin}, Integer(0), Success, nil).Force(context.Background())
 			assert.Equal(t, typeError(validTypeInCharacter, Integer(0), nil), err)
 			assert.False(t, ok)
 		})
 
 		t.Run("atom", func(t *testing.T) {
 			var vm VM
-			ok, err := PeekChar(&vm, &Stream{source: os.Stdin}, NewAtom("ab"), Success, nil).Force(context.Background())
+			ok, err := PeekChar(&vm, &Stream{vm: &vm, id: vm.nextStreamID(), source: os.Stdin}, NewAtom("ab"), Success, nil).Force(context.Background())
 			assert.Equal(t, typeError(validTypeInCharacter, NewAtom("ab"), nil), err)
 			assert.False(t, ok)
 		})
@@ -5799,7 +5770,7 @@ func TestPeekChar(t *testing.T) {
 		var vm VM
 		streamOrAlias := vm.NewVariable()
 		env := vm.NewEnv().
-			bind(streamOrAlias, &Stream{sink: os.Stdout, mode: ioModeAppend})
+			bind(streamOrAlias, &Stream{vm: &vm, id: vm.nextStreamID(), sink: os.Stdout, mode: ioModeAppend})
 
 		ok, err := PeekChar(&vm, streamOrAlias, vm.NewVariable(), Success, env).Force(context.Background())
 		assert.Equal(t, permissionError(operationInput, permissionTypeStream, streamOrAlias, env), err)
@@ -5807,10 +5778,8 @@ func TestPeekChar(t *testing.T) {
 	})
 
 	t.Run("streamOrAlias is associated with a binary stream", func(t *testing.T) {
-		s := &Stream{source: os.Stdin}
-		s.streamType = streamTypeBinary
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: os.Stdin, streamType: streamTypeBinary}
 		streamOrAlias := vm.NewVariable()
 		env := vm.NewEnv().
 			bind(streamOrAlias, s)
@@ -5828,6 +5797,8 @@ func TestPeekChar(t *testing.T) {
 		streamOrAlias := vm.NewVariable()
 		env := vm.NewEnv().
 			bind(streamOrAlias, &Stream{
+				vm:          &vm,
+				id:          vm.nextStreamID(),
 				source:      &m,
 				eofAction:   eofActionError,
 				endOfStream: endOfStreamPast,
@@ -5848,7 +5819,7 @@ func TestPeekChar(t *testing.T) {
 		var vm VM
 		streamOrAlias := vm.NewVariable()
 		env := vm.NewEnv().
-			bind(streamOrAlias, &Stream{source: f, mode: ioModeRead})
+			bind(streamOrAlias, &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead})
 
 		ok, err := PeekChar(&vm, streamOrAlias, vm.NewVariable(), Success, env).Force(context.Background())
 		assert.Equal(t, representationError(flagCharacter, nil), err)
@@ -6616,13 +6587,12 @@ func TestStreamProperty(t *testing.T) {
 		assert.NoError(t, f.Close())
 	}()
 
-	ss := []*Stream{
-		{source: f, mode: ioModeRead, alias: NewAtom("a"), reposition: true},
-		{sink: f, mode: ioModeWrite, alias: NewAtom("b"), reposition: false},
-		{sink: f, mode: ioModeAppend, alias: NewAtom("c"), reposition: true},
-	}
-
 	var vm VM
+	ss := []*Stream{
+		{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead, alias: NewAtom("a"), reposition: true},
+		{vm: &vm, id: vm.nextStreamID(), sink: f, mode: ioModeWrite, alias: NewAtom("b"), reposition: false},
+		{vm: &vm, id: vm.nextStreamID(), sink: f, mode: ioModeAppend, alias: NewAtom("c"), reposition: true},
+	}
 	for _, s := range ss {
 		vm.streams.add(s)
 	}
@@ -6638,7 +6608,7 @@ func TestStreamProperty(t *testing.T) {
 	}{
 		{
 			title:    "stream",
-			stream:   &Stream{source: f, mode: ioModeRead, alias: NewAtom("null"), reposition: true},
+			stream:   &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead, alias: NewAtom("null"), reposition: true},
 			property: p,
 			ok:       true,
 			env: []map[Variable]Term{
@@ -6710,6 +6680,85 @@ func TestStreamProperty(t *testing.T) {
 	}
 }
 
+func TestBuiltinRejectsForeignStreams(t *testing.T) {
+	tests := []struct {
+		title string
+		alias bool
+		call  func(*VM, Term) (bool, error)
+	}{
+		{title: "set_input", call: func(vm *VM, stream Term) (bool, error) {
+			return SetInput(vm, stream, Success, nil).Force(context.Background())
+		}},
+		{title: "set_input alias", alias: true, call: func(vm *VM, stream Term) (bool, error) {
+			return SetInput(vm, stream, Success, nil).Force(context.Background())
+		}},
+		{title: "set_output", call: func(vm *VM, stream Term) (bool, error) {
+			return SetOutput(vm, stream, Success, nil).Force(context.Background())
+		}},
+		{title: "close", call: func(vm *VM, stream Term) (bool, error) {
+			return Close(vm, stream, List(), Success, nil).Force(context.Background())
+		}},
+		{title: "stream_property", call: func(vm *VM, stream Term) (bool, error) {
+			return StreamProperty(vm, stream, atomInput, Success, nil).Force(context.Background())
+		}},
+		{title: "write_term", call: func(vm *VM, stream Term) (bool, error) {
+			return WriteTerm(vm, stream, NewAtom("foo"), List(), Success, nil).Force(context.Background())
+		}},
+		{title: "read_term", call: func(vm *VM, stream Term) (bool, error) {
+			return ReadTerm(vm, stream, vm.NewVariable(), List(), Success, nil).Force(context.Background())
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.title, func(t *testing.T) {
+			var vm, owner VM
+			input := vm.NewInputTextStream(nil)
+			output := vm.NewOutputTextStream(nil)
+			vm.input, vm.output = input, output
+
+			source := bytes.NewBufferString("foo.")
+			var sink bytes.Buffer
+			closer := &stubFile{}
+			alias := NewAtom("foreign")
+			foreign := &Stream{
+				vm:     &owner,
+				id:     owner.nextStreamID(),
+				source: source,
+				sink:   &sink,
+				closer: closer,
+				mode:   ioModeReadWrite,
+				alias:  alias,
+			}
+			owner.streams.add(foreign)
+
+			stream := Term(foreign)
+			if tt.alias {
+				vm.streams.add(foreign)
+				stream = alias
+			}
+
+			ok, err := tt.call(&vm, stream)
+			assert.False(t, ok)
+			assert.Same(t, ErrStreamScope, err)
+			assert.Same(t, input, vm.input)
+			assert.Same(t, output, vm.output)
+			assert.Same(t, &owner, foreign.vm)
+			assert.Equal(t, "foo.", source.String())
+			assert.Empty(t, sink.String())
+			assert.False(t, closer.closed)
+
+			registered, found := owner.streams.lookup(alias)
+			assert.True(t, found)
+			assert.Same(t, foreign, registered)
+			if tt.alias {
+				registered, found = vm.streams.lookup(alias)
+				assert.True(t, found)
+				assert.Same(t, foreign, registered)
+			}
+		})
+	}
+}
+
 func TestSetStreamPosition(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		f, err := os.Open("testdata/empty.txt")
@@ -6718,9 +6767,8 @@ func TestSetStreamPosition(t *testing.T) {
 			assert.NoError(t, f.Close())
 		}()
 
-		s := &Stream{source: f, mode: ioModeRead, reposition: true}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead, reposition: true}
 		ok, err := SetStreamPosition(&vm, s, Integer(0), Success, nil).Force(context.Background())
 		assert.NoError(t, err)
 		assert.True(t, ok)
@@ -6731,9 +6779,8 @@ func TestSetStreamPosition(t *testing.T) {
 		m.On("Seek", mock.Anything, mock.Anything).Return(int64(0), errors.New("failed")).Once()
 		defer m.AssertExpectations(t)
 
-		s := &Stream{source: &m, mode: ioModeRead, reposition: true}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: &m, mode: ioModeRead, reposition: true}
 		ok, err := SetStreamPosition(&vm, s, Integer(0), Success, nil).Force(context.Background())
 		assert.Error(t, err)
 		assert.False(t, ok)
@@ -6753,9 +6800,8 @@ func TestSetStreamPosition(t *testing.T) {
 			assert.NoError(t, f.Close())
 		}()
 
-		s := &Stream{source: f, mode: ioModeRead, reposition: true}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead, reposition: true}
 		ok, err := SetStreamPosition(&vm, s, vm.NewVariable(), Success, nil).Force(context.Background())
 		assert.Equal(t, InstantiationError(nil), err)
 		assert.False(t, ok)
@@ -6779,9 +6825,8 @@ func TestSetStreamPosition(t *testing.T) {
 					assert.NoError(t, f.Close())
 				}()
 
-				s := &Stream{source: f, mode: ioModeRead, reposition: true}
-
 				var vm VM
+				s := &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead, reposition: true}
 				ok, err := SetStreamPosition(&vm, s, tt.position, Success, nil).Force(context.Background())
 				assert.Equal(t, typeError(validTypeInteger, tt.position, nil), err)
 				assert.False(t, ok)
@@ -6804,11 +6849,11 @@ func TestSetStreamPosition(t *testing.T) {
 	})
 
 	t.Run("streamOrAlias has stream property reposition(false)", func(t *testing.T) {
-		stream := &Stream{source: os.Stdin}
+		var vm VM
+		stream := &Stream{vm: &vm, id: vm.nextStreamID(), source: os.Stdin}
 
 		assert.False(t, stream.reposition)
 
-		var vm VM
 		s := vm.NewVariable()
 		env := vm.NewEnv().
 			bind(s, stream)
@@ -6825,9 +6870,8 @@ func TestSetStreamPosition(t *testing.T) {
 			assert.NoError(t, f.Close())
 		}()
 
-		s := &Stream{source: f, mode: ioModeRead, reposition: false}
-
 		var vm VM
+		s := &Stream{vm: &vm, id: vm.nextStreamID(), source: f, mode: ioModeRead, reposition: false}
 		ok, err := SetStreamPosition(&vm, s, Integer(0), Success, nil).Force(context.Background())
 		assert.Equal(t, permissionError(operationReposition, permissionTypeStream, s, nil), err)
 		assert.False(t, ok)
