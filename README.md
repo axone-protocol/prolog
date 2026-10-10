@@ -45,7 +45,40 @@ The following customizations have been made to adapt the original `ichiban/prolo
 - Added support for the `Dict` term.
 - Added support for `read_write` mode for bidirectional file I/O, enabling half-duplex transactional devices in the host's VFS.
 - `halt/0` and `halt/1` stop Prolog execution by signaling a VM halt (the host decides how to handle exit codes).
-- Added VM metering capability to track and limit resource consumption across multiple dimensions (instructions, unifications, list processing, term copying, arithmetic evaluation, and structural comparisons).
+- Added VM metering capability to track and limit resource consumption across multiple dimensions (instructions, unifications, list processing, term copying, arithmetic evaluation, structural comparisons, and logical term-cell reservations).
+
+## VM metering
+
+`VM.InstallMeter` lets the host account for and limit VM resources. The VM reports instructions, unification steps, list traversal, copied nodes, arithmetic nodes, structural comparisons, and logical term-cell reservations. Install a meter before parsing or compiling untrusted input, including `Interpreter.Query` and `Interpreter.Exec`.
+
+### Logical term-cell quotas
+
+`engine.MeterTermCell` charges term slots before VM-controlled construction and growth: parsing and placeholders, compilation, execution registers, term copies, collectors, DCG expansion, and dictionary operations. Known-size buffers charge their reserved slots; incremental collectors charge new logical entries before appending. Slice views and filling already reserved slots do not charge again. Go's implicit slice overcapacity is not part of the cost.
+
+Install a host-owned quota:
+
+```go
+var vm engine.VM
+const limit uint64 = 1_000_000
+var used uint64
+
+vm.InstallMeter(func(kind engine.MeterKind, units uint64) engine.Term {
+	if kind != engine.MeterTermCell {
+		return nil
+	}
+	if units > limit-used {
+		return engine.NewAtom("resource_error").Apply(engine.NewAtom("memory"))
+	}
+	used += units
+	return nil
+})
+```
+
+Use a separate counter for each VM's budget lifecycle. Accepted charges are cumulative: backtracking, rejected syntax, and garbage collection do not refund them. `MeterCopyNode` measures copying work and `MeterListCell` measures traversal; neither replaces the term-cell quota. The existing metering schedule for other resource kinds is unchanged.
+
+Allocation sizes and derived lengths are checked before conversion or allocation. A quota refusal returns `error(resource_error(memory), Context)` through execution or the synchronous parsing/compilation API; constructing this exception does not consume the exhausted quota.
+
+This is **not a physical memory limit or an allocator**. No finite term-cell quota is enforced unless the installed callback handles `MeterTermCell`. Maps, closures, bytecode, strings, runtime overhead, and host-side construction through APIs such as `Atom.Apply`, `List`, and `NewDict` remain outside this quota. Intrinsically fixed small buffers, such as stream properties, remain unmetered.
 
 ## VM ownership
 
