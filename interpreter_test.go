@@ -315,13 +315,10 @@ func TestInterpreter_MeterException(t *testing.T) {
 func TestNew_variableNames(t *testing.T) {
 	// http://www.complang.tuwien.ac.at/ulrich/iso-prolog/variable_names
 	// I wanted to put this under TestNew() as t.Run("variable_names", ...) but GoLand didn't recognize it as a table-driven test.
+	t.Chdir(t.TempDir())
 
 	var out bytes.Buffer
 	p := New(nil, &out)
-
-	defer func() {
-		_ = os.Remove("f") // Some test cases open a file 'f'.
-	}()
 
 	tests := []struct {
 		name     string
