@@ -3,7 +3,6 @@ package engine
 import (
 	"fmt"
 	"math/rand"
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,7 +25,8 @@ func TestEnv_Lookup(t *testing.T) {
 		vars[i] = vm.NewVariable()
 	}
 
-	rand.Shuffle(len(vars), func(i, j int) {
+	random := rand.New(rand.NewSource(0))
+	random.Shuffle(len(vars), func(i, j int) {
 		vars[i], vars[j] = vars[j], vars[i]
 	})
 
@@ -35,7 +35,7 @@ func TestEnv_Lookup(t *testing.T) {
 		env = env.bind(v, v)
 	}
 
-	rand.Shuffle(len(vars), func(i, j int) {
+	random.Shuffle(len(vars), func(i, j int) {
 		vars[i], vars[j] = vars[j], vars[i]
 	})
 
@@ -44,75 +44,9 @@ func TestEnv_Lookup(t *testing.T) {
 			w, ok := env.lookup(v)
 			assert.True(t, ok)
 			assert.Equal(t, v, w)
+			assert.True(t, env.Resolve(v) == v)
 		})
 	}
-}
-
-func TestEnv_BindPreservesMeter(t *testing.T) {
-	var vm VM
-	m := func(kind MeterKind, units uint64) Term {
-		return nil
-	}
-
-	env := vm.NewEnv().withMeter(m)
-	for range 8 {
-		v := vm.NewVariable()
-		env = env.bind(v, v)
-	}
-
-	var walk func(*Env)
-	walk = func(e *Env) {
-		if e == nil {
-			return
-		}
-		assert.Equal(t, reflect.ValueOf(m).Pointer(), reflect.ValueOf(e.meter).Pointer())
-		walk(e.left)
-		walk(e.right)
-	}
-
-	walk(env)
-}
-
-func TestEnv_WithMeter(t *testing.T) {
-	t.Run("nil env and nil meter", func(t *testing.T) {
-		var env *Env
-		assert.Nil(t, env.withMeter(nil))
-	})
-
-	t.Run("nil env and meter", func(t *testing.T) {
-		m := func(kind MeterKind, units uint64) Term {
-			return nil
-		}
-
-		var env *Env
-		metered := env.withMeter(m)
-		if assert.NotNil(t, metered) {
-			assert.Equal(t, rootContext, metered.Resolve(varContext))
-			assert.Equal(t, reflect.ValueOf(m).Pointer(), reflect.ValueOf(metered.meter).Pointer())
-		}
-	})
-}
-
-func TestEnv_WithoutMeter(t *testing.T) {
-	t.Run("nil env", func(t *testing.T) {
-		var env *Env
-		assert.Nil(t, env.withoutMeter())
-	})
-
-	t.Run("clears meter", func(t *testing.T) {
-		var vm VM
-		m := func(kind MeterKind, units uint64) Term {
-			return nil
-		}
-
-		env := vm.NewEnv().withMeter(m)
-		cleared := env.withoutMeter()
-		if assert.NotNil(t, cleared) {
-			assert.Nil(t, cleared.meter)
-			assert.Equal(t, env.key, cleared.key)
-			assert.Equal(t, env.value, cleared.value)
-		}
-	})
 }
 
 func TestEnv_Simplify(t *testing.T) {
@@ -145,4 +79,48 @@ func TestContains(t *testing.T) {
 	assert.True(t, contains(&compound{functor: NewAtom("a")}, NewAtom("a"), env))
 	assert.True(t, contains(&compound{functor: NewAtom("f"), args: []Term{NewAtom("a")}}, NewAtom("a"), env))
 	assert.False(t, contains(&compound{functor: NewAtom("f")}, NewAtom("a"), env))
+}
+
+func TestEnv_MeteredBaseAdoptsScopeWithoutMutation(t *testing.T) {
+	var vm, other VM
+	x, y := vm.NewVariable(), other.NewVariable()
+	var charged uint64
+	var empty *Env
+	base := empty.withMeter(func(kind MeterKind, units uint64) Term {
+		if kind == MeterUnifyStep {
+			charged += units
+		}
+		return nil
+	})
+
+	bound := base.bind(x, NewAtom("a"))
+	fork, ok := base.Unify(y, NewAtom("b"))
+	assert.True(t, ok)
+	assert.Equal(t, NewAtom("a"), bound.Resolve(x))
+	assert.Equal(t, NewAtom("b"), fork.Resolve(y))
+	assert.Equal(t, x, base.Resolve(x))
+	assert.Equal(t, y, base.Resolve(y))
+	assert.Equal(t, rootContext, bound.Resolve(varContext))
+	assert.Equal(t, uint64(1), charged)
+
+	_, ok = bound.Unify(x, NewAtom("a"))
+	assert.True(t, ok)
+	assert.Equal(t, uint64(2), charged)
+	assert.PanicsWithValue(t, ErrVariableScope, func() { bound.Resolve(y) })
+	assert.PanicsWithValue(t, ErrVariableScope, func() { bound.bind(y, NewAtom("wrong")) })
+	assert.Equal(t, NewAtom("a"), bound.Resolve(x))
+
+	unmetered := bound.withoutMeter()
+	_, ok = unmetered.Unify(x, NewAtom("a"))
+	assert.True(t, ok)
+	assert.Equal(t, uint64(2), charged)
+	_, ok = bound.Unify(x, NewAtom("a"))
+	assert.True(t, ok)
+	assert.Equal(t, uint64(3), charged)
+}
+
+func TestEnv_UnifyDoesNotCoerceAtomsToIntegers(t *testing.T) {
+	var env *Env
+	_, ok := env.Unify(NewAtom("1"), Integer(1))
+	assert.False(t, ok)
 }

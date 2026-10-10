@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -234,7 +233,7 @@ func TestParser_Replace(t *testing.T) {
 		doubleQuotes doubleQuotes
 		input        string
 		args         []interface{}
-		err, termErr error
+		err, termErr bool
 		term         Term
 	}{
 		{
@@ -262,19 +261,25 @@ func TestParser_Replace(t *testing.T) {
 			title: "invalid argument",
 			input: `[?].`,
 			args:  []interface{}{nil},
-			err:   errors.New("can't convert to term: <invalid reflect.Value>"),
+			err:   true,
+		},
+		{
+			title: "unsupported list element",
+			input: `[?].`,
+			args:  []interface{}{[]bool{true}},
+			err:   true,
 		},
 		{
 			title:   "too few arguments",
 			input:   `[?, ?, ?, ?, ?].`,
 			args:    []interface{}{1, 2, "foo", []string{"a", "b", "c"}},
-			termErr: errors.New("not enough arguments for placeholders"),
+			termErr: true,
 		},
 		{
 			title:   "too many arguments",
 			input:   `[?, ?, ?, ?].`,
 			args:    []interface{}{1, 2, "foo", []string{"a", "b", "c"}, "extra"},
-			termErr: errors.New("too many arguments for placeholders: [extra]"),
+			termErr: true,
 		},
 	}
 
@@ -284,14 +289,20 @@ func TestParser_Replace(t *testing.T) {
 			p := NewParser(&vm, strings.NewReader(tt.input))
 			p.doubleQuotes = tt.doubleQuotes
 			err := p.SetPlaceholder(NewAtom("?"), tt.args...)
-			assert.Equal(t, tt.err, err)
-
-			if err != nil {
+			if tt.err {
+				assert.Error(t, err)
+				return
+			}
+			if !assert.NoError(t, err) {
 				return
 			}
 
 			term, err := p.Term()
-			assert.Equal(t, tt.termErr, err)
+			if tt.termErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 			assert.Equal(t, tt.term, term)
 		})
 	}

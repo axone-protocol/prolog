@@ -274,6 +274,7 @@ func (m *mockReader) Read(p []byte) (int, error) {
 }
 
 func TestStream_ReadByte(t *testing.T) {
+	var vm VM
 	tests := []struct {
 		title string
 		s     *Stream
@@ -284,7 +285,7 @@ func TestStream_ReadByte(t *testing.T) {
 	}{
 		{
 			title: "input binary: 3 bytes left",
-			s:     &Stream{source: bytes.NewReader([]byte{1, 2, 3}), streamType: streamTypeBinary},
+			s:     vm.NewInputBinaryStream(bytes.NewReader([]byte{1, 2, 3})),
 			b:     1,
 			pos:   1,
 			eos:   endOfStreamNot,
