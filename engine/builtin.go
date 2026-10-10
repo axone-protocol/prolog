@@ -46,10 +46,7 @@ func Call(vm *VM, goal Term, k Cont, env *Env) (promise *Promise) {
 		return Error(InstantiationError(env))
 	default:
 		fvs := env.freeVariables(g)
-		args, err := makeSlice(len(fvs))
-		if err != nil {
-			return Error(resourceError(resourceMemory, env))
-		}
+		args := makeTerms(int64(len(fvs)), env)
 		for i, fv := range fvs {
 			args[i] = fv
 		}
@@ -98,17 +95,16 @@ func Call7(vm *VM, closure, arg1, arg2, arg3, arg4, arg5, arg6, arg7 Term, k Con
 	return callN(vm, closure, []Term{arg1, arg2, arg3, arg4, arg5, arg6, arg7}, k, env)
 }
 
-func callN(vm *VM, closure Term, additional []Term, k Cont, env *Env) *Promise {
+func callN(vm *VM, closure Term, additional []Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
 	pi, arg, err := piArg(closure, env)
 	if err != nil {
 		return Error(err)
 	}
-	args, err := makeSlice(int(pi.arity) + len(additional))
-	if err != nil {
-		return Error(resourceError(resourceMemory, env))
-	}
-	args = args[:pi.arity]
-	for i := 0; i < int(pi.arity); i++ {
+	args := makeTerms(addTermCells(int64(pi.arity), int64(len(additional)), env), env)
+	args = args[:int(pi.arity)]
+	for i := range int(pi.arity) {
 		args[i] = arg(i)
 	}
 	args = append(args, additional...)
@@ -232,7 +228,9 @@ func TypeCompound(_ *VM, t Term, k Cont, env *Env) *Promise {
 }
 
 // AcyclicTerm checks if t is acyclic.
-func AcyclicTerm(_ *VM, t Term, k Cont, env *Env) *Promise {
+func AcyclicTerm(vm *VM, t Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
 	if cyclicTerm(t, nil, env) {
 		return Bool(false)
 	}
@@ -247,10 +245,10 @@ func cyclicTerm(t Term, visited []Term, env *Env) bool {
 			return true
 		}
 	}
-	visited = append(visited, t)
+	visited = appendTerms(visited, env, t)
 
 	if c, ok := t.(Compound); ok {
-		for i := 0; i < c.Arity(); i++ {
+		for i := range c.Arity() {
 			if cyclicTerm(c.Arg(i), visited, env) {
 				return true
 			}
@@ -262,7 +260,9 @@ func cyclicTerm(t Term, visited []Term, env *Env) bool {
 
 // Functor extracts the name and arity of term, or unifies term with an atomic/compound term of name and arity with
 // fresh variables as arguments.
-func Functor(vm *VM, t, name, arity Term, k Cont, env *Env) *Promise {
+func Functor(vm *VM, t, name, arity Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
 	switch t := env.Resolve(t).(type) {
 	case Variable:
 		switch arity := env.Resolve(arity).(type) {
@@ -291,10 +291,7 @@ func Functor(vm *VM, t, name, arity Term, k Cont, env *Env) *Promise {
 				return Error(typeError(validTypeAtom, name, env))
 			}
 
-			vs, err := makeSlice(int(arity))
-			if err != nil {
-				return Error(resourceError(resourceMemory, env))
-			}
+			vs := makeTerms(int64(arity), env)
 			for i := range vs {
 				vs[i] = vm.NewVariable()
 			}
@@ -335,7 +332,9 @@ func Arg(vm *VM, nth, t, arg Term, k Cont, env *Env) *Promise {
 }
 
 // Univ constructs list as a list which first element is the functor of term and the rest is the arguments of term, or construct a compound from list as term.
-func Univ(vm *VM, t, list Term, k Cont, env *Env) *Promise {
+func Univ(vm *VM, t, list Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
 	switch t := env.Resolve(t).(type) {
 	case Variable:
 		elems, err := slice(list, env)
@@ -371,9 +370,10 @@ func Univ(vm *VM, t, list Term, k Cont, env *Env) *Promise {
 		if err := iter.Err(); err != nil {
 			return Error(err)
 		}
-		elems := []Term{t.Functor()}
-		for i := 0; i < t.Arity(); i++ {
-			elems = append(elems, t.Arg(i))
+		elems := makeTerms(addTermCells(1, int64(t.Arity()), env), env)
+		elems[0] = t.Functor()
+		for i := range t.Arity() {
+			elems[i+1] = t.Arg(i)
 		}
 		return Unify(vm, list, List(elems...), k, env)
 	default:
@@ -388,116 +388,98 @@ func Univ(vm *VM, t, list Term, k Cont, env *Env) *Promise {
 }
 
 // CopyTerm clones in as out.
-func CopyTerm(vm *VM, in, out Term, k Cont, env *Env) *Promise {
-	c, err := renamedCopy(vm, in, nil, env)
-	if err != nil {
-		return Error(err)
-	}
+func CopyTerm(vm *VM, in, out Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
+	c := renamedCopy(vm, in, nil, env)
 	return Unify(vm, c, out, k, env)
 }
 
-func renamedCopy(vm *VM, t Term, copied map[termID]Term, env *Env) (Term, error) {
+func renamedCopy(vm *VM, t Term, copied map[termID]Term, env *Env) Term {
 	if copied == nil {
 		copied = map[termID]Term{}
 	}
 	t = env.Resolve(t)
 	if c, ok := copied[id(t)]; ok {
-		return c, nil
+		return c
 	}
 	switch t := t.(type) {
 	case Variable:
 		env.charge(MeterCopyNode, 1)
 		v := vm.NewVariable()
 		copied[id(t)] = v
-		return v, nil
+		return v
 	case charList, codeList:
-		return t, nil
+		return t
 	case list:
 		env.charge(MeterCopyNode, 1)
-		s, err := makeSlice(len(t))
-		if err != nil {
-			return nil, resourceError(resourceMemory, env)
-		}
-		l := list(s)
+		l := list(makeTerms(int64(len(t)), env))
 		copied[id(t)] = l
 		for i := range t {
-			c, err := renamedCopy(vm, t[i], copied, env)
-			if err != nil {
-				return nil, err
-			}
-			l[i] = c
+			l[i] = renamedCopy(vm, t[i], copied, env)
 		}
-		return l, nil
+		return l
 	case *partial:
 		env.charge(MeterCopyNode, 1)
+		chargeTermCells(1, env)
 		var p partial
 		copied[id(t)] = &p
-		cp, err := renamedCopy(vm, t.Compound, copied, env)
-		if err != nil {
-			return nil, err
-		}
-		p.Compound = cp.(Compound)
-		cp, err = renamedCopy(vm, *t.tail, copied, env)
-		if err != nil {
-			return nil, err
-		}
-		tail := cp
+		p.Compound = renamedCopy(vm, t.Compound, copied, env).(Compound)
+		tail := renamedCopy(vm, *t.tail, copied, env)
 		p.tail = &tail
-		return &p, nil
+		return &p
 	case Compound:
 		env.charge(MeterCopyNode, 1)
-		args, err := makeSlice(t.Arity())
-		if err != nil {
-			return nil, resourceError(resourceMemory, env)
+		args := makeTerms(int64(t.Arity()), env)
+		if _, ok := t.(Dict); ok {
+			d := &dict{compound: compound{
+				functor: t.Functor(),
+				args:    args,
+			}}
+			copied[id(t)] = d
+			for i := range t.Arity() {
+				d.args[i] = renamedCopy(vm, t.Arg(i), copied, env)
+			}
+			return d
 		}
-		c := compound{
+
+		c := &compound{
 			functor: t.Functor(),
 			args:    args,
 		}
-		copied[id(t)] = &c
-		for i := 0; i < t.Arity(); i++ {
-			cp, err := renamedCopy(vm, t.Arg(i), copied, env)
-			if err != nil {
-				return nil, err
-			}
-			c.args[i] = cp
+		copied[id(t)] = c
+		for i := range t.Arity() {
+			c.args[i] = renamedCopy(vm, t.Arg(i), copied, env)
 		}
-
-		if _, ok := t.(Dict); ok {
-			return &dict{c}, nil
-		}
-
-		return &c, nil
+		return c
 	default:
-		return t, nil
+		return t
 	}
 }
 
 // TermVariables succeeds if vars unifies with a list of variables in term.
-func TermVariables(vm *VM, term, vars Term, k Cont, env *Env) *Promise {
+func TermVariables(vm *VM, term, vars Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
 	var (
 		witness  = map[Variable]struct{}{}
 		ret      []Term
-		t        Term
 		traverse = []Term{term}
 	)
 	for len(traverse) > 0 {
-		t, traverse = traverse[0], traverse[1:]
+		i := len(traverse) - 1
+		t := traverse[i]
+		traverse = traverse[:i]
 		switch t := env.Resolve(t).(type) {
 		case Variable:
 			if _, ok := witness[t]; !ok {
-				ret = append(ret, t)
+				ret = appendTerms(ret, env, t)
 			}
 			witness[t] = struct{}{}
 		case Compound:
-			args, err := makeSlice(t.Arity())
-			if err != nil {
-				return Error(resourceError(resourceMemory, env))
+			for i := t.Arity() - 1; i >= 0; i-- {
+				traverse = appendTerms(traverse, env, t.Arg(i))
 			}
-			for i := 0; i < t.Arity(); i++ {
-				args[i] = t.Arg(i)
-			}
-			traverse = append(args, traverse...)
 		}
 	}
 
@@ -684,7 +666,9 @@ func CurrentOp(vm *VM, priority, specifier, op Term, k Cont, env *Env) *Promise 
 }
 
 // Assertz appends t to the database.
-func Assertz(vm *VM, t Term, k Cont, env *Env) *Promise {
+func Assertz(vm *VM, t Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
 	if err := assertMerge(vm, t, func(existing, new []clause) []clause {
 		return append(existing, new...)
 	}, env); err != nil {
@@ -694,7 +678,9 @@ func Assertz(vm *VM, t Term, k Cont, env *Env) *Promise {
 }
 
 // Asserta prepends t to the database.
-func Asserta(vm *VM, t Term, k Cont, env *Env) *Promise {
+func Asserta(vm *VM, t Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
 	if err := assertMerge(vm, t, func(existing, new []clause) []clause {
 		return append(new, existing...)
 	}, env); err != nil {
@@ -703,7 +689,8 @@ func Asserta(vm *VM, t Term, k Cont, env *Env) *Promise {
 	return k(env)
 }
 
-func assertMerge(vm *VM, t Term, merge func([]clause, []clause) []clause, env *Env) error {
+func assertMerge(vm *VM, t Term, merge func([]clause, []clause) []clause, env *Env) (err error) {
+	defer recoverMeterError(&err)
 	pi, arg, err := piArg(t, env)
 	if err != nil {
 		return err
@@ -740,28 +727,31 @@ func assertMerge(vm *VM, t Term, merge func([]clause, []clause) []clause, env *E
 }
 
 // BagOf collects all the solutions of goal as instances, which unify with template. instances may contain duplications.
-func BagOf(vm *VM, template, goal, instances Term, k Cont, env *Env) *Promise {
+func BagOf(vm *VM, template, goal, instances Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
 	return collectionOf(vm, func(tList []Term, env *Env) Term {
 		return List(tList...)
 	}, template, goal, instances, k, env)
 }
 
 // SetOf collects all the solutions of goal as instances, which unify with template. instances don't contain duplications.
-func SetOf(vm *VM, template, goal, instances Term, k Cont, env *Env) *Promise {
+func SetOf(vm *VM, template, goal, instances Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
 	return collectionOf(vm, func(tList []Term, env *Env) Term {
 		return env.set(tList...)
 	}, template, goal, instances, k, env)
 }
 
-func collectionOf(vm *VM, agg func([]Term, *Env) Term, template, goal, instances Term, k Cont, env *Env) *Promise {
+func collectionOf(vm *VM, agg func([]Term, *Env) Term, template, goal, instances Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
 	fvs := newFreeVariablesSet(goal, template, env)
-	w, err := makeSlice(len(fvs))
-	if err != nil {
-		return Error(resourceError(resourceMemory, env))
-	}
-	w = w[:0]
+	w := makeTerms(int64(len(fvs)), env)
+	i := 0
 	for v := range fvs {
-		w = append(w, v)
+		w[i] = v
+		i++
 	}
 	sort.Slice(w, func(i, j int) bool {
 		return w[i].(Variable).Compare(w[j], nil) < 0
@@ -778,20 +768,25 @@ func collectionOf(vm *VM, agg func([]Term, *Env) Term, template, goal, instances
 	}
 
 	return FindAll(vm, atomPlus.Apply(witness, template), g, s, func(env *Env) *Promise {
-		s, _ := slice(s, env)
+		s, err := slice(s, env)
+		if err != nil {
+			return Error(err)
+		}
 		ks := make([]func(context.Context) *Promise, 0, len(s))
 		for len(s) > 0 {
 			var wt Compound
 			wt, s = s[0].(Compound), s[1:]
 			w, t := wt.Arg(0), wt.Arg(1) // W+T
-			wList, tList := []Term{w}, []Term{t}
+			var wList, tList []Term
+			wList = appendTerms(wList, env, w)
+			tList = appendTerms(tList, env, t)
 			n := 0 // https://github.com/golang/go/wiki/SliceTricks#filter-in-place
 			for _, e := range s {
 				e := e.(Compound)
 				ww, tt := e.Arg(0), e.Arg(1) // WW+TT
 				if variant(ww, w, env) {
-					wList = append(wList, ww)
-					tList = append(tList, tt)
+					wList = appendTerms(wList, env, ww)
+					tList = appendTerms(tList, env, tt)
 				} else { // keep
 					s[n] = e
 					n++
@@ -812,13 +807,12 @@ func collectionOf(vm *VM, agg func([]Term, *Env) Term, template, goal, instances
 
 func variant(t1, t2 Term, env *Env) bool {
 	s := map[Variable]Variable{}
-	rest := [][2]Term{
-		{t1, t2},
-	}
-	var xy [2]Term
+	rest := makeTerms(2, env)
+	rest[0], rest[1] = t1, t2
 	for len(rest) > 0 {
-		rest, xy = rest[:len(rest)-1], rest[len(rest)-1]
-		x, y := env.Resolve(xy[0]), env.Resolve(xy[1])
+		i := len(rest) - 2
+		x, y := env.Resolve(rest[i]), env.Resolve(rest[i+1])
+		rest = rest[:i]
 		switch x := x.(type) {
 		case Variable:
 			switch y := y.(type) {
@@ -839,8 +833,8 @@ func variant(t1, t2 Term, env *Env) bool {
 				if x.Functor() != y.Functor() || x.Arity() != y.Arity() {
 					return false
 				}
-				for i := 0; i < x.Arity(); i++ {
-					rest = append(rest, [2]Term{x.Arg(i), y.Arg(i)})
+				for i := range x.Arity() {
+					rest = appendTerms(rest, env, x.Arg(i), y.Arg(i))
 				}
 			default:
 				return false
@@ -865,7 +859,9 @@ func iteratedGoalTerm(t Term, env *Env) Term {
 }
 
 // FindAll collects all the solutions of goal as instances, which unify with template. instances may contain duplications.
-func FindAll(vm *VM, template, goal, instances Term, k Cont, env *Env) *Promise {
+func FindAll(vm *VM, template, goal, instances Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
 	iter := ListIterator{List: instances, Env: env, AllowPartial: true}
 	for iter.Next() {
 	}
@@ -875,11 +871,7 @@ func FindAll(vm *VM, template, goal, instances Term, k Cont, env *Env) *Promise 
 	return Delay(func(ctx context.Context) *Promise {
 		var answers []Term
 		if _, err := Call(vm, goal, func(env *Env) *Promise {
-			c, err := renamedCopy(vm, template, nil, env)
-			if err != nil {
-				return Error(err)
-			}
-			answers = append(answers, c)
+			answers = appendTerms(answers, env, renamedCopy(vm, template, nil, env))
 			return Bool(false) // ask for more solutions
 		}, env).Force(ctx); err != nil {
 			return Error(err)
@@ -964,11 +956,13 @@ func Between(vm *VM, lower, upper, value Term, k Cont, env *Env) *Promise {
 }
 
 // Sort succeeds if sorted list of elements of list unifies with sorted.
-func Sort(vm *VM, list, sorted Term, k Cont, env *Env) *Promise {
+func Sort(vm *VM, list, sorted Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
 	var elems []Term
 	iter := ListIterator{List: list, Env: env}
 	for iter.Next() {
-		elems = append(elems, env.Resolve(iter.Current()))
+		elems = appendTerms(elems, env, env.Resolve(iter.Current()))
 	}
 	if err := iter.Err(); err != nil {
 		return Error(err)
@@ -985,7 +979,9 @@ func Sort(vm *VM, list, sorted Term, k Cont, env *Env) *Promise {
 }
 
 // KeySort succeeds if sorted is a sorted list of pairs based on their keys.
-func KeySort(vm *VM, pairs, sorted Term, k Cont, env *Env) *Promise {
+func KeySort(vm *VM, pairs, sorted Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
 	var elems []Term
 	iter := ListIterator{List: pairs, Env: env}
 	for iter.Next() {
@@ -996,7 +992,7 @@ func KeySort(vm *VM, pairs, sorted Term, k Cont, env *Env) *Promise {
 			if e.Functor() != atomMinus || e.Arity() != 2 {
 				return Error(typeError(validTypePair, e, env))
 			}
-			elems = append(elems, e)
+			elems = appendTerms(elems, env, e)
 		default:
 			return Error(typeError(validTypePair, e, env))
 		}
@@ -1802,7 +1798,9 @@ type readTermOptions struct {
 }
 
 // ReadTerm reads from the stream represented by streamOrAlias and unifies with stream.
-func ReadTerm(vm *VM, streamOrAlias, out, options Term, k Cont, env *Env) *Promise {
+func ReadTerm(vm *VM, streamOrAlias, out, options Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
 	s, err := stream(vm, streamOrAlias, env)
 	if err != nil {
 		return Error(err)
@@ -1841,16 +1839,21 @@ func ReadTerm(vm *VM, streamOrAlias, out, options Term, k Cont, env *Env) *Promi
 	case errPastEndOfStream:
 		return Error(permissionError(operationInput, permissionTypePastEndOfStream, streamOrAlias, env))
 	default:
+		var exception Exception
+		if errors.As(err, &exception) {
+			return Error(exception)
+		}
 		return Error(syntaxError(err, env))
 	}
 
 	var singletons, variables, variableNames []Term
 	for _, v := range p.Vars {
 		if v.Count == 1 {
-			singletons = append(singletons, v.Variable)
+			singletons = appendTerms(singletons, env, v.Variable)
 		}
-		variables = append(variables, v.Variable)
-		variableNames = append(variableNames, atomEqual.Apply(v.Name, v.Variable))
+		variables = appendTerms(variables, env, v.Variable)
+		chargeTermCells(2, env)
+		variableNames = appendTerms(variableNames, env, atomEqual.Apply(v.Name, v.Variable))
 	}
 
 	return Unify(vm, tuple(
@@ -2076,7 +2079,9 @@ func Halt(_ *VM, n Term, _ Cont, env *Env) *Promise {
 }
 
 // Clause unifies head and body with H and B respectively where H :- B is in the database.
-func Clause(vm *VM, head, body Term, k Cont, env *Env) *Promise {
+func Clause(vm *VM, head, body Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
 	pi, _, err := piArg(head, env)
 	if err != nil {
 		return Error(err)
@@ -2101,11 +2106,7 @@ func Clause(vm *VM, head, body Term, k Cont, env *Env) *Promise {
 
 	ks := make([]func(context.Context) *Promise, len(u.clauses))
 	for i, c := range u.clauses {
-		cp, err := renamedCopy(vm, c.raw, nil, env)
-		if err != nil {
-			return Error(err)
-		}
-		r := rulify(cp, env)
+		r := rulify(renamedCopy(vm, c.raw, nil, env), env)
 		ks[i] = func(context.Context) *Promise {
 			return Unify(vm, atomIf.Apply(head, body), r, k, env)
 		}
@@ -2364,7 +2365,9 @@ func AtomCodes(vm *VM, atom, codes Term, k Cont, env *Env) *Promise {
 
 // NumberChars breaks up an atom representation of a number num into a list of characters and unifies it with chars, or
 // constructs a number from a list of characters chars and unifies it with num.
-func NumberChars(vm *VM, num, chars Term, k Cont, env *Env) *Promise {
+func NumberChars(vm *VM, num, chars Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
 	var sb strings.Builder
 	iter := ListIterator{List: chars, Env: env, AllowPartial: true}
 	for iter.Next() {
@@ -2406,7 +2409,8 @@ func NumberChars(vm *VM, num, chars Term, k Cont, env *Env) *Promise {
 	}
 }
 
-func numberCharsWrite(vm *VM, num, chars Term, k Cont, env *Env) *Promise {
+func numberCharsWrite(vm *VM, num, chars Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
 	var n Number
 	switch num := env.Resolve(num).(type) {
 	case Variable:
@@ -2438,7 +2442,7 @@ func numberCharsWrite(vm *VM, num, chars Term, k Cont, env *Env) *Promise {
 	_ = n.WriteTerm(&buf, &defaultWriteOptions, nil)
 	rs := []rune(buf.String())
 
-	cs := make([]Term, len(rs))
+	cs := makeTerms(int64(len(rs)), env)
 	for i, r := range rs {
 		cs[i] = NewAtomRune(r)
 	}
@@ -2447,7 +2451,9 @@ func numberCharsWrite(vm *VM, num, chars Term, k Cont, env *Env) *Promise {
 
 // NumberCodes breaks up an atom representation of a number num into a list of runes and unifies it with codes, or
 // constructs a number from a list of runes codes and unifies it with num.
-func NumberCodes(vm *VM, num, codes Term, k Cont, env *Env) *Promise {
+func NumberCodes(vm *VM, num, codes Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
 	var sb strings.Builder
 	iter := ListIterator{List: codes, Env: env, AllowPartial: true}
 	for iter.Next() {
@@ -2488,7 +2494,8 @@ func NumberCodes(vm *VM, num, codes Term, k Cont, env *Env) *Promise {
 	}
 }
 
-func numberCodesWrite(vm *VM, num, codes Term, k Cont, env *Env) *Promise {
+func numberCodesWrite(vm *VM, num, codes Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
 	var n Number
 	switch num := env.Resolve(num).(type) {
 	case Variable:
@@ -2520,7 +2527,7 @@ func numberCodesWrite(vm *VM, num, codes Term, k Cont, env *Env) *Promise {
 	_ = n.WriteTerm(&buf, &defaultWriteOptions, nil)
 	rs := []rune(buf.String())
 
-	cs := make([]Term, len(rs))
+	cs := makeTerms(int64(len(rs)), env)
 	for i, r := range rs {
 		cs[i] = Integer(r)
 	}
@@ -2847,7 +2854,9 @@ func onOff(b bool) Atom {
 }
 
 // ExpandTerm transforms term1 according to term_expansion/2 and DCG rules then unifies with term2.
-func ExpandTerm(vm *VM, term1, term2 Term, k Cont, env *Env) *Promise {
+func ExpandTerm(vm *VM, term1, term2 Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
 	t, err := expand(vm, term1, env)
 	if err != nil {
 		return Error(err)
@@ -2856,7 +2865,8 @@ func ExpandTerm(vm *VM, term1, term2 Term, k Cont, env *Env) *Promise {
 	return Unify(vm, t, term2, k, env)
 }
 
-func expand(vm *VM, term Term, env *Env) (Term, error) {
+func expand(vm *VM, term Term, env *Env) (expanded Term, err error) {
+	defer recoverMeterError(&err)
 	env = vm.ownedEnv(env)
 	if _, ok := vm.getProcedure(procedureIndicator{name: atomTermExpansion, arity: 2}); ok {
 		var ret Term
@@ -2875,9 +2885,13 @@ func expand(vm *VM, term Term, env *Env) (Term, error) {
 
 	t, err := expandDCG(vm, term, env)
 	if err != nil {
+		var meterErr dcgMeterError
+		if errors.As(err, &meterErr) {
+			return nil, meterErr.Exception
+		}
 		return term, nil //nolint:nilerr // Failed DCG expansion leaves the input unchanged.
 	}
-	return t, err
+	return t, nil
 }
 
 // Nth0 succeeds if elem is the n-th element of list, counting from 0.
@@ -2974,7 +2988,9 @@ func Succ(vm *VM, x, s Term, k Cont, env *Env) *Promise {
 }
 
 // Length succeeds iff list is a list of length.
-func Length(vm *VM, list, length Term, k Cont, env *Env) *Promise {
+func Length(vm *VM, list, length Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+	env = vm.ownedEnv(env)
 	// https://github.com/mthom/scryer-prolog/issues/1325#issue-1160713156
 	// Note that it's a bit simpler since we don't have attributed variables (yet).
 
@@ -3032,11 +3048,9 @@ func Length(vm *VM, list, length Term, k Cont, env *Env) *Promise {
 	}, env)
 }
 
-func lengthRundown(vm *VM, list Variable, n Integer, k Cont, env *Env) *Promise {
-	elems, err := makeSlice(int(n))
-	if err != nil {
-		return Error(resourceError(resourceMemory, env))
-	}
+func lengthRundown(vm *VM, list Variable, n Integer, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+	elems := makeTerms(int64(n), env)
 	for i := range elems {
 		elems[i] = vm.NewVariable()
 	}
@@ -3047,11 +3061,12 @@ func lengthAddendum(vm *VM, suffix Term, offset Integer, list, length Variable, 
 	return Delay(func(context.Context) *Promise {
 		return Unify(vm, tuple(list, length), tuple(suffix, offset), k, env)
 	}, func(context.Context) *Promise {
-		suffix := atomDot.Apply(vm.NewVariable(), suffix)
 		offset, err := addI(offset, 1)
 		if err != nil {
 			return Error(representationError(flagMaxInteger, env))
 		}
+		chargeTermCells(2, env)
+		suffix := atomDot.Apply(vm.NewVariable(), suffix)
 		return lengthAddendum(vm, suffix, offset, list, length, k, env)
 	})
 }
@@ -3072,7 +3087,7 @@ func SkipMaxList(vm *VM, skip, max, list, suffix Term, k Cont, env *Env) *Promis
 	}
 
 	var (
-		iter = ListIterator{List: list, Env: env}
+		iter = ListIterator{List: list, Env: env, AllowPartial: true}
 		n    = Integer(0)
 	)
 	for n < m && iter.Next() {

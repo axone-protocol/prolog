@@ -18,11 +18,13 @@ type userDefined struct {
 type clauses []clause
 
 func (cs clauses) call(vm *VM, args []Term, k Cont, env *Env) *Promise {
+	env = vm.ownedEnv(env)
 	var p *Promise
 	ks := make([]func(context.Context) *Promise, len(cs))
 	for i := range cs {
 		i, c := i, cs[i]
 		ks[i] = func(context.Context) *Promise {
+			chargeTermCells(int64(len(c.vars)), env)
 			vars := make([]Variable, len(c.vars))
 			for i := range vars {
 				vars[i] = vm.NewVariable()
@@ -69,11 +71,13 @@ func compileClause(vm *VM, head Term, body Term, env *Env) (clause, error) {
 	body = desugarBody(vm, body, env)
 
 	if len(preds) > 0 {
-		predSeq := seq(atomComma, preds...)
+		predSeq := meteredSeq(atomComma, preds, env)
 		if body == nil {
 			body = predSeq
 		} else {
-			body = atomComma.Apply(body, predSeq)
+			args := makeTerms(2, env)
+			args[0], args[1] = body, predSeq
+			body = atomComma.Apply(args...)
 		}
 	}
 
@@ -108,12 +112,22 @@ func desugarBody(vm *VM, body Term, env *Env) Term {
 	for iter.Next() {
 		t, preds := desugarPred(vm, iter.Current(), nil, env)
 		if len(preds) > 0 {
-			items = append(items, preds...)
+			items = appendTerms(items, env, preds...)
 		}
-		items = append(items, t)
+		items = appendTerms(items, env, t)
 	}
 
-	return seq(atomComma, items...)
+	return meteredSeq(atomComma, items, env)
+}
+
+func meteredSeq(sep Atom, ts []Term, env *Env) Term {
+	s, ts := ts[len(ts)-1], ts[:len(ts)-1]
+	for i := len(ts) - 1; i >= 0; i-- {
+		args := makeTerms(2, env)
+		args[0], args[1] = ts[i], s
+		s = sep.Apply(args...)
+	}
+	return s
 }
 
 func desugarPred(vm *VM, term Term, acc []Term, env *Env) (Term, []Term) {
@@ -121,12 +135,13 @@ func desugarPred(vm *VM, term Term, acc []Term, env *Env) (Term, []Term) {
 	case charList, codeList:
 		return t, acc
 	case list:
-		l := make(list, len(t))
+		l := list(makeTerms(int64(len(t)), env))
 		for i, e := range t {
 			l[i], acc = desugarPred(vm, e, acc, env)
 		}
 		return l, acc
 	case *partial:
+		chargeTermCells(1, env)
 		c, acc := desugarPred(vm, t.Compound, acc, env)
 		tail, acc := desugarPred(vm, *t.tail, acc, env)
 		return &partial{
@@ -138,13 +153,15 @@ func desugarPred(vm *VM, term Term, acc []Term, env *Env) (Term, []Term) {
 			tempV := vm.NewVariable()
 			lhs, acc := desugarPred(vm, t.Arg(0), acc, env)
 			rhs, acc := desugarPred(vm, t.Arg(1), acc, env)
+			args := makeTerms(3, env)
+			args[0], args[1], args[2] = lhs, rhs, tempV
 
-			return tempV, append(acc, atomDot.Apply(lhs, rhs, tempV))
+			return tempV, appendTerms(acc, env, atomDot.Apply(args...))
 		}
 
 		c := compound{
 			functor: t.Functor(),
-			args:    make([]Term, t.Arity()),
+			args:    makeTerms(int64(t.Arity()), env),
 		}
 		for i := 0; i < t.Arity(); i++ {
 			c.args[i], acc = desugarPred(vm, t.Arg(i), acc, env)
@@ -192,7 +209,9 @@ var errNotCallable = errors.New("not callable")
 func (c *clause) compilePred(p Term, env *Env) error {
 	switch p := env.Resolve(p).(type) {
 	case Variable:
-		return c.compilePred(atomCall.Apply(p), env)
+		args := makeTerms(1, env)
+		args[0] = p
+		return c.compilePred(atomCall.Apply(args...), env)
 	case Atom:
 		switch p {
 		case atomCut:
@@ -215,7 +234,7 @@ func (c *clause) compilePred(p Term, env *Env) error {
 func (c *clause) compileHeadArg(a Term, env *Env) {
 	switch a := env.Resolve(a).(type) {
 	case Variable:
-		c.emit(instruction{opcode: OpGetVar, operand: c.varOffset(a)})
+		c.emit(instruction{opcode: OpGetVar, operand: c.varOffset(a, env)})
 	case charList, codeList: // Treat them as if they're atomic.
 		c.emit(instruction{opcode: OpGetConst, operand: a})
 	case list:
@@ -252,7 +271,7 @@ func (c *clause) compileHeadArg(a Term, env *Env) {
 func (c *clause) compileBodyArg(a Term, env *Env) {
 	switch a := env.Resolve(a).(type) {
 	case Variable:
-		c.emit(instruction{opcode: OpPutVar, operand: c.varOffset(a)})
+		c.emit(instruction{opcode: OpPutVar, operand: c.varOffset(a, env)})
 	case charList, codeList: // Treat them as if they're atomic.
 		c.emit(instruction{opcode: OpPutConst, operand: a})
 	case list:
@@ -296,12 +315,14 @@ func (c *clause) compileBodyArg(a Term, env *Env) {
 	}
 }
 
-func (c *clause) varOffset(o Variable) Integer {
+func (c *clause) varOffset(o Variable, env *Env) Integer {
 	for i, v := range c.vars {
 		if v == o {
 			return Integer(i)
 		}
 	}
+	addTermCells(int64(len(c.vars)), 1, env)
+	chargeTermCells(1, env)
 	c.vars = append(c.vars, o)
 	return Integer(len(c.vars) - 1)
 }

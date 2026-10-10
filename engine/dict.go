@@ -67,11 +67,17 @@ type dict struct {
 //
 // The first argument is the tag. The remaining arguments are the key and value pairs.
 func NewDict(args []Term) (Dict, error) {
-	args, err := processArgs(args)
+	return newDictWithEnv(args, nil)
+}
+
+func newDictWithEnv(args []Term, env *Env) (d Dict, err error) {
+	defer recoverMeterError(&err)
+
+	processed, err := processArgs(args, env)
 	if err != nil {
 		return nil, err
 	}
-	return newDict(args), nil
+	return newDict(processed), nil
 }
 
 func newDict(args []Term) Dict {
@@ -83,7 +89,7 @@ func newDict(args []Term) Dict {
 	}
 }
 
-func processArgs(args []Term) ([]Term, error) {
+func processArgs(args []Term, env *Env) ([]Term, error) {
 	if len(args) == 0 || len(args)%2 == 0 {
 		return nil, errInvalidDict
 	}
@@ -113,10 +119,12 @@ func processArgs(args []Term) ([]Term, error) {
 		return keys[i] < keys[j]
 	})
 
-	processedArgs := make([]Term, 0, len(rest))
-	processedArgs = append(processedArgs, tag)
-	for _, key := range keys {
-		processedArgs = append(processedArgs, key, kv[key])
+	pairs := int64(len(kv))
+	processedArgs := makeTerms(addTermCells(addTermCells(pairs, pairs, env), 1, env), env)
+	processedArgs[0] = tag
+	for i, key := range keys {
+		offset := 1 + 2*i
+		processedArgs[offset], processedArgs[offset+1] = key, kv[key]
 	}
 
 	return processedArgs, nil
@@ -227,7 +235,10 @@ func (d *dict) All() iter.Seq2[Atom, Term] {
 // If the provided Function is an atom, the function checks for the corresponding key in the Dict,
 // raising an exception if the key is missing.
 // For compound terms, it interprets Function as a call to a predefined set of functions, processing it accordingly.
-func Op3(vm *VM, dict, function, result Term, cont Cont, env *Env) *Promise {
+func Op3(vm *VM, dict, function, result Term, cont Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+
+	env = vm.ownedEnv(env)
 	switch dict := env.Resolve(dict).(type) {
 	case Variable:
 		return Error(InstantiationError(env))
@@ -243,9 +254,10 @@ func Op3(vm *VM, dict, function, result Term, cont Cont, env *Env) *Promise {
 			return Unify(vm, result, extracted, cont, env)
 		case Compound:
 			if funcs, ok := predefinedFuncs[function.Functor()]; ok {
-				if f, ok := funcs[function.Arity()]; ok {
-					args := make([]Term, function.Arity())
-					for i := 0; i < function.Arity(); i++ {
+				arity := function.Arity()
+				if f, ok := funcs[arity]; ok {
+					args := makeTerms(int64(arity), env)
+					for i := range args {
 						args[i] = function.Arg(i)
 					}
 					return f(vm, args, dict, result, cont, env)
@@ -338,7 +350,10 @@ func GetDict4(vm *VM, keyPath Term, defaultValue Term, dict Term, result Term, c
 // PutDict3 evaluates to a new dict where the key-values in dictIn replace or extend the key-values in the original dict.
 //
 // new is either a dict or list of attribute-value pairs using the syntax Key:Value, Key=Value, Key-Value or Key(Value)
-func PutDict3(vm *VM, new Term, dictIn Term, dictOut Term, cont Cont, env *Env) *Promise {
+func PutDict3(vm *VM, new Term, dictIn Term, dictOut Term, cont Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+
+	env = vm.ownedEnv(env)
 	switch dictIn := env.Resolve(dictIn).(type) {
 	case Variable:
 		return Error(InstantiationError(env))
@@ -347,14 +362,14 @@ func PutDict3(vm *VM, new Term, dictIn Term, dictOut Term, cont Cont, env *Env) 
 		case Variable:
 			return Error(InstantiationError(env))
 		case Dict:
-			dictIn = mergeDict(new, dictIn)
+			dictIn = mergeDict(new, dictIn, env)
 			return Unify(vm, dictOut, dictIn, cont, env)
 		case Compound:
 			dict, err := newDictFromListOfPairs(vm, new, env)
 			if err != nil {
 				return Error(err)
 			}
-			dictIn = mergeDict(dict, dictIn)
+			dictIn = mergeDict(dict, dictIn, env)
 			return Unify(vm, dictOut, dictIn, cont, env)
 		default:
 			return Error(typeError(validTypePair, new, env))
@@ -367,7 +382,10 @@ func PutDict3(vm *VM, new Term, dictIn Term, dictOut Term, cont Cont, env *Env) 
 // DelDict4 evaluates to a new dict where the key-value associated with key is removed from dictIn.
 // It unifies value with the removed value and dictOut with the resulting dict. The predicate fails
 // when key is not present in dictIn.
-func DelDict4(vm *VM, key Term, dictIn Term, value Term, dictOut Term, cont Cont, env *Env) *Promise {
+func DelDict4(vm *VM, key Term, dictIn Term, value Term, dictOut Term, cont Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+
+	env = vm.ownedEnv(env)
 	dictIn = env.Resolve(dictIn)
 	switch dt := dictIn.(type) {
 	case Variable:
@@ -384,8 +402,12 @@ func DelDict4(vm *VM, key Term, dictIn Term, value Term, dictOut Term, cont Cont
 			}
 
 			return Unify(vm, value, removed, func(env *Env) *Promise {
-				n := dt.Len()
-				args := make([]Term, 0, 1+2*(n-1))
+				pairs := int64(dt.Len())
+				if pairs < 1 {
+					return Error(resourceError(resourceMemory, env))
+				}
+				pairs--
+				args := makeTerms(addTermCells(addTermCells(pairs, pairs, env), 1, env), env)[:0]
 				args = append(args, dt.Tag())
 
 				dt.All()(func(kk Atom, vv Term) bool {
@@ -406,55 +428,50 @@ func DelDict4(vm *VM, key Term, dictIn Term, value Term, dictOut Term, cont Cont
 	}
 }
 
-// mergeDict merge n into d returning a new Dict.
-func mergeDict(n Dict, d Dict) Dict {
-	totalLen := d.Len() + n.Len()
-	args := make([]Term, 0, totalLen*2+1)
+// mergeDict merges n into d returning a new Dict.
+func mergeDict(n Dict, d Dict, env *Env) Dict {
+	dLen, nLen := d.Len(), n.Len()
+	pairs := addTermCells(int64(dLen), int64(nLen), env)
+	args := makeTerms(addTermCells(addTermCells(pairs, pairs, env), 1, env), env)[:0]
 	args = append(args, d.Tag())
 
-	dPairs := make([]Term, 0, d.Len()*2)
-	for k, v := range d.All() {
-		dPairs = append(dPairs, k, v)
-	}
-
-	nPairs := make([]Term, 0, n.Len()*2)
-	for k, v := range n.All() {
-		nPairs = append(nPairs, k, v)
-	}
-
 	i, j := 0, 0
-	for i < len(dPairs) && j < len(nPairs) {
-		dk, nk := dPairs[i].(Atom), nPairs[j].(Atom)
+	for i < dLen && j < nLen {
+		dk, dv, _ := d.At(i)
+		nk, nv, _ := n.At(j)
 
 		switch {
 		case dk == nk:
-			args = append(args, nk, nPairs[j+1])
-			i += 2
-			j += 2
+			args = append(args, nk, nv)
+			i++
+			j++
 		case dk < nk:
-			args = append(args, dk, dPairs[i+1])
-			i += 2
-		case nk < dk:
-			args = append(args, nk, nPairs[j+1])
-			j += 2
+			args = append(args, dk, dv)
+			i++
+		default:
+			args = append(args, nk, nv)
+			j++
 		}
 	}
 
-	for i < len(dPairs) {
-		args = append(args, dPairs[i], dPairs[i+1])
-		i += 2
+	for i < dLen {
+		k, v, _ := d.At(i)
+		args = append(args, k, v)
+		i++
 	}
-
-	for j < len(nPairs) {
-		args = append(args, nPairs[j], nPairs[j+1])
-		j += 2
+	for j < nLen {
+		k, v, _ := n.At(j)
+		args = append(args, k, v)
+		j++
 	}
 
 	return newDict(args)
 }
 
-func newDictFromListOfPairs(vm *VM, l Compound, env *Env) (Dict, error) {
-	var args []Term
+func newDictFromListOfPairs(vm *VM, l Compound, env *Env) (d Dict, err error) {
+	defer recoverMeterError(&err)
+
+	args := makeTerms(1, env)[:0]
 	args = append(args, vm.NewVariable())
 
 	iter := ListIterator{List: l, Env: env}
@@ -463,13 +480,13 @@ func newDictFromListOfPairs(vm *VM, l Compound, env *Env) (Dict, error) {
 		if err != nil {
 			return nil, err
 		}
-		args = append(args, k, v)
+		args = appendTerms(args, env, k, v)
 	}
 	if err := iter.Err(); err != nil {
 		return nil, err
 	}
 
-	return NewDict(args)
+	return newDictWithEnv(args, env)
 }
 
 func assertPair(pair Term, env *Env) (Atom, Term, error) {
