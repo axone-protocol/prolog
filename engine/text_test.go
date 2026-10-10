@@ -788,6 +788,72 @@ bar(b).
 	}
 }
 
+func TestVM_CompileTermCellMeter(t *testing.T) {
+	t.Run("returns a compilation meter exception", func(t *testing.T) {
+		var vm VM
+		var used uint64
+		var charges []uint64
+		vm.InstallMeter(func(kind MeterKind, units uint64) Term {
+			if kind != MeterTermCell {
+				return nil
+			}
+			charges = append(charges, units)
+			if used+units > 1 {
+				return atomResourceError.Apply(atomMemory)
+			}
+			used += units
+			return nil
+		})
+
+		err := vm.Compile(context.Background(), `f(a).`)
+		assert.Equal(t, resourceError(resourceMemory, vm.NewEnv()), err)
+		assert.Equal(t, []uint64{1, 1}, charges)
+	})
+}
+
+func TestClausesCallTermCellMeter(t *testing.T) {
+	c := clause{
+		vars:     make([]Variable, 2),
+		bytecode: bytecode{{opcode: OpExit}},
+	}
+
+	t.Run("charges before allocating variables", func(t *testing.T) {
+		var vm VM
+		vm.SetMaxVariables(2)
+		var charged uint64
+		vm.InstallMeter(func(kind MeterKind, units uint64) Term {
+			if kind == MeterTermCell {
+				charged += units
+			}
+			return nil
+		})
+
+		ok, err := clauses{c}.call(&vm, nil, Success, nil).Force(context.Background())
+		assert.NoError(t, err)
+		assert.True(t, ok)
+		assert.Equal(t, uint64(2), charged)
+		assert.Equal(t, uint64(2), vm.variableCount)
+	})
+
+	t.Run("stops before creating variables", func(t *testing.T) {
+		var vm VM
+		var charged uint64
+		vm.InstallMeter(func(kind MeterKind, units uint64) Term {
+			if kind != MeterTermCell {
+				return nil
+			}
+			charged += units
+			return atomResourceError.Apply(atomMemory)
+		})
+
+		ok, err := clauses{c}.call(&vm, nil, Success, nil).Force(context.Background())
+		assert.False(t, ok)
+		assert.Equal(t, resourceError(resourceMemory, vm.NewEnv()), err)
+		assert.Equal(t, uint64(2), charged)
+		assert.Zero(t, vm.variableCount)
+	})
+}
+
 func TestVM_Consult(t *testing.T) {
 	vm := VM{FS: testdata}
 	x := vm.NewVariable()
@@ -829,6 +895,21 @@ func TestVM_Consult(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConsultTermCellMeter(t *testing.T) {
+	var vm VM
+	vm.FS = testdata
+	vm.InstallMeter(func(kind MeterKind, _ uint64) Term {
+		if kind == MeterTermCell {
+			return atomResourceError.Apply(atomMemory)
+		}
+		return nil
+	})
+
+	ok, err := Consult(&vm, List(NewAtom("testdata/empty.txt")), Success, nil).Force(context.Background())
+	assert.False(t, ok)
+	assert.Equal(t, resourceError(resourceMemory, vm.NewEnv()), err)
 }
 
 func TestDiscontiguousError_Error(t *testing.T) {

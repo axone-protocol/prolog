@@ -30,9 +30,10 @@ type Env struct {
 	color       color
 	left, right *Env
 	binding
-	meter MeterFunc
-	vm    *VM
-	scope *variableScope
+	meter         MeterFunc
+	meterDisabled bool
+	vm            *VM
+	scope         *variableScope
 }
 
 type binding struct {
@@ -41,7 +42,8 @@ type binding struct {
 	// attributes?
 }
 
-// NewEnv creates an initial, unmetered environment owned by vm.
+// NewEnv creates an initial environment owned by vm. Execution metering is
+// attached on predicate entry; term reservations use vm's installed meter.
 func (vm *VM) NewEnv() *Env {
 	if vm.rootEnv == nil {
 		vm.rootEnv = &Env{
@@ -65,6 +67,7 @@ func (e *Env) withMeter(m MeterFunc) *Env {
 
 	ret := *e
 	ret.meter = m
+	ret.meterDisabled = false
 	return &ret
 }
 
@@ -74,11 +77,16 @@ func (e *Env) withoutMeter() *Env {
 	}
 	ret := *e
 	ret.meter = nil
+	ret.meterDisabled = true
 	return &ret
 }
 
 func (e *Env) charge(kind MeterKind, units uint64) {
-	chargeMeter(e.meterFunc(), kind, units, e)
+	m := e.meterFunc()
+	if kind == MeterTermCell && m == nil && e != nil && !e.meterDisabled && e.vm != nil {
+		m = e.vm.meter
+	}
+	chargeMeter(m, kind, units, e)
 }
 
 func (e *Env) meterFunc() MeterFunc {
@@ -130,33 +138,36 @@ func (e *Env) bind(v Variable, t Term) *Env {
 	if v != varContext && node.scope != v.scope {
 		panic(ErrVariableScope)
 	}
-	ret := *node.insert(k, t, node.meter, node.vm, node.scope)
+	ret := *node.insert(k, t, node.meter, node.meterDisabled, node.vm, node.scope)
 	ret.color = black
 	ret.meter = node.meter
 	return &ret
 }
 
-func (e *Env) insert(k envKey, v Term, meter MeterFunc, vm *VM, scope *variableScope) *Env {
+func (e *Env) insert(k envKey, v Term, meter MeterFunc, meterDisabled bool, vm *VM, scope *variableScope) *Env {
 	if e == nil {
-		return &Env{color: red, binding: binding{key: k, value: v}, meter: meter, vm: vm, scope: scope}
+		return &Env{color: red, binding: binding{key: k, value: v}, meter: meter, meterDisabled: meterDisabled, vm: vm, scope: scope}
 	}
 	switch {
 	case k < e.key:
 		ret := *e
-		ret.left = e.left.insert(k, v, meter, vm, scope)
+		ret.left = e.left.insert(k, v, meter, meterDisabled, vm, scope)
 		ret.balance()
 		ret.meter = meter
+		ret.meterDisabled = meterDisabled
 		return &ret
 	case k > e.key:
 		ret := *e
-		ret.right = e.right.insert(k, v, meter, vm, scope)
+		ret.right = e.right.insert(k, v, meter, meterDisabled, vm, scope)
 		ret.balance()
 		ret.meter = meter
+		ret.meterDisabled = meterDisabled
 		return &ret
 	default:
 		ret := *e
 		ret.value = v
 		ret.meter = meter
+		ret.meterDisabled = meterDisabled
 		return &ret
 	}
 }
@@ -214,13 +225,14 @@ func (e *Env) balance() {
 		return
 	}
 	*e = Env{
-		color:   red,
-		left:    &Env{color: black, left: a, right: b, binding: x, meter: m, vm: e.vm, scope: e.scope},
-		right:   &Env{color: black, left: c, right: d, binding: z, meter: m, vm: e.vm, scope: e.scope},
-		binding: y,
-		meter:   m,
-		vm:      e.vm,
-		scope:   e.scope,
+		color:         red,
+		left:          &Env{color: black, left: a, right: b, binding: x, meter: m, meterDisabled: e.meterDisabled, vm: e.vm, scope: e.scope},
+		right:         &Env{color: black, left: c, right: d, binding: z, meter: m, meterDisabled: e.meterDisabled, vm: e.vm, scope: e.scope},
+		binding:       y,
+		meter:         m,
+		meterDisabled: e.meterDisabled,
+		vm:            e.vm,
+		scope:         e.scope,
 	}
 }
 
@@ -265,13 +277,14 @@ func simplify(t Term, simplified map[termID]Compound, env *Env) Term {
 	case charList, codeList:
 		return t
 	case list:
-		l := make(list, len(t))
+		l := list(makeTerms(int64(len(t)), env))
 		simplified[id(t)] = l
 		for i, e := range t {
 			l[i] = simplify(e, simplified, env)
 		}
 		return l
 	case *partial:
+		chargeTermCells(1, env)
 		var p partial
 		simplified[id(t)] = &p
 		p.Compound = simplify(t.Compound, simplified, env).(Compound)
@@ -281,7 +294,7 @@ func simplify(t Term, simplified map[termID]Compound, env *Env) Term {
 	case Compound:
 		c := compound{
 			functor: t.Functor(),
-			args:    make([]Term, t.Arity()),
+			args:    makeTerms(int64(t.Arity()), env),
 		}
 		simplified[id(t)] = &c
 		for i := 0; i < t.Arity(); i++ {
@@ -313,6 +326,8 @@ func (e *Env) appendFreeVariables(fvs variables, t Term) variables {
 				return fvs
 			}
 		}
+		addTermCells(int64(len(fvs)), 1, e)
+		chargeTermCells(1, e)
 		return append(fvs, t)
 	case Compound:
 		for i := 0; i < t.Arity(); i++ {

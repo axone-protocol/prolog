@@ -1,46 +1,46 @@
 package engine
 
-import (
-	"errors"
-	"runtime"
-	"runtime/debug"
-	"unsafe"
+import "unsafe"
+
+// These bounds protect slice lengths and byte sizes before conversion to int.
+// They are representability checks, not physical memory limits.
+const (
+	maxTermCells     = int64(^uint(0)>>1) / int64(unsafe.Sizeof(Term(nil)))
+	maxVariableCells = int64(^uint(0)>>1) / int64(unsafe.Sizeof(Variable{}))
 )
 
-var errOutOfMemory = errors.New("out of memory")
-
-var termSize = int64(unsafe.Sizeof(Term(nil)))
-
-var memFree = func() int64 {
-	limit := debug.SetMemoryLimit(-1)
-	var stats runtime.MemStats
-	runtime.ReadMemStats(&stats)
-	return limit - int64(stats.Sys-stats.HeapReleased)
+func termCells(n int64, env *Env) int {
+	if n < 0 || n > maxTermCells || n > maxVariableCells {
+		panic(meterPanic{exception: resourceError(resourceMemory, env)})
+	}
+	return int(n)
 }
 
-// makeSlice tries to allocate a slice safely by respecting debug.SetMemoryLimit().
-// There's still a chance to breach the limit due to a race condition.
-// Yet, it can still prevent allocation of unreasonably large slices.
-func makeSlice(n int) (_ []Term, err error) {
-	if n < 0 {
-		return nil, errOutOfMemory
+func addTermCells(a, b int64, env *Env) int64 {
+	termCells(a, env)
+	termCells(b, env)
+	if a > maxTermCells-b || a > maxVariableCells-b {
+		panic(meterPanic{exception: resourceError(resourceMemory, env)})
 	}
-	if n <= 8 { // Overlook small slices for better performance.
-		return make([]Term, n), nil
-	}
+	return a + b
+}
 
-	defer func() {
-		if r := recover(); r != nil {
-			// e.g. "runtime error: makeslice: len out of range"
-			err = errOutOfMemory
-		}
-	}()
+func chargeTermCells(n int64, env *Env) {
+	termCells(n, env)
+	env.charge(MeterTermCell, uint64(n))
+}
 
-	free := memFree()
+// makeTerms reserves logical term slots before requesting their backing array.
+// The host meter supplies the quota; no installed meter means no finite quota.
+func makeTerms(n int64, env *Env) []Term {
+	chargeTermCells(n, env)
+	return make([]Term, int(n))
+}
 
-	if free < int64(n)*termSize {
-		return nil, errOutOfMemory
-	}
-
-	return make([]Term, n), nil
+// appendTerms charges new logical slots, not Go's implicit slice overcapacity.
+// Fill already charged reservations with ordinary append instead.
+func appendTerms(ts []Term, env *Env, terms ...Term) []Term {
+	addTermCells(int64(len(ts)), int64(len(terms)), env)
+	chargeTermCells(int64(len(terms)), env)
+	return append(ts, terms...)
 }

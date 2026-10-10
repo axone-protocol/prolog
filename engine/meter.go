@@ -27,12 +27,19 @@ const (
 	// MeterCompareStep charges one unit per structural comparison step in the standard order of terms.
 	// It captures work performed by compare/3, sort/2, keysort/2, setof/3, and related operations.
 	MeterCompareStep
+
+	// MeterTermCell charges logical term slots reserved by VM execution, parsing,
+	// compilation, copies, and collectors. It excludes runtime slice overcapacity
+	// and is cumulative: backtracking and garbage collection do not refund units.
+	// Hosts must install a finite quota before processing untrusted input.
+	MeterTermCell
 )
 
 // MeterFunc is called by the VM whenever it consumes a metered resource.
 // Returning nil continues execution.
 // Returning a non-nil term aborts execution by throwing error(Formal, Context),
 // where the returned term is used as Formal and the VM supplies the current Context.
+// Synchronous parsing and compilation return the resulting Exception directly.
 type MeterFunc func(kind MeterKind, units uint64) Term
 
 type meterPanic struct {
@@ -47,5 +54,17 @@ func chargeMeter(m MeterFunc, kind MeterKind, units uint64, env *Env) {
 		env = env.withoutMeter()
 		exception := NewException(atomError.Apply(formal, env.Resolve(varContext)), env)
 		panic(meterPanic{exception})
+	}
+}
+
+// recoverMeterError converts metering failures at synchronous error-returning
+// entry points. Other panics retain their existing behavior.
+func recoverMeterError(err *error) {
+	if r := recover(); r != nil {
+		if p, ok := r.(meterPanic); ok {
+			*err = p.exception
+			return
+		}
+		panic(r)
 	}
 }

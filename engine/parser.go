@@ -25,6 +25,7 @@ var atomSpecialDot = NewAtom("$dot")
 // Parser turns bytes into Term.
 type Parser struct {
 	vm           *VM
+	env          *Env
 	lexer        Lexer
 	_operators   *operators
 	doubleQuotes doubleQuotes
@@ -47,7 +48,8 @@ type ParsedVariable struct {
 // NewParser creates a new parser from the current VM and io.RuneReader.
 func NewParser(vm *VM, r io.RuneReader) *Parser {
 	return &Parser{
-		vm: vm,
+		vm:  vm,
+		env: vm.NewEnv(),
 		lexer: Lexer{
 			input: newRuneRingBuffer(r),
 		},
@@ -58,11 +60,12 @@ func NewParser(vm *VM, r io.RuneReader) *Parser {
 
 // SetPlaceholder registers placeholder and its arguments. Every occurrence of placeholder will be replaced by arguments.
 // Mismatch of the number of occurrences of placeholder and the number of arguments raises an error.
-func (p *Parser) SetPlaceholder(placeholder Atom, args ...interface{}) error {
+func (p *Parser) SetPlaceholder(placeholder Atom, args ...interface{}) (err error) {
+	defer recoverMeterError(&err)
+
 	p.placeholder = placeholder
-	p.args = make([]Term, len(args))
+	p.args = makeTerms(int64(len(args)), p.env)
 	for i, a := range args {
-		var err error
 		p.args[i], err = p.termOf(reflect.ValueOf(a))
 		if err != nil {
 			return err
@@ -86,7 +89,7 @@ func (p *Parser) termOf(o reflect.Value) (Term, error) {
 		}
 	case reflect.Array, reflect.Slice:
 		l := o.Len()
-		es := make([]Term, l)
+		es := makeTerms(int64(l), p.env)
 		for i := 0; i < l; i++ {
 			var err error
 			es[i], err = p.termOf(o.Index(i))
@@ -120,8 +123,10 @@ func (p *Parser) current() Token {
 }
 
 // Term parses a term followed by a full stop.
-func (p *Parser) Term() (Term, error) {
-	t, err := p.term(1201)
+func (p *Parser) Term() (t Term, err error) {
+	defer recoverMeterError(&err)
+
+	t, err = p.term(1201)
 	switch err {
 	case nil:
 		break
@@ -363,7 +368,9 @@ func (p *Parser) term(maxPriority Integer) (Term, error) {
 			p.backup()
 			return p.term0(maxPriority)
 		}
-		lhs = op.name.Apply(t)
+		prefixArgs := makeTerms(1, p.env)
+		prefixArgs[0] = t
+		lhs = op.name.Apply(prefixArgs...)
 	case errNoOp:
 		lhs, err = p.term0(maxPriority)
 		if err != nil {
@@ -380,13 +387,17 @@ func (p *Parser) term(maxPriority Integer) (Term, error) {
 		}
 		switch _, rbp := op.bindingPriorities(); {
 		case rbp > 1200:
-			lhs = op.name.Apply(lhs)
+			postfixArgs := makeTerms(1, p.env)
+			postfixArgs[0] = lhs
+			lhs = op.name.Apply(postfixArgs...)
 		default:
 			rhs, err := p.term(rbp)
 			if err != nil {
 				return nil, err
 			}
-			lhs = op.name.Apply(lhs, rhs)
+			infixArgs := makeTerms(2, p.env)
+			infixArgs[0], infixArgs[1] = lhs, rhs
+			lhs = op.name.Apply(infixArgs...)
 		}
 	}
 
@@ -711,7 +722,7 @@ func (p *Parser) list() (Term, error) {
 	if err != nil {
 		return nil, err
 	}
-	args := []Term{arg}
+	args := appendTerms(nil, p.env, arg)
 	for {
 		switch t, _ := p.next(); t.kind {
 		case tokenComma:
@@ -719,7 +730,7 @@ func (p *Parser) list() (Term, error) {
 			if err != nil {
 				return nil, err
 			}
-			args = append(args, arg)
+			args = appendTerms(args, p.env, arg)
 		case tokenBar:
 			rest, err := p.arg()
 			if err != nil {
@@ -729,8 +740,11 @@ func (p *Parser) list() (Term, error) {
 			switch t, _ := p.next(); t.kind {
 			case tokenCloseList:
 				if len(args) == 1 {
-					return Cons(args[0], rest), nil
+					terms := makeTerms(2, p.env)
+					terms[0], terms[1] = args[0], rest
+					return atomDot.Apply(terms...), nil
 				}
+				chargeTermCells(1, p.env)
 				return PartialList(rest, args...), nil
 			default:
 				p.backup()
@@ -756,7 +770,9 @@ func (p *Parser) curlyBracketedTerm() (Term, error) {
 		return nil, errExpectation
 	}
 
-	return atomEmptyBlock.Apply(t), nil
+	args := makeTerms(1, p.env)
+	args[0] = t
+	return atomEmptyBlock.Apply(args...), nil
 }
 
 func (p *Parser) functionalNotation(functor Atom) (Term, error) {
@@ -766,7 +782,7 @@ func (p *Parser) functionalNotation(functor Atom) (Term, error) {
 		if err != nil {
 			return nil, err
 		}
-		args := []Term{arg}
+		args := appendTerms(nil, p.env, arg)
 		for {
 			switch t, _ := p.next(); t.kind {
 			case tokenComma:
@@ -774,7 +790,7 @@ func (p *Parser) functionalNotation(functor Atom) (Term, error) {
 				if err != nil {
 					return nil, err
 				}
-				args = append(args, arg)
+				args = appendTerms(args, p.env, arg)
 			case tokenClose:
 				return functor.Apply(args...), nil
 			default:
@@ -834,7 +850,7 @@ func (p *Parser) dict() (Term, error) {
 		return nil, err
 	}
 
-	args = append(args, tag)
+	args = appendTerms(args, p.env, tag)
 
 	if t, _ := p.next(); t.kind != tokenOpenCurly {
 		p.backup()
@@ -842,7 +858,7 @@ func (p *Parser) dict() (Term, error) {
 	}
 
 	if t, _ := p.next(); t.kind == tokenCloseCurly {
-		return NewDict(args)
+		return newDictWithEnv(args, p.env)
 	}
 	p.backup()
 
@@ -851,12 +867,12 @@ func (p *Parser) dict() (Term, error) {
 		if err != nil {
 			return nil, err
 		}
-		args = append(args, k, v)
+		args = appendTerms(args, p.env, k, v)
 
 		switch t, _ := p.next(); t.kind {
 		case tokenComma:
 		case tokenCloseCurly:
-			return NewDict(args)
+			return newDictWithEnv(args, p.env)
 		default:
 			p.backup()
 			return nil, errExpectation

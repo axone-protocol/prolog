@@ -19,7 +19,9 @@ func (e *discontiguousError) Error() string {
 }
 
 // Compile compiles the Prolog text and updates the DB accordingly.
-func (vm *VM) Compile(ctx context.Context, s string, args ...interface{}) error {
+func (vm *VM) Compile(ctx context.Context, s string, args ...interface{}) (err error) {
+	defer recoverMeterError(&err)
+
 	var t text
 	if err := vm.compile(ctx, &t, s, args...); err != nil {
 		return err
@@ -56,14 +58,17 @@ func (vm *VM) Compile(ctx context.Context, s string, args ...interface{}) error 
 }
 
 // Consult executes Prolog texts in files.
-func Consult(vm *VM, files Term, k Cont, env *Env) *Promise {
+func Consult(vm *VM, files Term, k Cont, env *Env) (promise *Promise) {
+	defer ensurePromise(&promise)
+
+	env = vm.ownedEnv(env)
 	var filenames []Term
 	iter := ListIterator{List: files, Env: env}
 	for iter.Next() {
-		filenames = append(filenames, iter.Current())
+		filenames = appendTerms(filenames, env, iter.Current())
 	}
 	if err := iter.Err(); err != nil {
-		filenames = []Term{files}
+		filenames = appendTerms(nil, env, files)
 	}
 
 	return Delay(func(ctx context.Context) *Promise {
@@ -77,7 +82,8 @@ func Consult(vm *VM, files Term, k Cont, env *Env) *Promise {
 	})
 }
 
-func (vm *VM) compile(ctx context.Context, text *text, s string, args ...interface{}) error {
+func (vm *VM) compile(ctx context.Context, text *text, s string, args ...interface{}) (err error) {
+	defer recoverMeterError(&err)
 	env := vm.NewEnv()
 	if text.clauses == nil {
 		text.clauses = orderedmap.New[procedureIndicator, *userDefined]()
@@ -135,7 +141,8 @@ func (vm *VM) compile(ctx context.Context, text *text, s string, args ...interfa
 	return nil
 }
 
-func (vm *VM) directive(ctx context.Context, text *text, d Term) error {
+func (vm *VM) directive(ctx context.Context, text *text, d Term) (err error) {
+	defer recoverMeterError(&err)
 	env := vm.NewEnv()
 	if err := text.flush(); err != nil {
 		return err
@@ -156,7 +163,7 @@ func (vm *VM) directive(ctx context.Context, text *text, d Term) error {
 			u.discontiguous = true
 		}, env)
 	case procedureIndicator{name: atomInitialization, arity: 1}:
-		text.goals = append(text.goals, arg(0))
+		text.goals = appendTerms(text.goals, env, arg(0))
 		return nil
 	case procedureIndicator{name: atomInclude, arity: 1}:
 		_, b, err := vm.open(arg(0), env)

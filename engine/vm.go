@@ -276,6 +276,8 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 		ok  = true
 		op  instruction
 		arg Term
+		// Reserved slots are tracked separately from Go's implicit overcapacity.
+		reserved = len(args)
 	)
 	for ok {
 		op, pc = pc[0], pc[1:]
@@ -289,98 +291,113 @@ func (vm *VM) exec(pc bytecode, vars []Variable, cont Cont, args []Term, astack 
 		switch opcode, operand := op.opcode, op.operand; opcode {
 		case OpGetConst:
 			arg, args = args[0], args[1:]
+			reserved--
 			env, ok = env.unify(arg, operand, false)
 		case OpPutConst:
-			args = append(args, operand)
+			args, reserved = appendExecArg(args, reserved, operand, env)
 		case OpGetVar:
 			v := vars[operand.(Integer)]
 			arg, args = args[0], args[1:]
+			reserved--
 			env, ok = env.unify(arg, v, false)
 		case OpPutVar:
 			v := vars[operand.(Integer)]
-			args = append(args, v)
+			args, reserved = appendExecArg(args, reserved, v, env)
 		case OpGetFunctor:
 			pi := operand.(procedureIndicator)
-			arg, astack = env.Resolve(args[0]), append(astack, args[1:])
-			args = make([]Term, int(pi.arity))
+			arg, astack = env.Resolve(args[0]), append(astack, args[1:len(args):reserved])
+			args = makeTerms(int64(pi.arity), env)
+			reserved = len(args)
 			for i := range args {
 				args[i] = vm.NewVariable()
 			}
 			env, ok = env.unify(arg, pi.name.Apply(args...), false)
 		case OpPutFunctor:
 			pi := operand.(procedureIndicator)
-			vs := make([]Term, int(pi.arity))
+			vs := makeTerms(int64(pi.arity), env)
 			arg = pi.name.Apply(vs...)
-			args = append(args, arg)
-			astack = append(astack, args)
-			args = vs[:0]
+			args, reserved = appendExecArg(args, reserved, arg, env)
+			astack = append(astack, args[:len(args):reserved])
+			args, reserved = vs[:0], len(vs)
 		case OpPop:
 			args, astack = astack[len(astack)-1], astack[:len(astack)-1]
+			reserved = cap(args)
 		case OpEnter:
 			// Enter marks the start of a clause; no register changes are needed.
 		case OpCall:
 			pi := operand.(procedureIndicator)
-			return vm.arrive(pi.name, args, func(env *Env) *Promise {
+			return vm.arrive(pi.name, args[:len(args):reserved], func(env *Env) *Promise {
 				return vm.exec(pc, vars, cont, nil, nil, env, cutParent)
 			}, env)
 		case OpExit:
 			return cont(env)
 		case OpCut:
 			return cut(cutParent, func(context.Context) *Promise {
-				return vm.exec(pc, vars, cont, args, astack, env, cutParent)
+				return vm.exec(pc, vars, cont, args[:len(args):reserved], astack, env, cutParent)
 			})
 		case OpGetList:
 			l := operand.(Integer)
-			arg, astack = args[0], append(astack, args[1:])
-			args = make([]Term, int(l))
+			arg, astack = args[0], append(astack, args[1:len(args):reserved])
+			args = makeTerms(int64(l), env)
+			reserved = len(args)
 			for i := range args {
 				args[i] = vm.NewVariable()
 			}
 			env, ok = env.unify(arg, list(args), false)
 		case OpPutList:
 			l := operand.(Integer)
-			vs := make([]Term, int(l))
+			vs := makeTerms(int64(l), env)
 			arg = list(vs)
-			args = append(args, arg)
-			astack = append(astack, args)
-			args = vs[:0]
+			args, reserved = appendExecArg(args, reserved, arg, env)
+			astack = append(astack, args[:len(args):reserved])
+			args, reserved = vs[:0], len(vs)
 		case OpGetDict:
 			l := operand.(Integer)
-			arg, astack = args[0], append(astack, args[1:])
-			args = make([]Term, int(l))
+			arg, astack = args[0], append(astack, args[1:len(args):reserved])
+			args = makeTerms(int64(l), env)
+			reserved = len(args)
 			for i := range args {
 				args[i] = vm.NewVariable()
 			}
 			env, ok = env.unify(arg, newDict(args), false)
 		case OpPutDict:
 			l := operand.(Integer)
-			vs := make([]Term, int(l))
+			vs := makeTerms(int64(l), env)
 			arg = &dict{compound: compound{functor: atomDict, args: vs}}
-			args = append(args, arg)
-			astack = append(astack, args)
-			args = vs[:0]
+			args, reserved = appendExecArg(args, reserved, arg, env)
+			astack = append(astack, args[:len(args):reserved])
+			args, reserved = vs[:0], len(vs)
 		case OpGetPartial:
 			l := operand.(Integer)
-			arg, astack = args[0], append(astack, args[1:])
-			args = make([]Term, int(l+1))
+			arg, astack = args[0], append(astack, args[1:len(args):reserved])
+			args = makeTerms(addTermCells(int64(l), 1, env), env)
+			reserved = len(args)
 			for i := range args {
 				args[i] = vm.NewVariable()
 			}
 			env, ok = env.unify(arg, PartialList(args[0], args[1:]...), false)
 		case OpPutPartial:
 			l := operand.(Integer)
-			vs := make([]Term, int(l+1))
+			vs := makeTerms(addTermCells(int64(l), 1, env), env)
 			arg = &partial{
 				Compound: list(vs[1:]),
 				tail:     &vs[0],
 			}
-			args = append(args, arg)
-			astack = append(astack, args)
-			args = vs[:0]
+			args, reserved = appendExecArg(args, reserved, arg, env)
+			astack = append(astack, args[:len(args):reserved])
+			args, reserved = vs[:0], len(vs)
 		}
 	}
 
 	return Bool(false)
+}
+
+func appendExecArg(args []Term, reserved int, arg Term, env *Env) ([]Term, int) {
+	if len(args) == reserved {
+		reserved = int(addTermCells(int64(reserved), 1, env))
+		chargeTermCells(1, env)
+	}
+	return append(args, arg), reserved
 }
 
 // SetUserInput sets the given stream as user_input.
@@ -437,6 +454,8 @@ func (vm *VM) ClearHook() {
 }
 
 // InstallMeter sets the given meter function in the VM.
+// The host owns resource counters and quotas. To bound logical term allocations,
+// handle MeterTermCell and install the meter before parsing untrusted input.
 func (vm *VM) InstallMeter(f MeterFunc) {
 	vm.meter = f
 }
@@ -489,7 +508,7 @@ func (vm *VM) ownedEnv(env *Env) *Env {
 
 func (vm *VM) prepareEnv(env *Env) *Env {
 	env = vm.ownedEnv(env)
-	if env.meter != nil || vm.meter == nil {
+	if env.meterDisabled || env.meter != nil || vm.meter == nil {
 		return env
 	}
 	return env.withMeter(vm.meter)

@@ -177,3 +177,155 @@ func TestVM_MeterException(t *testing.T) {
 	_, matched := vm.NewEnv().Unify(pattern, ex.Term())
 	assert.True(t, matched)
 }
+
+func TestRecoverMeterError_PreservesNonMeterPanics(t *testing.T) {
+	want := ErrVariableScope
+	var err error
+	assert.PanicsWithValue(t, want, func() {
+		func() {
+			defer recoverMeterError(&err)
+			panic(want)
+		}()
+	})
+	assert.NoError(t, err)
+}
+
+func TestDesugarPred_MetersPartialListTail(t *testing.T) {
+	var vm VM
+	var charged uint64
+	vm.InstallMeter(func(kind MeterKind, units uint64) Term {
+		if kind == MeterTermCell {
+			charged += units
+		}
+		return nil
+	})
+
+	_, _ = desugarPred(&vm, PartialList(NewAtom("tail"), NewAtom("a"), NewAtom("b")), nil, vm.NewEnv())
+
+	assert.Equal(t, uint64(3), charged)
+}
+
+func TestVMExec_MetersCallerSpareCapacity(t *testing.T) {
+	var vm VM
+	var charged uint64
+	vm.InstallMeter(func(kind MeterKind, units uint64) Term {
+		if kind == MeterTermCell {
+			charged += units
+		}
+		return nil
+	})
+
+	args := make([]Term, 0, 1)
+	ok, err := vm.exec(
+		bytecode{
+			{opcode: OpPutConst, operand: NewAtom("a")},
+			{opcode: OpExit},
+		},
+		nil,
+		Success,
+		args,
+		nil,
+		nil,
+		nil,
+	).Force(context.Background())
+
+	assert.True(t, ok)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), charged)
+}
+
+func TestVM_MeterTermCell_CompiledTerms(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+		want   Term
+		cells  uint64
+	}{
+		{"get functor", "p(f(a,b,c)).", NewAtom("f").Apply(NewAtom("a"), NewAtom("b"), NewAtom("c")), 3},
+		{"get list", "p([a,b,c]).", List(NewAtom("a"), NewAtom("b"), NewAtom("c")), 3},
+		{"get dict", "p(tag{k:v}).", newDict([]Term{NewAtom("tag"), NewAtom("k"), NewAtom("v")}), 3},
+		{"get partial", "p([a,b|z]).", PartialList(NewAtom("z"), NewAtom("a"), NewAtom("b")), 3},
+		{"put functor", "p(X) :- X = f(a,b,c).", NewAtom("f").Apply(NewAtom("a"), NewAtom("b"), NewAtom("c")), 6},
+		{"put list", "p(X) :- X = [a,b,c].", List(NewAtom("a"), NewAtom("b"), NewAtom("c")), 6},
+		{"put dict", "p(X) :- X = tag{k:v}.", newDict([]Term{NewAtom("tag"), NewAtom("k"), NewAtom("v")}), 6},
+		{"put partial", "p(X) :- X = [a,b|z].", PartialList(NewAtom("z"), NewAtom("a"), NewAtom("b")), 6},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, enough := range []bool{false, true} {
+				var vm VM
+				vm.Register2(atomEqual, Unify)
+				vm.getOperators().define(1200, operatorSpecifierXFX, atomIf)
+				vm.getOperators().define(700, operatorSpecifierXFX, atomEqual)
+				if !assert.NoError(t, vm.Compile(context.Background(), tt.source)) {
+					return
+				}
+				remaining := tt.cells
+				if !enough {
+					remaining--
+				}
+				vm.InstallMeter(func(kind MeterKind, units uint64) Term {
+					if kind == MeterTermCell {
+						if units > remaining {
+							return atomResourceError.Apply(atomMemory)
+						}
+						remaining -= units
+					}
+					return nil
+				})
+				x := vm.NewVariable()
+				matched := false
+				ok, err := vm.Arrive(NewAtom("p"), []Term{x}, func(env *Env) *Promise {
+					matched = tt.want.Compare(x, env) == 0
+					return Bool(matched)
+				}, nil).Force(context.Background())
+				if enough {
+					assert.NoError(t, err)
+					assert.True(t, ok)
+					assert.True(t, matched)
+					assert.Zero(t, remaining)
+				} else {
+					assert.False(t, ok)
+					assert.False(t, matched)
+					assert.Equal(t, Exception{term: atomError.Apply(atomResourceError.Apply(atomMemory), atomSlash.Apply(NewAtom("p"), Integer(1)))}, err)
+				}
+			}
+		})
+	}
+}
+
+func TestVM_MeterTermCell_IndependentQuotas(t *testing.T) {
+	newVM := func() *VM {
+		vm := &VM{}
+		if !assert.NoError(t, vm.Compile(context.Background(), "p([a,b,c]).")) {
+			t.FailNow()
+		}
+		remaining := uint64(3)
+		vm.InstallMeter(func(kind MeterKind, units uint64) Term {
+			if kind == MeterTermCell {
+				if units > remaining {
+					return atomResourceError.Apply(atomMemory)
+				}
+				remaining -= units
+			}
+			return nil
+		})
+		return vm
+	}
+	call := func(vm *VM) (bool, error) {
+		x := vm.NewVariable()
+		return vm.Arrive(NewAtom("p"), []Term{x}, func(env *Env) *Promise {
+			return Bool(List(NewAtom("a"), NewAtom("b"), NewAtom("c")).Compare(x, env) == 0)
+		}, nil).Force(context.Background())
+	}
+	a, b := newVM(), newVM()
+	ok, err := call(a)
+	assert.NoError(t, err)
+	assert.True(t, ok)
+	ok, err = call(a)
+	assert.False(t, ok)
+	assert.Equal(t, Exception{term: atomError.Apply(atomResourceError.Apply(atomMemory), atomSlash.Apply(NewAtom("p"), Integer(1)))}, err)
+	ok, err = call(b)
+	assert.NoError(t, err)
+	assert.True(t, ok)
+}

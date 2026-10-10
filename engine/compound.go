@@ -460,7 +460,7 @@ func (e *Env) set(ts ...Term) Term {
 	sort.Slice(ts, func(i, j int) bool {
 		return ts[i].Compare(ts[j], e) == -1
 	})
-	us := make([]Term, 0, len(ts))
+	us := makeTerms(int64(len(ts)), e)[:0]
 	for _, t := range ts {
 		if len(us) > 0 && us[len(us)-1].Compare(t, e) == 0 {
 			continue
@@ -472,11 +472,11 @@ func (e *Env) set(ts ...Term) Term {
 
 // slice returns a Term slice containing the elements of list.
 // It errors if the given Term is not a list.
-func slice(list Term, env *Env) ([]Term, error) {
-	var ret []Term
+func slice(list Term, env *Env) (ret []Term, err error) {
+	defer recoverMeterError(&err)
 	iter := ListIterator{List: list, Env: env}
 	for iter.Next() {
-		ret = append(ret, env.Resolve(iter.Current()))
+		ret = appendTerms(ret, env, env.Resolve(iter.Current()))
 	}
 	return ret, iter.Err()
 }

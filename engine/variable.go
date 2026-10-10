@@ -135,7 +135,7 @@ func newVariableSet(t Term, env *Env) variableSet {
 			s[t] += 1
 		case Compound:
 			for i := 0; i < t.Arity(); i++ {
-				terms = append(terms, t.Arg(i))
+				terms = appendTerms(terms, env, t.Arg(i))
 			}
 		}
 	}
@@ -149,7 +149,7 @@ func newExistentialVariablesSet(t Term, env *Env) variableSet {
 			for v, o := range newVariableSet(c.Arg(0), env) {
 				ev[v] = o
 			}
-			terms = append(terms, c.Arg(1))
+			terms = appendTerms(terms, env, c.Arg(1))
 		}
 	}
 	return ev

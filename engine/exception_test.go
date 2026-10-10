@@ -7,7 +7,6 @@ import (
 )
 
 func TestNewException(t *testing.T) {
-	var vm VM
 	assert.Equal(t, Exception{term: NewAtom("foo").Apply(NewAtom("bar"))}, NewException(NewAtom("foo").Apply(NewAtom("bar")), nil))
 
 	assert.Equal(t,
@@ -17,9 +16,28 @@ func TestNewException(t *testing.T) {
 			),
 		},
 		NewException(NewAtom("foo").Apply(newDict([]Term{NewAtom("point"), NewAtom("x"), Integer(0), NewAtom("y"), Integer(1)})), nil))
+}
 
-	defer setMemFree(1)()
-	assert.Equal(t, resourceError(resourceMemory, nil), NewException(NewAtom("foo").Apply(vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable(), vm.NewVariable()), nil))
+func TestNewException_QuotaRefusal(t *testing.T) {
+	var vm VM
+	calls := 0
+	vm.InstallMeter(func(kind MeterKind, units uint64) Term {
+		if kind == MeterTermCell {
+			calls++
+			return atomResourceError.Apply(atomMemory)
+		}
+		return nil
+	})
+	exception := NewException(NewAtom("f").Apply(NewAtom("a")), vm.prepareEnv(nil))
+	assert.Equal(t, Exception{term: atomError.Apply(atomResourceError.Apply(atomMemory), rootContext)}, exception)
+	assert.Equal(t, 1, calls)
+}
+
+func TestNewException_PreservesForeignVariablePanic(t *testing.T) {
+	var owner, foreign VM
+	assert.PanicsWithValue(t, ErrVariableScope, func() {
+		_ = NewException(foreign.NewVariable(), owner.NewEnv())
+	})
 }
 
 func TestException_Error(t *testing.T) {
