@@ -179,7 +179,11 @@ func (i *Interpreter) Exec(query string, args ...interface{}) error {
 
 // ExecContext executes a prolog program with context.
 func (i *Interpreter) ExecContext(ctx context.Context, query string, args ...interface{}) error {
-	return i.Compile(ctx, query, args...)
+	terms, err := i.placeholderTerms(args)
+	if err != nil {
+		return err
+	}
+	return i.Compile(ctx, query, terms...)
 }
 
 // Query executes a prolog query and returns *Solutions.
@@ -189,8 +193,13 @@ func (i *Interpreter) Query(query string, args ...interface{}) (*Solutions, erro
 
 // QueryContext executes a prolog query and returns *Solutions with context.
 func (i *Interpreter) QueryContext(ctx context.Context, query string, args ...interface{}) (*Solutions, error) {
+	terms, err := i.placeholderTerms(args)
+	if err != nil {
+		return nil, err
+	}
+
 	p := engine.NewParser(&i.VM, strings.NewReader(query))
-	if err := p.SetPlaceholder(engine.NewAtom("?"), args...); err != nil {
+	if err := p.SetPlaceholder(engine.NewAtom("?"), terms...); err != nil {
 		return nil, err
 	}
 

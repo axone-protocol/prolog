@@ -19,7 +19,9 @@ func (e *discontiguousError) Error() string {
 }
 
 // Compile compiles the Prolog text and updates the DB accordingly.
-func (vm *VM) Compile(ctx context.Context, s string, args ...interface{}) (err error) {
+// Arguments are terms substituted for ? placeholders. Host-built arguments must
+// obey the VM ownership contract; their construction is not metered by Compile.
+func (vm *VM) Compile(ctx context.Context, s string, args ...Term) (err error) {
 	defer recoverMeterError(&err)
 
 	var t text
@@ -82,7 +84,7 @@ func Consult(vm *VM, files Term, k Cont, env *Env) (promise *Promise) {
 	})
 }
 
-func (vm *VM) compile(ctx context.Context, text *text, s string, args ...interface{}) (err error) {
+func (vm *VM) compile(ctx context.Context, text *text, s string, args ...Term) (err error) {
 	defer recoverMeterError(&err)
 	env := vm.NewEnv()
 	if text.clauses == nil {

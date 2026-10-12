@@ -326,6 +326,133 @@ func TestInterpreter_QueryTermCellMeter(t *testing.T) {
 	assert.Equal(t, engine.ResourceError(engine.NewAtom("memory"), p.NewEnv()), err)
 }
 
+func TestInterpreter_PlaceholderConversions(t *testing.T) {
+	t.Run("signed aliases", func(t *testing.T) {
+		type (
+			signedInt   int
+			signedInt8  int8
+			signedInt16 int16
+			signedInt32 int32
+			signedInt64 int64
+		)
+
+		tests := []struct {
+			name string
+			arg  interface{}
+			want int64
+		}{
+			{name: "int", arg: signedInt(-1), want: -1},
+			{name: "int8", arg: signedInt8(-2), want: -2},
+			{name: "int16", arg: signedInt16(-3), want: -3},
+			{name: "int32", arg: signedInt32(-4), want: -4},
+			{name: "int64", arg: signedInt64(-5), want: -5},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				p := New(nil, nil)
+				assert.NoError(t, p.QuerySolution(fmt.Sprintf(`? = %d.`, tt.want), tt.arg).Err())
+			})
+		}
+	})
+
+	t.Run("recursively converts arrays and slices with double_quotes", func(t *testing.T) {
+		value := [2][][1]string{
+			{{"a"}, {"b"}},
+			{{"c"}},
+		}
+		tests := []struct {
+			flag string
+			want string
+		}{
+			{flag: "chars", want: `[[[[a]],[[b]]],[[[c]]]]`},
+			{flag: "codes", want: `[[[[97]],[[98]]],[[[99]]]]`},
+			{flag: "atom", want: `[[[a],[b]],[[c]]]`},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.flag, func(t *testing.T) {
+				p := New(nil, nil)
+				assert.NoError(t, p.QuerySolution(`set_prolog_flag(double_quotes, `+tt.flag+`).`).Err())
+				assert.NoError(t, p.QuerySolution(`? = `+tt.want+`.`, value).Err())
+				assert.NoError(t, p.Exec(`stored(?).`, value))
+				assert.NoError(t, p.QuerySolution(`stored(`+tt.want+`).`).Err())
+			})
+		}
+	})
+
+	t.Run("rejects unsupported and nil placeholders", func(t *testing.T) {
+		tests := []struct {
+			name string
+			exec bool
+			arg  interface{}
+		}{
+			{name: "query nil", arg: nil},
+			{name: "query unsupported", arg: true},
+			{name: "query unsupported nested element", arg: []bool{true}},
+			{name: "exec nil", exec: true, arg: nil},
+			{name: "exec unsupported", exec: true, arg: true},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				p := NewEmpty()
+				if tt.exec {
+					assert.Error(t, p.ExecContext(context.Background(), `stored(?).`, tt.arg))
+					return
+				}
+				sols, err := p.QueryContext(context.Background(), `? .`, tt.arg)
+				assert.Nil(t, sols)
+				assert.Error(t, err)
+			})
+		}
+	})
+}
+
+func TestInterpreter_PlaceholderConversionMeter(t *testing.T) {
+	nested := [2][]int{{1, 2}, {3, 4}}
+	tests := []struct {
+		name      string
+		exec      bool
+		remaining uint64
+		charges   []uint64
+	}{
+		{name: "query rejects argument buffer", charges: []uint64{1}},
+		{name: "exec rejects argument buffer", exec: true, charges: []uint64{1}},
+		{name: "query rejects nested buffer", remaining: 3, charges: []uint64{1, 2, 2}},
+		{name: "exec rejects nested buffer", exec: true, remaining: 3, charges: []uint64{1, 2, 2}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := NewEmpty()
+			var charges []uint64
+			remaining := tt.remaining
+			p.InstallMeter(func(kind engine.MeterKind, units uint64) engine.Term {
+				if kind == engine.MeterTermCell {
+					charges = append(charges, units)
+					if units > remaining {
+						return engine.NewAtom("resource_error").Apply(engine.NewAtom("memory"))
+					}
+					remaining -= units
+				}
+				return nil
+			})
+
+			var err error
+			if tt.exec {
+				err = p.ExecContext(context.Background(), `stored(?).`, nested)
+			} else {
+				sols, queryErr := p.QueryContext(context.Background(), `? .`, nested)
+				assert.Nil(t, sols)
+				err = queryErr
+			}
+			assert.Equal(t, engine.ResourceError(engine.NewAtom("memory"), p.NewEnv()), err)
+			assert.Equal(t, tt.charges, charges)
+		})
+	}
+}
+
 func TestNew_variableNames(t *testing.T) {
 	// http://www.complang.tuwien.ac.at/ulrich/iso-prolog/variable_names
 	// I wanted to put this under TestNew() as t.Run("variable_names", ...) but GoLand didn't recognize it as a table-driven test.
