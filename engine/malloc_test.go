@@ -16,11 +16,8 @@ func TestMakeTerms_InvalidSize(t *testing.T) {
 				charged = true
 				return nil
 			})
-			var err error
-			func() {
-				defer recoverMeterError(&err)
-				makeTerms(n, vm.prepareEnv(nil))
-			}()
+			terms, err := vm.MakeTerms(int(n))
+			assert.Nil(t, terms)
 			assert.Equal(t, resourceError(resourceMemory, vm.NewEnv()), err)
 			assert.False(t, charged)
 		})
@@ -42,11 +39,8 @@ func TestMakeTerms_QuotaBeforeAllocation(t *testing.T) {
 		}
 		return nil
 	})
-	var err error
-	func() {
-		defer recoverMeterError(&err)
-		makeTerms(n, vm.NewEnv())
-	}()
+	terms, err := vm.MakeTerms(int(n))
+	assert.Nil(t, terms)
 	assert.Equal(t, resourceError(resourceMemory, vm.NewEnv()), err)
 	assert.Equal(t, 1, calls)
 }

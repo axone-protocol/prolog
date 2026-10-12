@@ -27,7 +27,6 @@ func TestVM_Compile(t *testing.T) {
 	tests := []struct {
 		title      string
 		text       string
-		args       []interface{}
 		err        error
 		result     *orderedmap.OrderedMap[procedureIndicator, procedure]
 		resultLazy func(*VM) *orderedmap.OrderedMap[procedureIndicator, procedure]
@@ -680,9 +679,6 @@ foo(b).
 			},
 		)},
 
-		{title: "error: invalid argument", text: `
-foo(?).
-`, args: []interface{}{nil}, err: errors.New("can't convert to term: <invalid reflect.Value>")},
 		{title: "error: syntax error", text: `
 foo().
 `, err: unexpectedTokenError{actual: Token{kind: tokenClose, val: ")"}}},
@@ -779,13 +775,26 @@ bar(b).
 			if tt.resultLazy != nil {
 				result = tt.resultLazy(&vm)
 			}
-			assert.Equal(t, tt.err, vm.Compile(context.Background(), tt.text, tt.args...))
+			assert.Equal(t, tt.err, vm.Compile(context.Background(), tt.text))
 			if tt.err == nil {
 				vm.procedures.Delete(procedureIndicator{name: NewAtom("throw"), arity: 1})
 				assert.EqualValues(t, result, vm.procedures)
 			}
 		})
 	}
+}
+
+func TestVM_CompilePlaceholders(t *testing.T) {
+	var vm VM
+	assert.NoError(t, vm.Compile(context.Background(), `p(?).`, List(Integer(1), NewAtom("a"))))
+	ok, err := Call(&vm, NewAtom("p").Apply(List(Integer(1), NewAtom("a"))), Success, nil).Force(context.Background())
+	assert.NoError(t, err)
+	assert.True(t, ok)
+	ok, err = Call(&vm, NewAtom("p").Apply(List(Integer(2), NewAtom("a"))), Success, nil).Force(context.Background())
+	assert.NoError(t, err)
+	assert.False(t, ok)
+
+	assert.Error(t, vm.Compile(context.Background(), `p(?).`, nil))
 }
 
 func TestVM_CompileTermCellMeter(t *testing.T) {

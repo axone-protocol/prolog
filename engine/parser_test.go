@@ -230,55 +230,33 @@ func TestParser_Term(t *testing.T) {
 func TestParser_Replace(t *testing.T) {
 	tests := []struct {
 		title        string
-		doubleQuotes doubleQuotes
 		input        string
-		args         []interface{}
+		args         []Term
 		err, termErr bool
 		term         Term
 	}{
 		{
-			title:        "chars",
-			doubleQuotes: doubleQuotesChars,
-			input:        `[?, ?, ?, ?].`,
-			args:         []interface{}{1, 2, "foo", []string{"a", "b", "c"}},
-			term:         List(Integer(1), Integer(2), CharList("foo"), List(CharList("a"), CharList("b"), CharList("c"))),
+			title: "explicit term representations",
+			input: `[?, ?, ?, ?].`,
+			args:  []Term{Integer(1), CharList("foo"), CodeList("bar"), List(NewAtom("a"), NewAtom("b"))},
+			term:  List(Integer(1), CharList("foo"), CodeList("bar"), List(NewAtom("a"), NewAtom("b"))),
 		},
 		{
-			title:        "codes",
-			doubleQuotes: doubleQuotesCodes,
-			input:        `[?, ?, ?, ?].`,
-			args:         []interface{}{1, 2, "foo", []string{"a", "b", "c"}},
-			term:         List(Integer(1), Integer(2), CodeList("foo"), List(CodeList("a"), CodeList("b"), CodeList("c"))),
-		},
-		{
-			title:        "atom",
-			doubleQuotes: doubleQuotesAtom,
-			input:        `[?, ?, ?, ?].`,
-			args:         []interface{}{1, 2, "foo", []string{"a", "b", "c"}},
-			term:         List(Integer(1), Integer(2), NewAtom("foo"), List(NewAtom("a"), NewAtom("b"), NewAtom("c"))),
-		},
-		{
-			title: "invalid argument",
+			title: "nil term",
 			input: `[?].`,
-			args:  []interface{}{nil},
-			err:   true,
-		},
-		{
-			title: "unsupported list element",
-			input: `[?].`,
-			args:  []interface{}{[]bool{true}},
+			args:  []Term{nil},
 			err:   true,
 		},
 		{
 			title:   "too few arguments",
-			input:   `[?, ?, ?, ?, ?].`,
-			args:    []interface{}{1, 2, "foo", []string{"a", "b", "c"}},
+			input:   `[?, ?].`,
+			args:    []Term{Integer(1)},
 			termErr: true,
 		},
 		{
 			title:   "too many arguments",
-			input:   `[?, ?, ?, ?].`,
-			args:    []interface{}{1, 2, "foo", []string{"a", "b", "c"}, "extra"},
+			input:   `[?].`,
+			args:    []Term{Integer(1), Integer(2)},
 			termErr: true,
 		},
 	}
@@ -287,7 +265,6 @@ func TestParser_Replace(t *testing.T) {
 		t.Run(tt.title, func(t *testing.T) {
 			var vm VM
 			p := NewParser(&vm, strings.NewReader(tt.input))
-			p.doubleQuotes = tt.doubleQuotes
 			err := p.SetPlaceholder(NewAtom("?"), tt.args...)
 			if tt.err {
 				assert.Error(t, err)
@@ -296,7 +273,6 @@ func TestParser_Replace(t *testing.T) {
 			if !assert.NoError(t, err) {
 				return
 			}
-
 			term, err := p.Term()
 			if tt.termErr {
 				assert.Error(t, err)
@@ -306,6 +282,23 @@ func TestParser_Replace(t *testing.T) {
 			assert.Equal(t, tt.term, term)
 		})
 	}
+}
+
+func TestParser_PlaceholderScope(t *testing.T) {
+	var vm, foreign VM
+	x := vm.NewVariable()
+	p := NewParser(&vm, strings.NewReader(`[?, ?].`))
+	assert.NoError(t, p.SetPlaceholder(NewAtom("?"), x, NewAtom("f").Apply(x)))
+	term, err := p.Term()
+	assert.NoError(t, err)
+	assert.Equal(t, List(x, NewAtom("f").Apply(x)), term)
+
+	assert.PanicsWithValue(t, ErrVariableScope, func() {
+		_ = p.SetPlaceholder(NewAtom("?"), NewAtom("f").Apply(foreign.NewVariable()))
+	})
+	assert.PanicsWithValue(t, ErrStreamScope, func() {
+		_ = p.SetPlaceholder(NewAtom("?"), foreign.NewOutputTextStream(io.Discard))
+	})
 }
 
 func TestParser_Number(t *testing.T) {
@@ -501,28 +494,17 @@ func TestParser_TermCellMeter(t *testing.T) {
 			}
 			return nil
 		})
+		args, err := vm.MakeTerms(1)
+		assert.NoError(t, err)
+		elements, err := vm.MakeTerms(2)
+		assert.NoError(t, err)
+		elements[0], elements[1] = Integer(1), Integer(2)
+		args[0] = List(elements...)
 		p := NewParser(&vm, strings.NewReader(`? .`))
-		assert.NoError(t, p.SetPlaceholder(NewAtom("?"), []int{1, 2}))
+		assert.NoError(t, p.SetPlaceholder(NewAtom("?"), args...))
 		term, err := p.Term()
 		assert.NoError(t, err)
 		assert.Equal(t, List(Integer(1), Integer(2)), term)
 		assert.Zero(t, remaining)
-	})
-
-	t.Run("charges placeholders before conversion", func(t *testing.T) {
-		var vm VM
-		var charges []uint64
-		vm.InstallMeter(func(kind MeterKind, units uint64) Term {
-			if kind != MeterTermCell {
-				return nil
-			}
-			charges = append(charges, units)
-			return atomResourceError.Apply(atomMemory)
-		})
-
-		p := NewParser(&vm, strings.NewReader(`?.`))
-		err := p.SetPlaceholder(NewAtom("?"), []string{"a", "b"}, []string{"c"})
-		assert.Equal(t, resourceError(resourceMemory, vm.NewEnv()), err)
-		assert.Equal(t, []uint64{2}, charges)
 	})
 }
