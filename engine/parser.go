@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -58,49 +57,23 @@ func NewParser(vm *VM, r io.RuneReader) *Parser {
 	}
 }
 
-// SetPlaceholder registers placeholder and its arguments. Every occurrence of placeholder will be replaced by arguments.
-// Mismatch of the number of occurrences of placeholder and the number of arguments raises an error.
-func (p *Parser) SetPlaceholder(placeholder Atom, args ...interface{}) (err error) {
-	defer recoverMeterError(&err)
-
+// SetPlaceholder registers placeholder and its term arguments.
+// The argument slice is borrowed, not copied; callers must not modify it until
+// parsing finishes or SetPlaceholder is called again. Host construction is not
+// metered here; use VM.MakeTerms to reserve a metered argument buffer.
+// Variables and streams must belong to the parser's VM; scope conflicts panic
+// with ErrVariableScope or ErrStreamScope, as at other low-level term boundaries.
+// Mismatch between placeholder occurrences and arguments raises a parsing error.
+func (p *Parser) SetPlaceholder(placeholder Atom, args ...Term) error {
+	for _, a := range args {
+		if a == nil {
+			return errors.New("nil placeholder term")
+		}
+		checkTermScope(a, p.vm.scope(), nil)
+	}
 	p.placeholder = placeholder
-	p.args = makeTerms(int64(len(args)), p.env)
-	for i, a := range args {
-		p.args[i], err = p.termOf(reflect.ValueOf(a))
-		if err != nil {
-			return err
-		}
-	}
+	p.args = args
 	return nil
-}
-
-func (p *Parser) termOf(o reflect.Value) (Term, error) {
-	switch o.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return Integer(o.Int()), nil
-	case reflect.String:
-		switch p.doubleQuotes {
-		case doubleQuotesCodes:
-			return CodeList(o.String()), nil
-		case doubleQuotesAtom:
-			return NewAtom(o.String()), nil
-		default:
-			return CharList(o.String()), nil
-		}
-	case reflect.Array, reflect.Slice:
-		l := o.Len()
-		es := makeTerms(int64(l), p.env)
-		for i := 0; i < l; i++ {
-			var err error
-			es[i], err = p.termOf(o.Index(i))
-			if err != nil {
-				return nil, err
-			}
-		}
-		return List(es...), nil
-	default:
-		return nil, fmt.Errorf("can't convert to term: %v", o)
-	}
 }
 
 func (p *Parser) next() (Token, error) {
@@ -348,6 +321,19 @@ func (d doubleQuotes) String() string {
 		doubleQuotesChars: "chars",
 		doubleQuotesAtom:  "atom",
 	}[d]
+}
+
+// DoubleQuoted constructs a term from s using the VM's current double_quotes flag.
+// Like CharList, CodeList, and NewAtom, this does not reserve term cells.
+func (vm *VM) DoubleQuoted(s string) Term {
+	switch vm.doubleQuotes {
+	case doubleQuotesCodes:
+		return CodeList(s)
+	case doubleQuotesAtom:
+		return NewAtom(s)
+	default:
+		return CharList(s)
+	}
 }
 
 func (p *Parser) getOperators() *operators {

@@ -37,6 +37,14 @@ func makeTerms(n int64, env *Env) []Term {
 	return make([]Term, int(n))
 }
 
+// MakeTerms reserves n logical term slots using the VM's installed meter before
+// allocating a buffer for host-built terms. A negative or unrepresentable size
+// returns a resource_error(memory) exception, as does a memory quota refusal.
+func (vm *VM) MakeTerms(n int) (terms []Term, err error) {
+	defer recoverMeterError(&err)
+	return makeTerms(int64(n), vm.NewEnv()), nil
+}
+
 // appendTerms charges new logical slots, not Go's implicit slice overcapacity.
 // Fill already charged reservations with ordinary append instead.
 func appendTerms(ts []Term, env *Env, terms ...Term) []Term {
