@@ -16,8 +16,8 @@ import (
 
 	terminal "golang.org/x/term"
 
-	"github.com/axone-protocol/prolog/v3"
-	"github.com/axone-protocol/prolog/v3/engine"
+	"github.com/axone-protocol/prolog/v4"
+	"github.com/axone-protocol/prolog/v4/engine"
 )
 
 const (

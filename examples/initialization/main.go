@@ -4,7 +4,7 @@ import (
 	_ "embed"
 	"os"
 
-	"github.com/axone-protocol/prolog/v3"
+	"github.com/axone-protocol/prolog/v4"
 )
 
 //go:embed hello.pl

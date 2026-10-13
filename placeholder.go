@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/axone-protocol/prolog/v3/engine"
+	"github.com/axone-protocol/prolog/v4/engine"
 )
 
 func (i *Interpreter) placeholderTerms(args []interface{}) ([]engine.Term, error) {

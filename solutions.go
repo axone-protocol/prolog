@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/axone-protocol/prolog/v3/engine"
+	"github.com/axone-protocol/prolog/v4/engine"
 )
 
 // ErrClosed indicates the Solutions are already closed and unable to perform the operation.

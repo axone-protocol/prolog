@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/axone-protocol/prolog/v3/engine"
+	"github.com/axone-protocol/prolog/v4/engine"
 )
 
 //go:embed bootstrap.pl

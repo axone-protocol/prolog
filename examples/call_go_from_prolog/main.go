@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/axone-protocol/prolog/v3"
-	"github.com/axone-protocol/prolog/v3/engine"
+	"github.com/axone-protocol/prolog/v4"
+	"github.com/axone-protocol/prolog/v4/engine"
 )
 
 func main() {
